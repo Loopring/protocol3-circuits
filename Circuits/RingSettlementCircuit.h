@@ -57,7 +57,7 @@ public:
         this->numRings = numRings;
         this->data = data;
         assert(numRings > 0);
-        assert(numRings * ringSize == data.size);
+        assert(numRings * ringSize == data.size());
 
         // XOR compress
         Bitstream compressedData;
@@ -763,11 +763,14 @@ public:
                       FMT(annotation_prefix, ".updateAccount_O"));
         updateAccount_O->generate_r1cs_constraints();
 
-        // Transform the data
-        transformData.generate_r1cs_constraints(numRings, flattenReverse(dataAvailabityData.data));
+        if (onchainDataAvailability)
+        {
+            // Transform the data
+            transformData.generate_r1cs_constraints(numRings, flattenReverse(dataAvailabityData.data));
+            publicData.add(flattenReverse({transformData.result()}));
+        }
 
         // Check the input hash
-        publicData.add(flattenReverse({transformData.result()}));
         publicDataHash.generate_r1cs_constraints(true);
         publicData.generate_r1cs_constraints();
 
@@ -820,7 +823,10 @@ public:
         updateAccount_P->generate_r1cs_witness(block.accountUpdate_P.proof);
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
 
-        transformData.generate_r1cs_witness();
+        if (onchainDataAvailability)
+        {
+            transformData.generate_r1cs_witness();
+        }
         publicData.generate_r1cs_witness();
 
         return true;
