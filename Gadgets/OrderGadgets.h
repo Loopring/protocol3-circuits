@@ -137,7 +137,8 @@ public:
     }
 
     void generate_r1cs_witness(const Order& order, const Account& account,
-                               const BalanceLeaf& balanceLeafS, const BalanceLeaf& balanceLeafB)
+                               const BalanceLeaf& balanceLeafS, const BalanceLeaf& balanceLeafB,
+                               const TradeHistoryLeaf& tradeHistoryLeaf)
     {
         exchangeID.bits.fill_with_bits_of_field_element(pb, order.exchangeID);
         exchangeID.generate_r1cs_witness_from_bits();
@@ -184,9 +185,9 @@ public:
         amountS_notZero.generate_r1cs_witness();
         amountB_notZero.generate_r1cs_witness();
 
-        pb.val(tradeHistoryFilled) = order.tradeHistoryFilled;
-        pb.val(tradeHistoryCancelled) = order.tradeHistoryCancelled;
-        pb.val(tradeHistoryOrderID) = order.tradeHistoryOrderID;
+        pb.val(tradeHistoryFilled) = tradeHistoryLeaf.filled;
+        pb.val(tradeHistoryCancelled) = tradeHistoryLeaf.cancelled;
+        pb.val(tradeHistoryOrderID) = tradeHistoryLeaf.orderID;
 
         tradeHistory.generate_r1cs_witness();
 

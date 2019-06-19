@@ -171,10 +171,6 @@ public:
     ethsnarks::FieldT rebateBips;
 
     Signature signature;
-
-    ethsnarks::FieldT tradeHistoryFilled;
-    ethsnarks::FieldT tradeHistoryCancelled;
-    ethsnarks::FieldT tradeHistoryOrderID;
 };
 
 void from_json(const json& j, Order& order)
@@ -200,10 +196,6 @@ void from_json(const json& j, Order& order)
     order.rebateBips = ethsnarks::FieldT(j.at("rebateBips"));
 
     order.signature = j.at("signature").get<Signature>();
-
-    order.tradeHistoryFilled = ethsnarks::FieldT(j.at("tradeHistoryFilled").get<std::string>().c_str());
-    order.tradeHistoryCancelled = ethsnarks::FieldT(j.at("tradeHistoryCancelled"));
-    order.tradeHistoryOrderID = ethsnarks::FieldT(j.at("tradeHistoryOrderID"));
 }
 
 class Ring

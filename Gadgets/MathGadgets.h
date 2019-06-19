@@ -497,6 +497,92 @@ public:
     }
 };
 
+class XorGadget : public GadgetT
+{
+public:
+    VariableT A;
+    VariableT B;
+    VariableT C;
+
+    XorGadget(
+        ProtoboardT& pb,
+        const VariableT& _A,
+        const VariableT& _B,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        A(_A),
+        B(_B),
+
+        C(make_variable(pb, FMT(prefix, ".C")))
+    {
+
+    }
+
+    const VariableT& result() const
+    {
+        return C;
+    }
+
+    void generate_r1cs_witness()
+    {
+        pb.val(C) = pb.val(A) + pb.val(B) - ((pb.val(A) == FieldT::one() && pb.val(B) == FieldT::one()) ? 2 : 0);
+    }
+
+    void generate_r1cs_constraints()
+    {
+        pb.add_r1cs_constraint(ConstraintT(2 * A, B, A + B - C), FMT(annotation_prefix, ".A ^ B == C"));
+    }
+};
+
+class XorArrayGadget : public GadgetT
+{
+public:
+    VariableArrayT A;
+    VariableArrayT B;
+    VariableArrayT C;
+
+    XorArrayGadget(
+        ProtoboardT& pb,
+        VariableArrayT _A,
+        VariableArrayT _B,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        A(_A),
+        B(_B),
+
+        C(make_var_array(pb, A.size(), FMT(prefix, ".C")))
+    {
+        assert(A.size() == B.size());
+    }
+
+    const VariableArrayT& result() const
+    {
+        return C;
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (unsigned int i = 0; i < C.size(); i++)
+        {
+            pb.val(C[i]) = pb.val(A[i]) + pb.val(B[i]) - ((pb.val(A[i]) == FieldT::one() && pb.val(B[i]) == FieldT::one()) ? 2 : 0);
+        }
+        // printBits("A: ", A.get_bits(pb));
+        // printBits("B: ", B.get_bits(pb));
+        // printBits("C: ", C.get_bits(pb));
+    }
+
+    void generate_r1cs_constraints()
+    {
+        for (unsigned int i = 0; i < C.size(); i++)
+        {
+            pb.add_r1cs_constraint(ConstraintT(2 * A[i], B[i], A[i] + B[i] - C[i]), FMT(annotation_prefix, ".A ^ B == C"));
+        }
+    }
+};
 
 class EqualGadget : public GadgetT
 {
@@ -1027,6 +1113,23 @@ public:
     void generate_r1cs_constraints()
     {
         signatureVerifier.generate_r1cs_constraints();
+    }
+};
+
+class Bitstream
+{
+public:
+
+    std::vector<VariableArrayT> data;
+
+    void add(const VariableArrayT& bits)
+    {
+        data.push_back(bits);
+    }
+
+    void add(const std::vector<VariableArrayT>& bits)
+    {
+        data.insert(data.end(), bits.begin(), bits.end());
     }
 };
 
