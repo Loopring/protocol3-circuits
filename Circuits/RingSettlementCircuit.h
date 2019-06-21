@@ -81,22 +81,24 @@ public:
             unsigned int offset;
             unsigned int length;
         };
-        std::vector<Range> ranges;
-        ranges.push_back({0, 40});      // ringMatcherID + fFee + tokenID
-        ranges.push_back({40, 40});     // orderA.orderID + orderB.orderID
-        ranges.push_back({80, 40});     // orderA.accountID + orderB.accountID
-        ranges.push_back({120, 8});     // orderA.tokenS
-        ranges.push_back({128, 24});    // orderA.fillS
-        ranges.push_back({152, 8});     // orderA.data
-        ranges.push_back({160, 8});     // orderB.tokenS
-        ranges.push_back({168, 24});    // orderB.fillS
-        ranges.push_back({192, 8});     // orderB.data
-        for (const Range& range : ranges)
+        std::vector<std::vector<Range>> ranges;
+        ranges.push_back({{0, 40}});      // ringMatcherID + fFee + tokenID
+        ranges.push_back({{40, 40}});     // orderA.orderID + orderB.orderID
+        ranges.push_back({{80, 40}});     // orderA.accountID + orderB.accountID
+        ranges.push_back({{120, 8}, {160, 8}});     // orderA.tokenS + orderB.tokenS
+        ranges.push_back({{152, 8}});     // orderA.data
+        ranges.push_back({{192, 8}});     // orderB.data
+        ranges.push_back({{128, 24}});    // orderA.fillS
+        ranges.push_back({{168, 24}});    // orderB.fillS
+        for (const std::vector<Range>& subRanges : ranges)
         {
             for (unsigned int i = 0; i < numRings; i++)
             {
-                unsigned int ringStart = i * ringSize;
-                transformedData.add(subArray(flatten(compressedData.data), ringStart + range.offset, range.length));
+                for (const Range& subRange : subRanges)
+                {
+                    unsigned int ringStart = i * ringSize;
+                    transformedData.add(subArray(flatten(compressedData.data), ringStart + subRange.offset, subRange.length));
+                }
             }
         }
     }
