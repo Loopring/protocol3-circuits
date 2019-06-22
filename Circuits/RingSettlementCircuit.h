@@ -82,14 +82,13 @@ public:
             unsigned int length;
         };
         std::vector<std::vector<Range>> ranges;
-        ranges.push_back({{0, 40}});      // ringMatcherID + fFee + tokenID
-        ranges.push_back({{40, 40}});     // orderA.orderID + orderB.orderID
-        ranges.push_back({{80, 40}});     // orderA.accountID + orderB.accountID
-        ranges.push_back({{120, 8}, {160, 8}});     // orderA.tokenS + orderB.tokenS
-        ranges.push_back({{152, 8}});     // orderA.data
-        ranges.push_back({{192, 8}});     // orderB.data
-        ranges.push_back({{128, 24}});    // orderA.fillS
-        ranges.push_back({{168, 24}});    // orderB.fillS
+        ranges.push_back({{0, 40}});                    // ringMatcherID + fFee + tokenID
+        ranges.push_back({{40, 40}});                   // orderA.orderID + orderB.orderID
+        ranges.push_back({{80, 40}});                   // orderA.accountID + orderB.accountID
+        ranges.push_back({{120, 8}, {160, 8}});         // orderA.tokenS + orderB.tokenS
+        ranges.push_back({{128, 24},{168, 24}});        // orderA.fillS + orderB.fillS
+        ranges.push_back({{152, 8}});                   // orderA.data
+        ranges.push_back({{192, 8}});                   // orderB.data
         for (const std::vector<Range>& subRanges : ranges)
         {
             for (unsigned int i = 0; i < numRings; i++)
