@@ -209,10 +209,10 @@ bool cancel(Mode mode, bool onchainDataAvailability, unsigned int numCancels, co
 std::string generateBaseFileName(const json& input) {
     // Read meta data
     int blockType = input["blockType"].get<int>();
-    unsigned int numElements = input["numElements"].get<int>();
+    unsigned int blockSize = input["blockSize"].get<int>();
     bool onchainDataAvailability = input["onchainDataAvailability"].get<bool>();
     std::string strOnchainDataAvailability = onchainDataAvailability ? "_DA_" : "_";
-    std::string postFix = strOnchainDataAvailability + std::to_string(numElements);
+    std::string postFix = strOnchainDataAvailability + std::to_string(blockSize);
 
     std::string baseFilename = "keys/";
     switch(blockType) {
@@ -253,14 +253,14 @@ std::string generateBaseFileName(const json& input) {
 int runCircuit(Mode mode, const json& input, ethsnarks::ProtoboardT& pb) {
     // Read meta data
     int blockType = input["blockType"].get<int>();
-    unsigned int numElements = input["numElements"].get<int>();
+    unsigned int blockSize = input["blockSize"].get<int>();
     bool onchainDataAvailability = input["onchainDataAvailability"].get<bool>();
 
     switch(blockType)
     {
         case 0:
         {
-            if (!trade(mode, onchainDataAvailability, numElements, input, pb))
+            if (!trade(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
             }
@@ -268,7 +268,7 @@ int runCircuit(Mode mode, const json& input, ethsnarks::ProtoboardT& pb) {
         }
         case 1:
         {
-            if (!deposit(mode, numElements, input, pb))
+            if (!deposit(mode, blockSize, input, pb))
             {
                 return 1;
             }
@@ -276,7 +276,7 @@ int runCircuit(Mode mode, const json& input, ethsnarks::ProtoboardT& pb) {
         }
         case 2:
         {
-            if (!onchainWithdraw(mode, onchainDataAvailability, numElements, input, pb))
+            if (!onchainWithdraw(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
             }
@@ -284,7 +284,7 @@ int runCircuit(Mode mode, const json& input, ethsnarks::ProtoboardT& pb) {
         }
         case 3:
         {
-            if (!offchainWithdraw(mode, onchainDataAvailability, numElements, input, pb))
+            if (!offchainWithdraw(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
             }
@@ -292,7 +292,7 @@ int runCircuit(Mode mode, const json& input, ethsnarks::ProtoboardT& pb) {
         }
         case 4:
         {
-            if (!cancel(mode, onchainDataAvailability, numElements, input, pb))
+            if (!cancel(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
             }
@@ -309,11 +309,11 @@ int runCircuit(Mode mode, const json& input, ethsnarks::ProtoboardT& pb) {
 
 bool validateBlock(char* inputJson) {
     ethsnarks::ppT::init_public_params();
-    
+
     json input = json::parse(inputJson);
     ethsnarks::ProtoboardT pb;
     runCircuit(Mode::Validate, input, pb);
-        
+
     // Check if the inputs are valid for the circuit
     if (!pb.is_satisfied())
     {
@@ -324,7 +324,7 @@ bool validateBlock(char* inputJson) {
 
 bool createKeyPair(char* inputJson) {
     ethsnarks::ppT::init_public_params();
-    
+
     json input = json::parse(inputJson);
     std::string baseFilename = generateBaseFileName(input);
     ethsnarks::ProtoboardT pb;
@@ -367,7 +367,7 @@ ProofResult generateProof(char* inputJson) {
     std::string proofJsonStr = generateProof(pb, (baseFilename + "_pk.raw").c_str());
     clock_gettime(CLOCK_MONOTONIC, &time2);
     timespec duration = diff(time1,time2);
-    
+
     if (!proofJsonStr.empty()) {
         res.success = false;
         res.errorMessage = "Failed to generate Proof:" + baseFilename + "_pk.raw";

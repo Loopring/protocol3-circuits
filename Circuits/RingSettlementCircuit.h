@@ -18,6 +18,91 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
+class TransformRingSettlementDataGadget : public GadgetT
+{
+public:
+
+    const unsigned int ringSize = 25 * 8;
+
+    VariableArrayT data;
+    Bitstream transformedData;
+    unsigned int numRings;
+
+    std::vector<XorArrayGadget> xorGadgets;
+
+    TransformRingSettlementDataGadget(
+        ProtoboardT& pb,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix)
+    {
+        numRings = 0;
+    }
+
+    VariableArrayT result()
+    {
+        return flatten(transformedData.data);
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (unsigned int i = 0; i < xorGadgets.size(); i++)
+        {
+            xorGadgets[i].generate_r1cs_witness();
+        }
+    }
+
+    void generate_r1cs_constraints(unsigned int numRings, const VariableArrayT& data)
+    {
+        this->numRings = numRings;
+        this->data = data;
+        assert(numRings > 0);
+        assert(numRings * ringSize == data.size());
+
+        // XOR compress
+        Bitstream compressedData;
+        compressedData.add(subArray(data, 0, ringSize));
+        for (unsigned int i = 1; i < numRings; i++)
+        {
+            unsigned int previousRingStart = (i - 1) * ringSize;
+            unsigned int ringStart = i * ringSize;
+
+            xorGadgets.emplace_back(pb, subArray(data, previousRingStart, 5 * 8),
+                                        subArray(data, ringStart, 5 * 8),
+                                        std::string("xor_") + std::to_string(i));
+            xorGadgets.back().generate_r1cs_constraints();
+            compressedData.add(xorGadgets.back().result());
+            compressedData.add(subArray(data, ringStart + 5 * 8, ringSize - 5 * 8));
+        }
+
+        // Transform
+        struct Range
+        {
+            unsigned int offset;
+            unsigned int length;
+        };
+        std::vector<std::vector<Range>> ranges;
+        ranges.push_back({{0, 40}});                    // ringMatcherID + fFee + tokenID
+        ranges.push_back({{40, 40}});                   // orderA.orderID + orderB.orderID
+        ranges.push_back({{80, 40}});                   // orderA.accountID + orderB.accountID
+        ranges.push_back({{120, 8}, {160, 8}});         // orderA.tokenS + orderB.tokenS
+        ranges.push_back({{128, 24},{168, 24}});        // orderA.fillS + orderB.fillS
+        ranges.push_back({{152, 8}});                   // orderA.data
+        ranges.push_back({{192, 8}});                   // orderB.data
+        for (const std::vector<Range>& subRanges : ranges)
+        {
+            for (unsigned int i = 0; i < numRings; i++)
+            {
+                for (const Range& subRange : subRanges)
+                {
+                    unsigned int ringStart = i * ringSize;
+                    transformedData.add(subArray(flatten(compressedData.data), ringStart + subRange.offset, subRange.length));
+                }
+            }
+        }
+    }
+};
+
 class RingSettlementGadget : public GadgetT
 {
 public:
@@ -48,6 +133,9 @@ public:
 
     OrderGadget orderA;
     OrderGadget orderB;
+
+    ForceNotEqualGadget accountA_neq_ringMatcher;
+    ForceNotEqualGadget accountB_neq_ringMatcher;
 
     OrderMatchingGadget orderMatching;
 
@@ -146,6 +234,9 @@ public:
 
         orderA(pb, params, constants, _exchangeID, FMT(prefix, ".orderA")),
         orderB(pb, params, constants, _exchangeID, FMT(prefix, ".orderB")),
+
+        accountA_neq_ringMatcher(pb, orderA.accountID.packed, minerAccountID.packed, FMT(prefix, ".accountA_neq_ringMatcher")),
+        accountB_neq_ringMatcher(pb, orderB.accountID.packed, minerAccountID.packed, FMT(prefix, ".accountB_neq_ringMatcher")),
 
         // Match orders
         orderMatching(pb, constants, _timestamp, orderA, orderB, FMT(prefix, ".orderMatching")),
@@ -350,11 +441,16 @@ public:
         orderA.generate_r1cs_witness(ringSettlement.ring.orderA,
                                      ringSettlement.accountUpdate_A.before,
                                      ringSettlement.balanceUpdateS_A.before,
-                                     ringSettlement.balanceUpdateB_A.before);
+                                     ringSettlement.balanceUpdateB_A.before,
+                                     ringSettlement.tradeHistoryUpdate_A.before);
         orderB.generate_r1cs_witness(ringSettlement.ring.orderB,
                                      ringSettlement.accountUpdate_B.before,
                                      ringSettlement.balanceUpdateS_B.before,
-                                     ringSettlement.balanceUpdateB_B.before);
+                                     ringSettlement.balanceUpdateB_B.before,
+                                     ringSettlement.tradeHistoryUpdate_B.before);
+
+        accountA_neq_ringMatcher.generate_r1cs_witness();
+        accountB_neq_ringMatcher.generate_r1cs_witness();
 
         // Match orders
         orderMatching.generate_r1cs_witness();
@@ -457,6 +553,9 @@ public:
         orderA.generate_r1cs_constraints();
         orderB.generate_r1cs_constraints();
 
+        accountA_neq_ringMatcher.generate_r1cs_constraints();
+        accountB_neq_ringMatcher.generate_r1cs_constraints();
+
         // Match orders
         orderMatching.generate_r1cs_constraints();
 
@@ -529,6 +628,8 @@ public:
     std::vector<RingSettlementGadget*> ringSettlements;
 
     libsnark::dual_variable_gadget<FieldT> publicDataHash;
+    Bitstream dataAvailabityData;
+    TransformRingSettlementDataGadget transformData;
     PublicDataGadget publicData;
 
     Constants constants;
@@ -555,6 +656,7 @@ public:
         GadgetT(pb, prefix),
 
         publicDataHash(pb, 256, FMT(prefix, ".publicDataHash")),
+        transformData(pb, FMT(prefix, ".transformData")),
         publicData(pb, publicDataHash, FMT(prefix, ".publicData")),
 
         constants(pb, FMT(prefix, ".constants")),
@@ -644,7 +746,7 @@ public:
             if (onchainDataAvailability)
             {
                 // Store data from ring settlement
-                publicData.add(ringSettlements.back()->getPublicData());
+                dataAvailabityData.add(ringSettlements.back()->getPublicData());
             }
         }
 
@@ -661,6 +763,13 @@ public:
                       {publicKey.x, publicKey.y, constants.zero, ringSettlements.back()->getNewOperatorBalancesRoot()},
                       FMT(annotation_prefix, ".updateAccount_O"));
         updateAccount_O->generate_r1cs_constraints();
+
+        if (onchainDataAvailability)
+        {
+            // Transform the data
+            transformData.generate_r1cs_constraints(numRings, flattenReverse(dataAvailabityData.data));
+            publicData.add(flattenReverse({transformData.result()}));
+        }
 
         // Check the input hash
         publicDataHash.generate_r1cs_constraints(true);
@@ -715,6 +824,10 @@ public:
         updateAccount_P->generate_r1cs_witness(block.accountUpdate_P.proof);
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
 
+        if (onchainDataAvailability)
+        {
+            transformData.generate_r1cs_witness();
+        }
         publicData.generate_r1cs_witness();
 
         return true;

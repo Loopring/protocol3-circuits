@@ -287,10 +287,10 @@ int main (int argc, char **argv)
 
     // Read meta data
     int blockType = input["blockType"].get<int>();
-    unsigned int numElements = input["numElements"].get<int>();
+    unsigned int blockSize = input["blockSize"].get<int>();
     bool onchainDataAvailability = input["onchainDataAvailability"].get<bool>();
     std::string strOnchainDataAvailability = onchainDataAvailability ? "_DA_" : "_";
-    std::string postFix = strOnchainDataAvailability + std::to_string(numElements);
+    std::string postFix = strOnchainDataAvailability + std::to_string(blockSize);
 
     std::cout << "Building circuit... " << std::endl;
     std::string baseFilename = "keys/";
@@ -300,7 +300,7 @@ int main (int argc, char **argv)
         case 0:
         {
             baseFilename += "trade" + postFix;
-            if (!trade(mode, onchainDataAvailability, numElements, input, pb))
+            if (!trade(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
             }
@@ -309,7 +309,7 @@ int main (int argc, char **argv)
         case 1:
         {
             baseFilename += "deposit" + postFix;
-            if (!deposit(mode, numElements, input, pb))
+            if (!deposit(mode, blockSize, input, pb))
             {
                 return 1;
             }
@@ -318,7 +318,7 @@ int main (int argc, char **argv)
         case 2:
         {
             baseFilename += "withdraw_onchain" + postFix;
-            if (!onchainWithdraw(mode, onchainDataAvailability, numElements, input, pb))
+            if (!onchainWithdraw(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
             }
@@ -327,7 +327,7 @@ int main (int argc, char **argv)
         case 3:
         {
             baseFilename += "withdraw_offchain" + postFix;
-            if (!offchainWithdraw(mode, onchainDataAvailability, numElements, input, pb))
+            if (!offchainWithdraw(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
             }
@@ -336,7 +336,7 @@ int main (int argc, char **argv)
         case 4:
         {
             baseFilename += "cancel" + postFix;
-            if (!cancel(mode, onchainDataAvailability, numElements, input, pb))
+            if (!cancel(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
             }
