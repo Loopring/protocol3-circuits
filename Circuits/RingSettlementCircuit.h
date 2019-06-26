@@ -115,6 +115,10 @@ public:
     const VariableT tradingHistoryRootB_A;
     const VariableT tradingHistoryRootS_B;
     const VariableT tradingHistoryRootB_B;
+    const VariableT tradingHistoryRootA_M;
+    const VariableT tradingHistoryRootB_M;
+    const VariableT tradingHistoryRootO_M;
+    const VariableT tradingHistoryRoot_O;
 
     const VariableT balancesRootA;
     const VariableT balancesRootB;
@@ -133,9 +137,6 @@ public:
 
     OrderGadget orderA;
     OrderGadget orderB;
-
-    ForceNotEqualGadget accountA_neq_ringMatcher;
-    ForceNotEqualGadget accountB_neq_ringMatcher;
 
     OrderMatchingGadget orderMatching;
 
@@ -235,9 +236,6 @@ public:
         orderA(pb, params, constants, _exchangeID, FMT(prefix, ".orderA")),
         orderB(pb, params, constants, _exchangeID, FMT(prefix, ".orderB")),
 
-        accountA_neq_ringMatcher(pb, orderA.accountID.packed, minerAccountID.packed, FMT(prefix, ".accountA_neq_ringMatcher")),
-        accountB_neq_ringMatcher(pb, orderB.accountID.packed, minerAccountID.packed, FMT(prefix, ".accountB_neq_ringMatcher")),
-
         // Match orders
         orderMatching(pb, constants, _timestamp, orderA, orderB, FMT(prefix, ".orderMatching")),
 
@@ -291,6 +289,10 @@ public:
         tradingHistoryRootB_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_A"))),
         tradingHistoryRootS_B(make_variable(pb, FMT(prefix, ".tradingHistoryRootS_B"))),
         tradingHistoryRootB_B(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_B"))),
+        tradingHistoryRootA_M(make_variable(pb, FMT(prefix, ".tradingHistoryRootA_M"))),
+        tradingHistoryRootB_M(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_M"))),
+        tradingHistoryRootO_M(make_variable(pb, FMT(prefix, ".tradingHistoryRootO_M"))),
+        tradingHistoryRoot_O(make_variable(pb, FMT(prefix, ".tradingHistoryRoot_O"))),
 
         // Initial balances roots
         balancesRootA(make_variable(pb, FMT(prefix, ".balancesRootA"))),
@@ -341,16 +343,16 @@ public:
 
         // Update Ring-Matcher
         updateBalanceA_M(pb, balancesRootM, orderA.tokenB.bits,
-                        {balanceA_M.front(), constants.emptyTradeHistory},
-                        {balanceA_M.back(), constants.emptyTradeHistory},
+                        {balanceA_M.front(), tradingHistoryRootA_M},
+                        {balanceA_M.back(), tradingHistoryRootA_M},
                         FMT(prefix, ".updateBalanceA_M")),
         updateBalanceB_M(pb, updateBalanceA_M.getNewRoot(), orderB.tokenB.bits,
-                        {balanceB_M.front(), constants.emptyTradeHistory},
-                        {balanceB_M.back(), constants.emptyTradeHistory},
+                        {balanceB_M.front(), tradingHistoryRootB_M},
+                        {balanceB_M.back(), tradingHistoryRootB_M},
                         FMT(prefix, ".updateBalanceB_M")),
         updateBalanceO_M(pb, updateBalanceB_M.getNewRoot(), tokenID,
-                        {balanceO_M.front(), constants.emptyTradeHistory},
-                        {balanceO_M.back(), constants.emptyTradeHistory},
+                        {balanceO_M.front(), tradingHistoryRootO_M},
+                        {balanceO_M.back(), tradingHistoryRootO_M},
                         FMT(prefix, ".updateBalanceO_M")),
         updateAccount_M(pb, updateAccount_B.result(), minerAccountID.bits,
                         {publicKey.x, publicKey.y, nonce_before.packed, balancesRootM},
@@ -369,8 +371,8 @@ public:
 
         // Update Operator
         updateBalanceF_O(pb, _operatorBalancesRoot, tokenID,
-                         {balanceF_O.front(), constants.emptyTradeHistory},
-                         {balanceF_O.back(), constants.emptyTradeHistory},
+                         {balanceF_O.front(), tradingHistoryRoot_O},
+                         {balanceF_O.back(), tradingHistoryRoot_O},
                          FMT(prefix, ".updateBalanceF_O")),
 
         // Signatures
@@ -449,9 +451,6 @@ public:
                                      ringSettlement.balanceUpdateB_B.before,
                                      ringSettlement.tradeHistoryUpdate_B.before);
 
-        accountA_neq_ringMatcher.generate_r1cs_witness();
-        accountB_neq_ringMatcher.generate_r1cs_witness();
-
         // Match orders
         orderMatching.generate_r1cs_witness();
 
@@ -503,6 +502,10 @@ public:
         pb.val(tradingHistoryRootB_A) = ringSettlement.balanceUpdateB_A.before.tradingHistoryRoot;
         pb.val(tradingHistoryRootS_B) = ringSettlement.balanceUpdateS_B.before.tradingHistoryRoot;
         pb.val(tradingHistoryRootB_B) = ringSettlement.balanceUpdateB_B.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRootA_M) = ringSettlement.balanceUpdateA_M.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRootB_M) = ringSettlement.balanceUpdateB_M.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRootO_M) = ringSettlement.balanceUpdateO_M.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRoot_O) = ringSettlement.balanceUpdateF_O.before.tradingHistoryRoot;
 
         // Initial balances roots
         pb.val(balancesRootA) = ringSettlement.balanceUpdateS_A.rootBefore;
@@ -552,9 +555,6 @@ public:
 
         orderA.generate_r1cs_constraints();
         orderB.generate_r1cs_constraints();
-
-        accountA_neq_ringMatcher.generate_r1cs_constraints();
-        accountB_neq_ringMatcher.generate_r1cs_constraints();
 
         // Match orders
         orderMatching.generate_r1cs_constraints();
@@ -650,6 +650,7 @@ public:
     libsnark::dual_variable_gadget<FieldT> operatorAccountID;
     const jubjub::VariablePointT publicKey;
     const VariableT balancesRootO_before;
+    const VariableT nonce_O;
     UpdateAccountGadget* updateAccount_O;
 
     RingSettlementCircuit(ProtoboardT& pb, const std::string& prefix) :
@@ -672,7 +673,8 @@ public:
 
         operatorAccountID(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".operatorAccountID")),
         publicKey(pb, FMT(prefix, ".publicKey")),
-        balancesRootO_before(make_variable(pb, FMT(prefix, ".balancesRootO_before")))
+        balancesRootO_before(make_variable(pb, FMT(prefix, ".balancesRootO_before"))),
+        nonce_O(make_variable(pb, FMT(prefix, ".nonce_O")))
     {
         this->updateAccount_P = nullptr;
         this->updateAccount_O = nullptr;
@@ -759,8 +761,8 @@ public:
 
         // Update the operator
         updateAccount_O = new UpdateAccountGadget(pb, updateAccount_P->result(), operatorAccountID.bits,
-                      {publicKey.x, publicKey.y, constants.zero, balancesRootO_before},
-                      {publicKey.x, publicKey.y, constants.zero, ringSettlements.back()->getNewOperatorBalancesRoot()},
+                      {publicKey.x, publicKey.y, nonce_O, balancesRootO_before},
+                      {publicKey.x, publicKey.y, nonce_O, ringSettlements.back()->getNewOperatorBalancesRoot()},
                       FMT(annotation_prefix, ".updateAccount_O"));
         updateAccount_O->generate_r1cs_constraints();
 
@@ -815,6 +817,7 @@ public:
         pb.val(publicKey.x) = block.accountUpdate_O.before.publicKey.x;
         pb.val(publicKey.y) = block.accountUpdate_O.before.publicKey.y;
         pb.val(balancesRootO_before) = block.accountUpdate_O.before.balancesRoot;
+        pb.val(nonce_O) = block.accountUpdate_O.before.nonce;
         pb.val(balancesRootP_before) = block.accountUpdate_P.before.balancesRoot;
 
         for(unsigned int i = 0; i < block.ringSettlements.size(); i++)
