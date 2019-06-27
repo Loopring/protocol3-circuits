@@ -204,12 +204,12 @@ public:
     Order orderA;
     Order orderB;
 
-    ethsnarks::FieldT minerAccountID;
+    ethsnarks::FieldT ringMatcherAccountID;
     ethsnarks::FieldT tokenID;
     ethsnarks::FieldT fee;
     ethsnarks::FieldT nonce;
 
-    Signature minerSignature;
+    Signature ringMatcherSignature;
     Signature dualAuthASignature;
     Signature dualAuthBSignature;
 };
@@ -219,12 +219,12 @@ void from_json(const json& j, Ring& ring)
     ring.orderA = j.at("orderA").get<Order>();
     ring.orderB = j.at("orderB").get<Order>();
 
-    ring.minerAccountID = ethsnarks::FieldT(j.at("minerAccountID"));
+    ring.ringMatcherAccountID = ethsnarks::FieldT(j.at("ringMatcherAccountID"));
     ring.tokenID = ethsnarks::FieldT(j.at("tokenID"));
     ring.fee = ethsnarks::FieldT(j.at("fee").get<std::string>().c_str());
     ring.nonce = ethsnarks::FieldT(j.at("nonce"));
 
-    ring.minerSignature = j.at("minerSignature").get<Signature>();
+    ring.ringMatcherSignature = j.at("ringMatcherSignature").get<Signature>();
     ring.dualAuthASignature = j.at("dualAuthASignature").get<Signature>();
     ring.dualAuthBSignature = j.at("dualAuthBSignature").get<Signature>();
 }

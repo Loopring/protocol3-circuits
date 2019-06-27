@@ -127,7 +127,7 @@ public:
     VariableT blockexchangeID;
 
     const jubjub::VariablePointT publicKey;
-    libsnark::dual_variable_gadget<FieldT> minerAccountID;
+    libsnark::dual_variable_gadget<FieldT> ringMatcherAccountID;
     VariableArrayT tokenID;
     libsnark::dual_variable_gadget<FieldT> fee;
     FloatGadget fFee;
@@ -202,7 +202,7 @@ public:
     UpdateBalanceGadget updateBalanceF_O;
 
     const VariableArrayT message;
-    SignatureVerifier minerSignatureVerifier;
+    SignatureVerifier ringMatcherSignatureVerifier;
     SignatureVerifier dualAuthASignatureVerifier;
     SignatureVerifier dualAuthBSignatureVerifier;
 
@@ -225,7 +225,7 @@ public:
         constants(_constants),
 
         publicKey(pb, FMT(prefix, ".publicKey")),
-        minerAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".minerAccountID")),
+        ringMatcherAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".ringMatcherAccountID")),
         tokenID(make_var_array(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".tokenID"))),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         fFee(pb, constants, Float12Encoding, FMT(prefix, ".fFee")),
@@ -354,7 +354,7 @@ public:
                         {balanceO_M.front(), tradingHistoryRootO_M},
                         {balanceO_M.back(), tradingHistoryRootO_M},
                         FMT(prefix, ".updateBalanceO_M")),
-        updateAccount_M(pb, updateAccount_B.result(), minerAccountID.bits,
+        updateAccount_M(pb, updateAccount_B.result(), ringMatcherAccountID.bits,
                         {publicKey.x, publicKey.y, nonce_before.packed, balancesRootM},
                         {publicKey.x, publicKey.y, nonce_after.result(), updateBalanceO_M.getNewRoot()},
                         FMT(prefix, ".updateAccount_M")),
@@ -377,11 +377,11 @@ public:
 
         // Signatures
         message(flatten({orderA.getHash(), orderB.getHash(),
-                         minerAccountID.bits, tokenID, fee.bits,
+                         ringMatcherAccountID.bits, tokenID, fee.bits,
                          orderA.feeBips.bits, orderB.feeBips.bits,
                          orderA.rebateBips.bits, orderB.rebateBips.bits,
                          nonce_before.bits, constants.padding_0})),
-        minerSignatureVerifier(pb, params, publicKey, message, FMT(prefix, ".minerSignatureVerifier")),
+        ringMatcherSignatureVerifier(pb, params, publicKey, message, FMT(prefix, ".ringMatcherSignatureVerifier")),
         dualAuthASignatureVerifier(pb, params, orderA.dualAuthPublicKey, message, FMT(prefix, ".dualAuthASignatureVerifier")),
         dualAuthBSignatureVerifier(pb, params, orderB.dualAuthPublicKey, message, FMT(prefix, ".dualAuthBSignatureVerifier"))
     {
@@ -407,7 +407,7 @@ public:
     {
         return
         {
-            minerAccountID.bits,
+            ringMatcherAccountID.bits,
             fFee.bits(),
             tokenID,
 
@@ -429,8 +429,8 @@ public:
         pb.val(publicKey.x) = ringSettlement.accountUpdate_M.before.publicKey.x;
         pb.val(publicKey.y) = ringSettlement.accountUpdate_M.before.publicKey.y;
 
-        minerAccountID.bits.fill_with_bits_of_field_element(pb, ringSettlement.ring.minerAccountID);
-        minerAccountID.generate_r1cs_witness_from_bits();
+        ringMatcherAccountID.bits.fill_with_bits_of_field_element(pb, ringSettlement.ring.ringMatcherAccountID);
+        ringMatcherAccountID.generate_r1cs_witness_from_bits();
         tokenID.fill_with_bits_of_field_element(pb, ringSettlement.ring.tokenID);
         fee.bits.fill_with_bits_of_field_element(pb, ringSettlement.ring.fee);
         fee.generate_r1cs_witness_from_bits();
@@ -538,7 +538,7 @@ public:
         updateBalanceF_O.generate_r1cs_witness(ringSettlement.balanceUpdateF_O.proof);
 
         // Signatures
-        minerSignatureVerifier.generate_r1cs_witness(ringSettlement.ring.minerSignature);
+        ringMatcherSignatureVerifier.generate_r1cs_witness(ringSettlement.ring.ringMatcherSignature);
         dualAuthASignatureVerifier.generate_r1cs_witness(ringSettlement.ring.dualAuthASignature);
         dualAuthBSignatureVerifier.generate_r1cs_witness(ringSettlement.ring.dualAuthBSignature);
     }
@@ -546,7 +546,7 @@ public:
 
     void generate_r1cs_constraints()
     {
-        minerAccountID.generate_r1cs_constraints(true);
+        ringMatcherAccountID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
         fFee.generate_r1cs_constraints();
         ensureAccuracyFee.generate_r1cs_constraints();
@@ -612,7 +612,7 @@ public:
         updateBalanceF_O.generate_r1cs_constraints();
 
         // Signatures
-        minerSignatureVerifier.generate_r1cs_constraints();
+        ringMatcherSignatureVerifier.generate_r1cs_constraints();
         dualAuthASignatureVerifier.generate_r1cs_constraints();
         dualAuthBSignatureVerifier.generate_r1cs_constraints();
     }
