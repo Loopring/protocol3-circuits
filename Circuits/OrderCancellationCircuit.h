@@ -51,6 +51,7 @@ public:
     VariableT balancesRoot_W_before;
     VariableT balanceF_W_before;
     VariableT nonce_W;
+    VariableT tradingHistoryRootF_W;
 
     VariableT balanceF_O_before;
     VariableT tradingHistoryRootF_O;
@@ -120,6 +121,7 @@ public:
         balancesRoot_W_before(make_variable(pb, FMT(prefix, ".balancesRoot_W_before"))),
         balanceF_W_before(make_variable(pb, FMT(prefix, ".balanceF_W_before"))),
         nonce_W(make_variable(pb, FMT(prefix, ".nonce_W"))),
+        tradingHistoryRootF_W(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_W"))),
 
         balanceF_O_before(make_variable(pb, FMT(prefix, ".balanceF_O_before"))),
         tradingHistoryRootF_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_O"))),
@@ -160,8 +162,8 @@ public:
 
         // Wallet balance
         updateBalanceF_W(pb, balancesRoot_W_before, feeTokenID,
-                         {balanceF_W_before, constants.emptyTradeHistory},
-                         {feePaymentWallet.Y, constants.emptyTradeHistory},
+                         {balanceF_W_before, tradingHistoryRootF_W},
+                         {feePaymentWallet.Y, tradingHistoryRootF_W},
                          FMT(prefix, ".updateBalanceF_W")),
         // Wallet account
         updateAccount_W(pb, updateAccount_A.result(), walletAccountID,
@@ -240,6 +242,7 @@ public:
         pb.val(balancesRoot_W_before) = cancellation.accountUpdate_W.before.balancesRoot;
         pb.val(balanceF_W_before) = cancellation.balanceUpdateF_W.before.balance;
         pb.val(nonce_W) = cancellation.accountUpdate_W.before.nonce;
+        pb.val(tradingHistoryRootF_W) = cancellation.balanceUpdateF_W.before.tradingHistoryRoot;
 
         pb.val(balanceF_O_before) = cancellation.balanceUpdateF_O.before.balance;
         pb.val(tradingHistoryRootF_O) = cancellation.balanceUpdateF_O.before.tradingHistoryRoot;

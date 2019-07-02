@@ -42,6 +42,7 @@ public:
     AccountState accountWalletBefore;
 
     VariableT balanceF_O_before;
+    VariableT tradingHistoryRootF_O;
 
     MulDivGadget feeToWallet;
     UnsafeSubGadget feeToOperator;
@@ -127,6 +128,7 @@ public:
 
         // Operator
         balanceF_O_before(make_variable(pb, FMT(prefix, ".balanceF_O_before"))),
+        tradingHistoryRootF_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_O"))),
 
         // Split the fee between wallet and operator
         feeToWallet(pb, constants, fFee.value(), walletSplitPercentage.value.packed, constants._100, FMT(prefix, ".feeToWallet")),
@@ -178,8 +180,8 @@ public:
 
         // Update Operator
         updateBalanceF_O(pb, operatorBalancesRoot, feeTokenID,
-                         {balanceF_O_before, constants.emptyTradeHistory},
-                         {feePaymentOperator.Y, constants.emptyTradeHistory},
+                         {balanceF_O_before, tradingHistoryRootF_O},
+                         {feePaymentOperator.Y, tradingHistoryRootF_O},
                          FMT(prefix, ".updateBalanceF_O")),
 
         // Signature
@@ -252,6 +254,7 @@ public:
 
         // Operator
         pb.val(balanceF_O_before) = withdrawal.balanceUpdateF_O.before.balance;
+        pb.val(tradingHistoryRootF_O) = withdrawal.balanceUpdateF_O.before.tradingHistoryRoot;
 
         // Fee payments calculations
         feeToWallet.generate_r1cs_witness();
