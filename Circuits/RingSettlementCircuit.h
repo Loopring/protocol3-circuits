@@ -226,7 +226,7 @@ public:
 
         publicKey(pb, FMT(prefix, ".publicKey")),
         ringMatcherAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".ringMatcherAccountID")),
-        tokenID(make_var_array(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".tokenID"))),
+        tokenID(make_var_array(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID"))),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         fFee(pb, constants, Float12Encoding, FMT(prefix, ".fFee")),
         ensureAccuracyFee(pb, fFee.value(), fee.packed, Float12Accuracy, FMT(prefix, ".ensureAccuracyFee")),
@@ -300,11 +300,11 @@ public:
         balancesRootM(make_variable(pb, FMT(prefix, ".balancesRootM"))),
 
         // Update trading history
-        updateTradeHistoryA(pb, tradingHistoryRootS_A, subArray(orderA.orderID.bits, 0, TREE_DEPTH_TRADING_HISTORY),
+        updateTradeHistoryA(pb, tradingHistoryRootS_A, subArray(orderA.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
                             {orderA.tradeHistoryFilled, orderA.tradeHistoryCancelled, orderA.tradeHistoryOrderID},
                             {filledAfterA.result(), orderA.tradeHistory.getCancelledToStore(), orderA.tradeHistory.getOrderIDToStore()},
                             FMT(prefix, ".updateTradeHistoryA")),
-        updateTradeHistoryB(pb, tradingHistoryRootS_B, subArray(orderB.orderID.bits, 0, TREE_DEPTH_TRADING_HISTORY),
+        updateTradeHistoryB(pb, tradingHistoryRootS_B, subArray(orderB.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
                             {orderB.tradeHistoryFilled, orderB.tradeHistoryCancelled, orderB.tradeHistoryOrderID},
                             {filledAfterB.result(), orderB.tradeHistory.getCancelledToStore(), orderB.tradeHistory.getOrderIDToStore()},
                             FMT(prefix, ".updateTradeHistoryB")),
@@ -671,7 +671,7 @@ public:
 
         balancesRootP_before(make_variable(pb, FMT(prefix, ".balancesRootP_before"))),
 
-        operatorAccountID(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".operatorAccountID")),
+        operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
         publicKey(pb, FMT(prefix, ".publicKey")),
         balancesRootO_before(make_variable(pb, FMT(prefix, ".balancesRootO_before"))),
         nonce_O(make_variable(pb, FMT(prefix, ".nonce_O")))

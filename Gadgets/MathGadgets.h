@@ -326,9 +326,12 @@ public:
         pb.val(z) = (pb.val(b) == FieldT::one()) ? pb.val(x) : pb.val(y);
     }
 
-    void generate_r1cs_constraints()
+    void generate_r1cs_constraints(bool enforeBitness = true)
     {
-        libsnark::generate_boolean_r1cs_constraint<ethsnarks::FieldT>(pb, b, FMT(annotation_prefix, ".bitness"));
+        if (enforeBitness)
+        {
+            libsnark::generate_boolean_r1cs_constraint<ethsnarks::FieldT>(pb, b, FMT(annotation_prefix, ".bitness"));
+        }
         pb.add_r1cs_constraint(ConstraintT(b, y - x, y - z), FMT(annotation_prefix, ".b * (y - x) == (y - z)"));
     }
 };
@@ -392,8 +395,8 @@ public:
         GadgetT(pb, prefix),
         inputs(_inputs)
     {
-        assert(inputs.size() > 0);
-        for (unsigned int i = 0; i < inputs.size(); i++)
+        assert(inputs.size() > 1);
+        for (unsigned int i = 1; i < inputs.size(); i++)
         {
             results.emplace_back(make_variable(pb, FMT(prefix, ".results")));
         }
@@ -406,19 +409,19 @@ public:
 
     void generate_r1cs_witness()
     {
-        pb.val(results[0]) = pb.val(inputs[0]);
-        for (unsigned int i = 1; i < inputs.size(); i++)
+        pb.val(results[0]) = pb.val(inputs[0]) * pb.val(inputs[1]);
+        for (unsigned int i = 2; i < inputs.size(); i++)
         {
-            pb.val(results[i]) = pb.val(results[i - 1]) * pb.val(inputs[i]);
+            pb.val(results[i - 1]) = pb.val(results[i - 2]) * pb.val(inputs[i]);
         }
     }
 
     void generate_r1cs_constraints()
     {
-        pb.add_r1cs_constraint(ConstraintT(inputs[0], FieldT::one(), inputs[0]), FMT(annotation_prefix, ".A && B"));
-        for (unsigned int i = 1; i < inputs.size(); i++)
+        pb.add_r1cs_constraint(ConstraintT(inputs[0], inputs[1], results[0]), FMT(annotation_prefix, ".A && B"));
+        for (unsigned int i = 2; i < inputs.size(); i++)
         {
-            pb.add_r1cs_constraint(ConstraintT(inputs[i], results[i - 1], results[i]), FMT(annotation_prefix, ".A && B"));
+            pb.add_r1cs_constraint(ConstraintT(inputs[i], results[i - 2], results[i - 1]), FMT(annotation_prefix, ".A && B"));
         }
     }
 };
@@ -446,7 +449,7 @@ public:
 
     }
 
-    const VariableT& Or() const
+    const VariableT& result() const
     {
         return _or;
     }

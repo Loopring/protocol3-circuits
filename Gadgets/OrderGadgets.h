@@ -77,9 +77,9 @@ public:
 
         exchangeID(pb, 32, FMT(prefix, ".exchangeID")),
         orderID(pb, NUM_BITS_ORDERID, FMT(prefix, ".orderID")),
-        accountID(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".accountID")),
-        tokenS(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".tokenS")),
-        tokenB(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".tokenB")),
+        accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
+        tokenS(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenS")),
+        tokenB(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenB")),
         amountS(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amountS")),
         amountB(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amountB")),
         allOrNone(pb, 1, FMT(prefix, ".allOrNone")),
