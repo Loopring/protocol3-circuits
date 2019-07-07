@@ -45,8 +45,8 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        leafBefore(pb, {before.publicKeyX, before.publicKeyY, before.nonce, before.balancesRoot}, FMT(prefix, ".leafBefore")),
-        leafAfter(pb, {after.publicKeyX, after.publicKeyY, after.nonce, after.balancesRoot}, FMT(prefix, ".leafAfter")),
+        leafBefore(pb, var_array({before.publicKeyX, before.publicKeyY, before.nonce, before.balancesRoot}), FMT(prefix, ".leafBefore")),
+        leafAfter(pb, var_array({after.publicKeyX, after.publicKeyY, after.nonce, after.balancesRoot}), FMT(prefix, ".leafAfter")),
 
         proof(make_var_array(pb, TREE_DEPTH_ACCOUNTS * 3, FMT(prefix, ".proof"))),
         proofVerifierBefore(pb, TREE_DEPTH_ACCOUNTS, address, leafBefore.result(), root, proof, FMT(prefix, ".pathBefore")),
@@ -106,8 +106,8 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        leafBefore(pb, {before.balance, before.tradingHistory}, FMT(prefix, ".leafBefore")),
-        leafAfter(pb, {after.balance, after.tradingHistory}, FMT(prefix, ".leafAfter")),
+        leafBefore(pb, var_array({before.balance, before.tradingHistory}), FMT(prefix, ".leafBefore")),
+        leafAfter(pb, var_array({after.balance, after.tradingHistory}), FMT(prefix, ".leafAfter")),
 
         proof(make_var_array(pb, TREE_DEPTH_TOKENS * 3, FMT(prefix, ".proof"))),
         proofVerifierBefore(pb, TREE_DEPTH_TOKENS, tokenID, leafBefore.result(), root, proof, FMT(prefix, ".pathBefore")),

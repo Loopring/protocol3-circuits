@@ -49,7 +49,7 @@ public:
 
         child0(pb, bit0_or_bit1.result(), sideNodes[0], input, FMT(prefix, ".child0")),
         child1p(pb, bit0, input, sideNodes[0], FMT(prefix, ".child1p")),
-        child1(pb, bit1, sideNodes[1], child1p.result(), FMT(prefix, ".child1p")),
+        child1(pb, bit1, sideNodes[1], child1p.result(), FMT(prefix, ".child1")),
         child2p(pb, bit0, sideNodes[2], input, FMT(prefix, ".child2p")),
         child2(pb, bit1, child2p.result(), sideNodes[1], FMT(prefix, ".child2")),
         child3(pb, bit0_and_bit1.result(), input, sideNodes[2], FMT(prefix, ".child3"))
@@ -129,7 +129,7 @@ public:
 
             auto t = HashT(
                     in_pb,
-                    m_selectors[i].getChildren(),
+                    var_array(m_selectors[i].getChildren()),
                     FMT(this->annotation_prefix, ".hasher[%zu]", i));
             m_hashers.push_back(t);
         }
@@ -199,46 +199,10 @@ public:
     }
 };
 
-template<unsigned param_t, unsigned param_c, unsigned param_F, unsigned param_P, unsigned nInputs, unsigned nOutputs>
-class Poseidon: public Poseidon_gadget_T<param_t, param_c, param_F, param_P, nInputs, nOutputs>
-{
-public:
-
-    const VariableT res;
-
-    Poseidon(
-		ProtoboardT &in_pb,
-		const std::vector<VariableT>& in_messages,
-		const std::string &prefix
-	) :
-		Poseidon_gadget_T<param_t, param_c, param_F, param_P, nInputs, nOutputs>(in_pb, VariableArrayT(in_messages.begin(), in_messages.end()), prefix),
-        res(make_variable(this->pb, FMT(prefix, ".res")))
-	{
-
-	}
-
-    void generate_r1cs_witness() const
-    {
-        Poseidon_gadget_T<param_t, param_c, param_F, param_P, nInputs, nOutputs>::generate_r1cs_witness();
-        this->pb.val(res) = lc_vals(this->pb, this->outputs())[0];
-    }
-
-    void generate_r1cs_constraints()
-    {
-        Poseidon_gadget_T<param_t, param_c, param_F, param_P, nInputs, nOutputs>::generate_r1cs_constraints();
-        this->pb.add_r1cs_constraint(ConstraintT(res, FieldT::one(), this->outputs()[0]), FMT(this->annotation_prefix, ".res == output"));
-    }
-
-	const VariableT& result() const
-    {
-        return res;
-	}
-};
-
-using HashMerkleTree = Poseidon<5, 1, 8, 57, 4, 1>;
-using HashAccountLeaf = Poseidon<5, 1, 8, 57, 4, 1>;
-using HashBalanceLeaf = Poseidon<3, 1, 8, 57, 2, 1>;
-using HashTradingHistoryLeaf = Poseidon<4, 1, 8, 57, 3, 1>;
+using HashMerkleTree = Poseidon_gadget_T<5, 1, 8, 57, 4, 1>;
+using HashAccountLeaf = Poseidon_gadget_T<5, 1, 8, 57, 4, 1>;
+using HashBalanceLeaf = Poseidon_gadget_T<3, 1, 8, 57, 2, 1>;
+using HashTradingHistoryLeaf = Poseidon_gadget_T<4, 1, 8, 57, 3, 1>;
 
 // Optimal parameters:
 //using HashMerkleTree = Poseidon<5, 1, 6, 52, 4, 1>;

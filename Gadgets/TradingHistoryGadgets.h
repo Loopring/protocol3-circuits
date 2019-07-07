@@ -51,8 +51,8 @@ public:
 
         fill(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fill")),
 
-        leafBefore(pb, {before.filled, before.cancelled, before.orderID}, FMT(prefix, ".leafBefore")),
-        leafAfter(pb, {after.filled, after.cancelled, after.orderID}, FMT(prefix, ".leafAfter")),
+        leafBefore(pb, var_array({before.filled, before.cancelled, before.orderID}), FMT(prefix, ".leafBefore")),
+        leafAfter(pb, var_array({after.filled, after.cancelled, after.orderID}), FMT(prefix, ".leafAfter")),
 
         proof(make_var_array(pb, TREE_DEPTH_TRADING_HISTORY * 3, FMT(prefix, ".proof"))),
         proofVerifierBefore(pb, TREE_DEPTH_TRADING_HISTORY, address, leafBefore.result(), merkleRootBefore, proof, FMT(prefix, ".pathBefore")),
