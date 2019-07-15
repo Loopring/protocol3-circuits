@@ -3,15 +3,13 @@
 
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
+#include "../Utils/Utils.h"
 #include "../Gadgets/AccountGadgets.h"
 #include "../Gadgets/TradingHistoryGadgets.h"
 
-#include "../ThirdParty/BigInt.hpp"
 #include "ethsnarks.hpp"
 #include "utils.hpp"
 #include "jubjub/point.hpp"
-#include "jubjub/eddsa.hpp"
-#include "gadgets/sha256_many.hpp"
 
 using namespace ethsnarks;
 
@@ -27,11 +25,11 @@ public:
     const jubjub::VariablePointT publicKey;
     const jubjub::VariablePointT walletPublicKey;
 
-    VariableArrayT accountID;
-    VariableArrayT orderTokenID;
+    libsnark::dual_variable_gadget<FieldT> accountID;
+    libsnark::dual_variable_gadget<FieldT> orderTokenID;
     libsnark::dual_variable_gadget<FieldT> orderID;
-    VariableArrayT walletAccountID;
-    VariableArrayT feeTokenID;
+    libsnark::dual_variable_gadget<FieldT> walletAccountID;
+    libsnark::dual_variable_gadget<FieldT> feeTokenID;
     libsnark::dual_variable_gadget<FieldT> fee;
     FloatGadget fFee;
     EnsureAccuracyGadget ensureAccuracyFee;
@@ -78,7 +76,7 @@ public:
 
     ForceLeqGadget checkOrderID;
 
-    const VariableArrayT message;
+    Poseidon_gadget_T<11, 1, 6, 53, 9, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OrderCancellationGadget(
@@ -87,7 +85,7 @@ public:
         const Constants& _constants,
         const VariableT& _accountsMerkleRoot,
         const VariableT& _operatorBalancesRoot,
-        const VariableArrayT& _exchangeID,
+        const VariableT& blockExchangeID,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
@@ -97,11 +95,11 @@ public:
         publicKey(pb, FMT(prefix, ".publicKey")),
         walletPublicKey(pb, FMT(prefix, ".walletPublicKey")),
 
-        accountID(make_var_array(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".account"))),
-        orderTokenID(make_var_array(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".orderTokenID"))),
+        accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
+        orderTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".orderTokenID")),
         orderID(pb, NUM_BITS_ORDERID, FMT(prefix, ".orderID")),
-        walletAccountID(make_var_array(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".walletAccountID"))),
-        feeTokenID(make_var_array(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".feeTokenID"))),
+        walletAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".walletAccountID")),
+        feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
         walletSplitPercentage(pb, constants, FMT(prefix, ".walletSplitPercentage")),
@@ -139,40 +137,40 @@ public:
         feePaymentOperator(pb, NUM_BITS_AMOUNT, feePaymentWallet.X, balanceF_O_before, feeToOperator.result(), FMT(prefix, ".feePaymentOperator")),
 
         // Trade history
-        updateTradeHistory_A(pb, tradingHistoryRootT_A_before, subArray(orderID.bits, 0, TREE_DEPTH_TRADING_HISTORY),
+        updateTradeHistory_A(pb, tradingHistoryRootT_A_before, subArray(orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
                              {filled, cancelled_before, orderID_before},
                              {filled, constants.one, orderID.packed},
                              FMT(prefix, ".updateTradeHistory_A")),
         // Balance
-        updateBalanceT_A(pb, balancesRoot_before, orderTokenID,
+        updateBalanceT_A(pb, balancesRoot_before, orderTokenID.bits,
                          {balanceT_A, tradingHistoryRootT_A_before},
                          {balanceT_A, updateTradeHistory_A.getNewRoot()},
                          FMT(prefix, ".updateBalanceT_A")),
         // Balance Fee
-        updateBalanceF_A(pb, updateBalanceT_A.getNewRoot(), feeTokenID,
+        updateBalanceF_A(pb, updateBalanceT_A.getNewRoot(), feeTokenID.bits,
                          {balanceF_A_before, tradingHistoryRootF_A},
                          {feePaymentOperator.X, tradingHistoryRootF_A},
                          FMT(prefix, ".updateBalanceF_A")),
         // Account
-        updateAccount_A(pb, _accountsMerkleRoot, accountID,
+        updateAccount_A(pb, _accountsMerkleRoot, accountID.bits,
                         {publicKey.x, publicKey.y, nonce_before.packed, balancesRoot_before},
                         {publicKey.x, publicKey.y, nonce_after.result(), updateBalanceF_A.getNewRoot()},
                         FMT(prefix, ".updateAccount_A")),
 
 
         // Wallet balance
-        updateBalanceF_W(pb, balancesRoot_W_before, feeTokenID,
+        updateBalanceF_W(pb, balancesRoot_W_before, feeTokenID.bits,
                          {balanceF_W_before, tradingHistoryRootF_W},
                          {feePaymentWallet.Y, tradingHistoryRootF_W},
                          FMT(prefix, ".updateBalanceF_W")),
         // Wallet account
-        updateAccount_W(pb, updateAccount_A.result(), walletAccountID,
+        updateAccount_W(pb, updateAccount_A.result(), walletAccountID.bits,
                         {walletPublicKey.x, walletPublicKey.y, nonce_W, balancesRoot_W_before},
                         {walletPublicKey.x, walletPublicKey.y, nonce_W, updateBalanceF_W.getNewRoot()},
                         FMT(prefix, ".updateAccount_W")),
 
         // Operator balance
-        updateBalanceF_O(pb, _operatorBalancesRoot, feeTokenID,
+        updateBalanceF_O(pb, _operatorBalancesRoot, feeTokenID.bits,
                          {balanceF_O_before, tradingHistoryRootF_O},
                          {feePaymentOperator.Y, tradingHistoryRootF_O},
                          FMT(prefix, ".updateBalanceF_O")),
@@ -180,11 +178,19 @@ public:
         // OrderID check
         checkOrderID(pb, orderID_before, orderID.packed, NUM_BITS_ORDERID, FMT(prefix, ".checkOrderID")),
 
-        // Signature
-        message(flatten({_exchangeID, accountID, orderTokenID, orderID.bits, walletAccountID,
-                         feeTokenID, fee.bits, walletSplitPercentage.value.bits,
-                         nonce_before.bits, constants.padding_00})),
-        signatureVerifier(pb, params, publicKey, message, FMT(prefix, ".signatureVerifier"))
+         // Signature
+        hash(pb, var_array({
+            blockExchangeID,
+            accountID.packed,
+            orderTokenID.packed,
+            orderID.packed,
+            walletAccountID.packed,
+            feeTokenID.packed,
+            fee.packed,
+            walletSplitPercentage.value.packed,
+            nonce_before.packed
+        }), FMT(this->annotation_prefix, ".hash")),
+        signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }
@@ -201,11 +207,11 @@ public:
 
     const std::vector<VariableArrayT> getPublicData() const
     {
-        return {accountID,
-                walletAccountID,
-                orderTokenID,
+        return {accountID.bits,
+                walletAccountID.bits,
+                orderTokenID.bits,
                 constants.accountPadding, orderID.bits,
-                feeTokenID,
+                feeTokenID.bits,
                 fFee.bits(),
                 constants.padding_0, walletSplitPercentage.value.bits};
     }
@@ -217,12 +223,16 @@ public:
         pb.val(walletPublicKey.x) = cancellation.accountUpdate_W.before.publicKey.x;
         pb.val(walletPublicKey.y) = cancellation.accountUpdate_W.before.publicKey.y;
 
-        accountID.fill_with_bits_of_field_element(pb, cancellation.accountUpdate_A.accountID);
-        orderTokenID.fill_with_bits_of_field_element(pb, cancellation.balanceUpdateT_A.tokenID);
+        accountID.bits.fill_with_bits_of_field_element(pb, cancellation.accountUpdate_A.accountID);
+        accountID.generate_r1cs_witness_from_bits();
+        orderTokenID.bits.fill_with_bits_of_field_element(pb, cancellation.balanceUpdateT_A.tokenID);
+        orderTokenID.generate_r1cs_witness_from_bits();
         orderID.bits.fill_with_bits_of_field_element(pb, cancellation.tradeHistoryUpdate_A.orderID);
         orderID.generate_r1cs_witness_from_bits();
-        walletAccountID.fill_with_bits_of_field_element(pb, cancellation.accountUpdate_W.accountID);
-        feeTokenID.fill_with_bits_of_field_element(pb, cancellation.balanceUpdateF_A.tokenID);
+        walletAccountID.bits.fill_with_bits_of_field_element(pb, cancellation.accountUpdate_W.accountID);
+        walletAccountID.generate_r1cs_witness_from_bits();
+        feeTokenID.bits.fill_with_bits_of_field_element(pb, cancellation.balanceUpdateF_A.tokenID);
+        feeTokenID.generate_r1cs_witness_from_bits();
         fee.bits.fill_with_bits_of_field_element(pb, cancellation.fee);
         fee.generate_r1cs_witness_from_bits();
         fFee.generate_r1cs_witness(toFloat(cancellation.fee, Float16Encoding));
@@ -270,6 +280,8 @@ public:
 
         checkOrderID.generate_r1cs_witness();
 
+        // Check signature
+        hash.generate_r1cs_witness();
         signatureVerifier.generate_r1cs_witness(cancellation.signature);
     }
 
@@ -303,7 +315,8 @@ public:
 
         checkOrderID.generate_r1cs_constraints();
 
-        // Signature
+        // Check signature
+        hash.generate_r1cs_constraints();
         signatureVerifier.generate_r1cs_constraints();
     }
 };
@@ -344,7 +357,7 @@ public:
         merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
         merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
 
-        operatorAccountID(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".operatorAccountID")),
+        operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
         publicKey(pb, FMT(prefix, ".publicKey")),
         nonce(make_variable(pb, 0, FMT(prefix, ".nonce"))),
         balancesRoot_before(make_variable(pb, 0, FMT(prefix, ".balancesRoot_before")))
@@ -387,7 +400,7 @@ public:
                 constants,
                 cancelAccountsRoot,
                 cancelOperatorBalancesRoot,
-                exchangeID.bits,
+                exchangeID.packed,
                 std::string("cancels_") + std::to_string(j)
             );
             cancels.back().generate_r1cs_constraints();

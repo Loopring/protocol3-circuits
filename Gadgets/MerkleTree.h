@@ -90,7 +90,7 @@ public:
 };
 
 template<typename HashT>
-class markle_path_compute_4 : public GadgetT
+class merkle_path_compute_4 : public GadgetT
 {
 public:
     const size_t m_depth;
@@ -101,7 +101,7 @@ public:
     std::vector<merkle_path_selector_4> m_selectors;
     std::vector<HashT> m_hashers;
 
-    markle_path_compute_4(
+    merkle_path_compute_4(
         ProtoboardT &in_pb,
         const size_t in_depth,
         const VariableArrayT& in_address_bits,
@@ -165,7 +165,7 @@ public:
 * Merkle path authenticator, verifies computed root matches expected result
 */
 template<typename HashT>
-class merkle_path_authenticator_4 : public markle_path_compute_4<HashT>
+class merkle_path_authenticator_4 : public merkle_path_compute_4<HashT>
 {
 public:
     const VariableT m_expected_root;
@@ -179,7 +179,7 @@ public:
         const VariableArrayT in_path,
         const std::string &in_annotation_prefix
     ) :
-        markle_path_compute_4<HashT>::markle_path_compute_4(in_pb, in_depth, in_address_bits, in_leaf, in_path, in_annotation_prefix),
+        merkle_path_compute_4<HashT>::merkle_path_compute_4(in_pb, in_depth, in_address_bits, in_leaf, in_path, in_annotation_prefix),
         m_expected_root(in_expected_root)
     { }
 
@@ -190,7 +190,7 @@ public:
 
     void generate_r1cs_constraints()
     {
-        markle_path_compute_4<HashT>::generate_r1cs_constraints();
+        merkle_path_compute_4<HashT>::generate_r1cs_constraints();
 
         // Ensure root matches calculated path hash
         this->pb.add_r1cs_constraint(
@@ -199,19 +199,20 @@ public:
     }
 };
 
-using HashMerkleTree = Poseidon_gadget_T<5, 1, 8, 57, 4, 1>;
-using HashAccountLeaf = Poseidon_gadget_T<5, 1, 8, 57, 4, 1>;
-using HashBalanceLeaf = Poseidon_gadget_T<3, 1, 8, 57, 2, 1>;
-using HashTradingHistoryLeaf = Poseidon_gadget_T<4, 1, 8, 57, 3, 1>;
+// Same parameters for ease of implementation in EVM
+using HashMerkleTree = Poseidon_gadget_T<5, 1, 6, 52, 4, 1>;
+using HashAccountLeaf = Poseidon_gadget_T<5, 1, 6, 52, 4, 1>;
+using HashBalanceLeaf = Poseidon_gadget_T<5, 1, 6, 52, 2, 1>;
+using HashTradingHistoryLeaf = Poseidon_gadget_T<5, 1, 6, 52, 3, 1>;
 
-// Optimal parameters:
-//using HashMerkleTree = Poseidon<5, 1, 6, 52, 4, 1>;
-//using HashAccountLeaf = Poseidon<5, 1, 6, 52, 4, 1>;
-//using HashBalanceLeaf = Poseidon<3, 1, 6, 51, 2, 1>;
-//using HashTradingHistoryLeaf = Poseidon<4, 1, 6, 52, 3, 1>;
+// Minimal parameters for 128bit security:
+//using HashMerkleTree = Poseidon_gadget_T<5, 1, 6, 52, 4, 1>;
+//using HashAccountLeaf = Poseidon_gadget_T<5, 1, 6, 52, 4, 1>;
+//using HashBalanceLeaf = Poseidon_gadget_T<3, 1, 6, 51, 2, 1>;
+//using HashTradingHistoryLeaf = Poseidon_gadget_T<4, 1, 6, 52, 3, 1>;
 
-typedef Loopring::merkle_path_authenticator_4<HashMerkleTree> MerklePathCheckT;
-typedef Loopring::markle_path_compute_4<HashMerkleTree> MerklePathT;
+using MerklePathCheckT = merkle_path_authenticator_4<HashMerkleTree>;
+using MerklePathT = merkle_path_compute_4<HashMerkleTree>;
 
 }
 

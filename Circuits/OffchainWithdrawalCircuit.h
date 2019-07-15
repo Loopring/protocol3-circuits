@@ -21,13 +21,13 @@ public:
 
     const Constants& constants;
 
-    VariableArrayT accountID;
-    VariableArrayT tokenID;
+    libsnark::dual_variable_gadget<FieldT> accountID;
+    libsnark::dual_variable_gadget<FieldT> tokenID;
     libsnark::dual_variable_gadget<FieldT> amountRequested;
     libsnark::dual_variable_gadget<FieldT> fee;
 
-    VariableArrayT walletAccountID;
-    VariableArrayT feeTokenID;
+    libsnark::dual_variable_gadget<FieldT> walletAccountID;
+    libsnark::dual_variable_gadget<FieldT> feeTokenID;
     FloatGadget fFee;
     EnsureAccuracyGadget ensureAccuracyFee;
     PercentageGadget walletSplitPercentage;
@@ -68,7 +68,7 @@ public:
 
     UpdateBalanceGadget updateBalanceF_O;
 
-    const VariableArrayT message;
+    Poseidon_gadget_T<11, 1, 6, 53, 9, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OffchainWithdrawalGadget(
@@ -77,19 +77,19 @@ public:
         const Constants& _constants,
         const VariableT& accountsMerkleRoot,
         const VariableT& operatorBalancesRoot,
-        const VariableArrayT& exchangeID,
+        const VariableT& blockExchangeID,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
         constants(_constants),
 
-        accountID(make_var_array(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".accountID"))),
-        tokenID(make_var_array(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".tokenID"))),
+        accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
+        tokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID")),
         amountRequested(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amountRequested")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
-        walletAccountID(make_var_array(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".walletAccountID"))),
-        feeTokenID(make_var_array(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".feeTokenID"))),
+        walletAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".walletAccountID")),
+        feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
         walletSplitPercentage(pb, constants, FMT(prefix, ".walletSplitPercentage")),
 
@@ -150,44 +150,54 @@ public:
             feePaymentOperator.X,
             balanceFBefore.tradingHistory
         }),
-        updateBalanceF_A(pb, accountBefore.balancesRoot, feeTokenID, balanceFBefore, balanceFAfter, FMT(prefix, ".updateBalanceF_A")),
+        updateBalanceF_A(pb, accountBefore.balancesRoot, feeTokenID.bits, balanceFBefore, balanceFAfter, FMT(prefix, ".updateBalanceF_A")),
         balanceAfter({
             balance_after.result(),
             balanceBefore.tradingHistory
         }),
-        updateBalance_A(pb, updateBalanceF_A.getNewRoot(), tokenID, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance_A")),
+        updateBalance_A(pb, updateBalanceF_A.getNewRoot(), tokenID.bits, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance_A")),
         accountAfter({
             accountBefore.publicKeyX,
             accountBefore.publicKeyY,
             nonce_after.result(),
             updateBalance_A.getNewRoot()
         }),
-        updateAccount_A(pb, accountsMerkleRoot, accountID, accountBefore, accountAfter, FMT(prefix, ".updateAccount_A")),
+        updateAccount_A(pb, accountsMerkleRoot, accountID.bits, accountBefore, accountAfter, FMT(prefix, ".updateAccount_A")),
 
         // Update Wallet
         balanceWalletAfter({
             feePaymentWallet.Y,
             balanceWalletBefore.tradingHistory
         }),
-        updateBalance_W(pb, accountWalletBefore.balancesRoot, feeTokenID, balanceWalletBefore, balanceWalletAfter, FMT(prefix, ".updateBalance_W")),
+        updateBalance_W(pb, accountWalletBefore.balancesRoot, feeTokenID.bits, balanceWalletBefore, balanceWalletAfter, FMT(prefix, ".updateBalance_W")),
         accountWalletAfter({
             accountWalletBefore.publicKeyX,
             accountWalletBefore.publicKeyY,
             accountWalletBefore.nonce,
             updateBalance_W.getNewRoot()
         }),
-        updateAccount_W(pb, updateAccount_A.result(), walletAccountID, accountWalletBefore, accountWalletAfter, FMT(prefix, ".updateAccount_W")),
+        updateAccount_W(pb, updateAccount_A.result(), walletAccountID.bits, accountWalletBefore, accountWalletAfter, FMT(prefix, ".updateAccount_W")),
 
         // Update Operator
-        updateBalanceF_O(pb, operatorBalancesRoot, feeTokenID,
+        updateBalanceF_O(pb, operatorBalancesRoot, feeTokenID.bits,
                          {balanceF_O_before, tradingHistoryRootF_O},
                          {feePaymentOperator.Y, tradingHistoryRootF_O},
                          FMT(prefix, ".updateBalanceF_O")),
 
         // Signature
-        message(flatten({exchangeID, accountID, tokenID, amountRequested.bits, walletAccountID,
-                         feeTokenID, fee.bits, walletSplitPercentage.value.bits, nonce_before.bits, constants.padding_0})),
-        signatureVerifier(pb, params, jubjub::VariablePointT(accountBefore.publicKeyX, accountBefore.publicKeyY), message, FMT(prefix, ".signatureVerifier"))
+        hash(pb, var_array({
+            blockExchangeID,
+            accountID.packed,
+            tokenID.packed,
+            amountRequested.packed,
+            walletAccountID.packed,
+            feeTokenID.packed,
+            fee.packed,
+            walletSplitPercentage.value.packed,
+            nonce_before.packed
+        }), FMT(this->annotation_prefix, ".hash")),
+        signatureVerifier(pb, params, jubjub::VariablePointT(accountBefore.publicKeyX, accountBefore.publicKeyY),
+                          hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }
@@ -204,25 +214,29 @@ public:
 
     const std::vector<VariableArrayT> getApprovedWithdrawalData() const
     {
-        return {tokenID,
-                accountID,
+        return {tokenID.bits,
+                accountID.bits,
                 amountWithdrawn.bits()};
     }
 
     const std::vector<VariableArrayT> getDataAvailabilityData() const
     {
-        return {constants.accountPadding, walletAccountID,
-                feeTokenID,
+        return {constants.accountPadding, walletAccountID.bits,
+                feeTokenID.bits,
                 fFee.bits(),
                 constants.padding_0, walletSplitPercentage.value.bits};
     }
 
     void generate_r1cs_witness(const OffchainWithdrawal& withdrawal)
     {
-        accountID.fill_with_bits_of_field_element(pb, withdrawal.accountUpdate_A.accountID);
-        tokenID.fill_with_bits_of_field_element(pb, withdrawal.balanceUpdateW_A.tokenID);
-        walletAccountID.fill_with_bits_of_field_element(pb, withdrawal.accountUpdate_W.accountID);
-        feeTokenID.fill_with_bits_of_field_element(pb, withdrawal.balanceUpdateF_A.tokenID);
+        accountID.bits.fill_with_bits_of_field_element(pb, withdrawal.accountUpdate_A.accountID);
+        accountID.generate_r1cs_witness_from_bits();
+        tokenID.bits.fill_with_bits_of_field_element(pb, withdrawal.balanceUpdateW_A.tokenID);
+        tokenID.generate_r1cs_witness_from_bits();
+        walletAccountID.bits.fill_with_bits_of_field_element(pb, withdrawal.accountUpdate_W.accountID);
+        walletAccountID.generate_r1cs_witness_from_bits();
+        feeTokenID.bits.fill_with_bits_of_field_element(pb, withdrawal.balanceUpdateF_A.tokenID);
+        feeTokenID.generate_r1cs_witness_from_bits();
         fee.bits.fill_with_bits_of_field_element(pb, withdrawal.fee);
         fee.generate_r1cs_witness_from_bits();
         fFee.generate_r1cs_witness(toFloat(withdrawal.fee, Float16Encoding));
@@ -281,11 +295,16 @@ public:
         updateBalanceF_O.generate_r1cs_witness(withdrawal.balanceUpdateF_O.proof);
 
         // Check signature
+        hash.generate_r1cs_witness();
         signatureVerifier.generate_r1cs_witness(withdrawal.signature);
     }
 
     void generate_r1cs_constraints()
     {
+        accountID.generate_r1cs_constraints(true);
+        tokenID.generate_r1cs_constraints(true);
+        walletAccountID.generate_r1cs_constraints(true);
+        feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
         fFee.generate_r1cs_constraints();
         ensureAccuracyFee.generate_r1cs_constraints();
@@ -314,6 +333,8 @@ public:
         updateAccount_W.generate_r1cs_constraints();
         updateBalanceF_O.generate_r1cs_constraints();
 
+        // Check signature
+        hash.generate_r1cs_constraints();
         signatureVerifier.generate_r1cs_constraints();
     }
 };
@@ -354,7 +375,7 @@ public:
         merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
         merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
 
-        operatorAccountID(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".operatorAccountID")),
+        operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
         publicKey(pb, FMT(prefix, ".publicKey")),
         nonce(make_variable(pb, 0, FMT(prefix, ".nonce"))),
         balancesRoot_before(make_variable(pb, 0, FMT(prefix, ".balancesRoot_before")))
@@ -396,7 +417,7 @@ public:
                 constants,
                 withdrawalAccountsRoot,
                 withdrawalOperatorBalancesRoot,
-                exchangeID.bits,
+                exchangeID.packed,
                 std::string("withdrawals_") + std::to_string(j)
             );
             withdrawals.back().generate_r1cs_constraints();

@@ -9,8 +9,10 @@
 #include "jubjub/point.hpp"
 #include "jubjub/eddsa.hpp"
 #include "gadgets/subadd.hpp"
+#include "gadgets/poseidon.hpp"
 
 using namespace ethsnarks;
+using namespace jubjub;
 
 namespace Loopring
 {
@@ -1074,20 +1076,127 @@ public:
     }
 };
 
+class EdDSA_HashRAM_Poseidon_gadget : public GadgetT
+{
+public:
+    Poseidon_gadget_T<6, 1, 6, 52, 5, 1> m_hash_RAM;      // hash_RAM = H(R, A, M)
+    libsnark::dual_variable_gadget<FieldT> hash;
+
+    EdDSA_HashRAM_Poseidon_gadget(
+        ProtoboardT& in_pb,
+        const Params& in_params,
+        const VariablePointT& in_R,
+        const VariablePointT& in_A,
+        const VariableT& in_M,
+        const std::string& annotation_prefix
+    ) :
+        GadgetT(in_pb, annotation_prefix),
+        // Prefix the message with R and A.
+        m_hash_RAM(in_pb, var_array({in_R.x, in_R.y, in_A.x, in_A.y, in_M}), FMT(annotation_prefix, ".hash_RAM")),
+        hash(pb, 254, FMT(annotation_prefix, ".hash"))
+    {
+
+    }
+
+    void generate_r1cs_constraints()
+    {
+        m_hash_RAM.generate_r1cs_constraints();
+        hash.generate_r1cs_constraints(true);
+    }
+
+    void generate_r1cs_witness()
+    {
+        m_hash_RAM.generate_r1cs_witness();
+        hash.bits.fill_with_bits_of_field_element(pb, pb.val(m_hash_RAM.result()));
+        hash.generate_r1cs_witness_from_bits();
+    }
+
+    const VariableArrayT& result()
+    {
+        return hash.bits;
+    }
+};
+
+class EdDSA_Poseidon: public GadgetT
+{
+public:
+    PointValidator m_validator_R;                       // IsValid(R)
+    fixed_base_mul m_lhs;                               // lhs = B*s
+    EdDSA_HashRAM_Poseidon_gadget m_hash_RAM;           // hash_RAM = H(R,A,M)
+    ScalarMult m_At;                                    // A*hash_RAM
+    PointAdder m_rhs;                                   // rhs = R + (A*hash_RAM)
+
+    EdDSA_Poseidon(
+        ProtoboardT& in_pb,
+        const Params& in_params,
+        const EdwardsPoint& in_base,     // B
+        const VariablePointT& in_A,      // A
+        const VariablePointT& in_R,      // R
+        const VariableArrayT& in_s,      // s
+        const VariableT& in_msg,         // m
+        const std::string& annotation_prefix
+    ) :
+        GadgetT(in_pb, annotation_prefix),
+        // IsValid(R)
+        m_validator_R(in_pb, in_params, in_R.x, in_R.y, FMT(this->annotation_prefix, ".validator_R")),
+
+        // lhs = ScalarMult(B, s)
+        m_lhs(in_pb, in_params, in_base.x, in_base.y, in_s, FMT(this->annotation_prefix, ".lhs")),
+
+        // hash_RAM = H(R, A, M)
+        m_hash_RAM(in_pb, in_params, in_R, in_A, in_msg, FMT(this->annotation_prefix, ".hash_RAM")),
+
+        // At = ScalarMult(A,hash_RAM)
+        m_At(in_pb, in_params, in_A.x, in_A.y, m_hash_RAM.result(), FMT(this->annotation_prefix, ".At = A * hash_RAM")),
+
+        // rhs = PointAdd(R, At)
+        m_rhs(in_pb, in_params, in_R.x, in_R.y, m_At.result_x(), m_At.result_y(), FMT(this->annotation_prefix, ".rhs"))
+    {
+
+    }
+
+    void generate_r1cs_constraints()
+    {
+        m_validator_R.generate_r1cs_constraints();
+        m_lhs.generate_r1cs_constraints();
+        m_hash_RAM.generate_r1cs_constraints();
+        m_At.generate_r1cs_constraints();
+        m_rhs.generate_r1cs_constraints();
+
+        // Verify the two points are equal
+        this->pb.add_r1cs_constraint(
+            ConstraintT(m_lhs.result_x(), FieldT::one(), m_rhs.result_x()),
+            FMT(this->annotation_prefix, " lhs.x == rhs.x"));
+
+        this->pb.add_r1cs_constraint(
+            ConstraintT(m_lhs.result_y(), FieldT::one(), m_rhs.result_y()),
+            FMT(this->annotation_prefix, " lhs.y == rhs.y"));
+    }
+
+    void generate_r1cs_witness()
+    {
+        m_validator_R.generate_r1cs_witness();
+        m_lhs.generate_r1cs_witness();
+        m_hash_RAM.generate_r1cs_witness();
+        m_At.generate_r1cs_witness();
+        m_rhs.generate_r1cs_witness();
+    }
+};
+
 class SignatureVerifier : public GadgetT
 {
 public:
 
     const jubjub::VariablePointT sig_R;
     const VariableArrayT sig_s;
-    const VariableArrayT sig_m;
-    jubjub::PureEdDSA signatureVerifier;
+    const VariableT sig_m;
+    EdDSA_Poseidon signatureVerifier;
 
     SignatureVerifier(
         ProtoboardT& pb,
         const jubjub::Params& params,
         const jubjub::VariablePointT& publicKey,
-        const VariableArrayT& _message,
+        const VariableT& _message,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),

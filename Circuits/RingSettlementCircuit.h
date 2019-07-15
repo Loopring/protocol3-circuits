@@ -201,10 +201,10 @@ public:
 
     UpdateBalanceGadget updateBalanceF_O;
 
-    const VariableArrayT message;
-    SignatureVerifier ringMatcherSignatureVerifier;
-    SignatureVerifier dualAuthASignatureVerifier;
-    SignatureVerifier dualAuthBSignatureVerifier;
+    // Will be removed in next beta release because of fee model changes (no ring-matcher anymore)
+    // The operator will only need to sign something like (blockIdx, merkleRoot)
+    //const VariableArrayT message;
+    //SignatureVerifier ringMatcherSignatureVerifier;
 
     RingSettlementGadget(
         ProtoboardT& pb,
@@ -373,7 +373,7 @@ public:
         updateBalanceF_O(pb, _operatorBalancesRoot, tokenID,
                          {balanceF_O.front(), tradingHistoryRoot_O},
                          {balanceF_O.back(), tradingHistoryRoot_O},
-                         FMT(prefix, ".updateBalanceF_O")),
+                         FMT(prefix, ".updateBalanceF_O"))/*,
 
         // Signatures
         message(flatten({orderA.getHash(), orderB.getHash(),
@@ -381,9 +381,7 @@ public:
                          orderA.feeBips.bits, orderB.feeBips.bits,
                          orderA.rebateBips.bits, orderB.rebateBips.bits,
                          nonce_before.bits, constants.padding_0})),
-        ringMatcherSignatureVerifier(pb, params, publicKey, message, FMT(prefix, ".ringMatcherSignatureVerifier")),
-        dualAuthASignatureVerifier(pb, params, orderA.dualAuthPublicKey, message, FMT(prefix, ".dualAuthASignatureVerifier")),
-        dualAuthBSignatureVerifier(pb, params, orderB.dualAuthPublicKey, message, FMT(prefix, ".dualAuthBSignatureVerifier"))
+        ringMatcherSignatureVerifier(pb, params, publicKey, message, FMT(prefix, ".ringMatcherSignatureVerifier"))*/
     {
 
     }
@@ -538,9 +536,7 @@ public:
         updateBalanceF_O.generate_r1cs_witness(ringSettlement.balanceUpdateF_O.proof);
 
         // Signatures
-        ringMatcherSignatureVerifier.generate_r1cs_witness(ringSettlement.ring.ringMatcherSignature);
-        dualAuthASignatureVerifier.generate_r1cs_witness(ringSettlement.ring.dualAuthASignature);
-        dualAuthBSignatureVerifier.generate_r1cs_witness(ringSettlement.ring.dualAuthBSignature);
+        //ringMatcherSignatureVerifier.generate_r1cs_witness(ringSettlement.ring.ringMatcherSignature);
     }
 
 
@@ -612,9 +608,7 @@ public:
         updateBalanceF_O.generate_r1cs_constraints();
 
         // Signatures
-        ringMatcherSignatureVerifier.generate_r1cs_constraints();
-        dualAuthASignatureVerifier.generate_r1cs_constraints();
-        dualAuthBSignatureVerifier.generate_r1cs_constraints();
+        //ringMatcherSignatureVerifier.generate_r1cs_constraints();
     }
 };
 

@@ -6,6 +6,7 @@
 #include "../Utils/Data.h"
 
 #include "ethsnarks.hpp"
+#include "gadgets/poseidon.hpp"
 #include "utils.hpp"
 
 using namespace ethsnarks;
@@ -13,12 +14,10 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
-
 class OrderGadget : public GadgetT
 {
 public:
 
-    libsnark::dual_variable_gadget<FieldT> exchangeID;
     libsnark::dual_variable_gadget<FieldT> orderID;
     libsnark::dual_variable_gadget<FieldT> accountID;
     libsnark::dual_variable_gadget<FieldT> tokenS;
@@ -42,17 +41,11 @@ public:
     ForceZeroAorBGadget feeOrRebateZero;
     ForceLeqGadget validateFeeBips;
 
-    ForceEqualGadget validateExchangeID;
-
     ForceNotEqualGadget tokenS_neq_tokenB;
     ForceNotZeroGadget amountS_notZero;
     ForceNotZeroGadget amountB_notZero;
 
     const jubjub::VariablePointT publicKey;
-
-    libsnark::dual_variable_gadget<FieldT> dualAuthPublicKeyX;
-    libsnark::dual_variable_gadget<FieldT> dualAuthPublicKeyY;
-    const jubjub::VariablePointT dualAuthPublicKey;
 
     VariableT tradeHistoryFilled;
     VariableT tradeHistoryCancelled;
@@ -63,7 +56,10 @@ public:
     VariableT balanceS;
     VariableT balanceB;
 
-    const VariableArrayT message;
+    // Largest value in the order hash is currently 96bit so we can go up to t == 16
+    // (but we need 3 inputs for capacity for 128bit security)
+    // Packing small values together in a single input is also possible
+    Poseidon_gadget_T<15, 1, 6, 53, 12, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OrderGadget(
@@ -75,7 +71,6 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        exchangeID(pb, 32, FMT(prefix, ".exchangeID")),
         orderID(pb, NUM_BITS_ORDERID, FMT(prefix, ".orderID")),
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
         tokenS(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenS")),
@@ -99,17 +94,11 @@ public:
         feeOrRebateZero(pb, feeBips.packed, rebateBips.packed, FMT(prefix, ".feeOrRebateZero")),
         validateFeeBips(pb, feeBips.packed, maxFeeBips.packed, NUM_BITS_BIPS, FMT(prefix, ".feeBips <= maxFeeBips")),
 
-        validateExchangeID(pb, exchangeID.packed, blockExchangeID, FMT(annotation_prefix, ".validateExchangeID")),
-
         tokenS_neq_tokenB(pb, tokenS.packed, tokenB.packed, FMT(prefix, ".tokenS != tokenB")),
         amountS_notZero(pb, amountS.packed, FMT(prefix, ".tokenS != 0")),
         amountB_notZero(pb, amountB.packed, FMT(prefix, ".tokenB != 0")),
 
         publicKey(pb, FMT(prefix, ".publicKey")),
-
-        dualAuthPublicKeyX(pb, 254, FMT(prefix, ".dualAuthPublicKeyX")),
-        dualAuthPublicKeyY(pb, 254, FMT(prefix, ".dualAuthPublicKeyY")),
-        dualAuthPublicKey(dualAuthPublicKeyX.packed, dualAuthPublicKeyY.packed),
 
         tradeHistoryFilled(make_variable(pb, FMT(prefix, ".tradeHistoryFilled"))),
         tradeHistoryCancelled(make_variable(pb, FMT(prefix, ".tradeHistoryCancelled"))),
@@ -120,13 +109,21 @@ public:
         balanceS(make_variable(pb, FMT(prefix, ".balanceS"))),
         balanceB(make_variable(pb, FMT(prefix, ".balanceB"))),
 
-        message(flatten({exchangeID.bits, orderID.bits, accountID.bits,
-                         dualAuthPublicKeyX.bits, dualAuthPublicKeyY.bits,
-                         tokenS.bits, tokenB.bits,
-                         amountS.bits, amountB.bits,
-                         allOrNone.bits, validSince.bits, validUntil.bits,
-                         maxFeeBips.bits, buy.bits})),
-        signatureVerifier(pb, params, publicKey, message, FMT(prefix, ".signatureVerifier"))
+        hash(pb, var_array({
+            blockExchangeID,
+            orderID.packed,
+            accountID.packed,
+            tokenS.packed,
+            tokenB.packed,
+            amountS.packed,
+            amountB.packed,
+            allOrNone.packed,
+            validSince.packed,
+            validUntil.packed,
+            maxFeeBips.packed,
+            buy.packed
+        }), FMT(this->annotation_prefix, ".hash")),
+        signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }
@@ -140,8 +137,6 @@ public:
                                const BalanceLeaf& balanceLeafS, const BalanceLeaf& balanceLeafB,
                                const TradeHistoryLeaf& tradeHistoryLeaf)
     {
-        exchangeID.bits.fill_with_bits_of_field_element(pb, order.exchangeID);
-        exchangeID.generate_r1cs_witness_from_bits();
         orderID.bits.fill_with_bits_of_field_element(pb, order.orderID);
         orderID.generate_r1cs_witness_from_bits();
         accountID.bits.fill_with_bits_of_field_element(pb, order.accountID);
@@ -179,8 +174,6 @@ public:
         feeOrRebateZero.generate_r1cs_witness();
         validateFeeBips.generate_r1cs_witness();
 
-        validateExchangeID.generate_r1cs_witness();
-
         tokenS_neq_tokenB.generate_r1cs_witness();
         amountS_notZero.generate_r1cs_witness();
         amountB_notZero.generate_r1cs_witness();
@@ -197,17 +190,13 @@ public:
         pb.val(publicKey.x) = account.publicKey.x;
         pb.val(publicKey.y) = account.publicKey.y;
 
-        dualAuthPublicKeyX.bits.fill_with_bits_of_field_element(pb, order.dualAuthPublicKey.x);
-        dualAuthPublicKeyX.generate_r1cs_witness_from_bits();
-        dualAuthPublicKeyY.bits.fill_with_bits_of_field_element(pb, order.dualAuthPublicKey.y);
-        dualAuthPublicKeyY.generate_r1cs_witness_from_bits();
-
+        hash.generate_r1cs_witness();
+        // print(pb, "orderHash", hash.result());
         signatureVerifier.generate_r1cs_witness(order.signature);
     }
 
     void generate_r1cs_constraints()
     {
-        exchangeID.generate_r1cs_constraints(true);
         accountID.generate_r1cs_constraints(true);
         tokenS.generate_r1cs_constraints(true);
         tokenB.generate_r1cs_constraints(true);
@@ -230,17 +219,13 @@ public:
         feeOrRebateZero.generate_r1cs_constraints();
         validateFeeBips.generate_r1cs_constraints();
 
-        validateExchangeID.generate_r1cs_constraints();
-
         tokenS_neq_tokenB.generate_r1cs_constraints();
         amountS_notZero.generate_r1cs_constraints();
         amountB_notZero.generate_r1cs_constraints();
 
         tradeHistory.generate_r1cs_constraints();
 
-        dualAuthPublicKeyX.generate_r1cs_constraints(true);
-        dualAuthPublicKeyY.generate_r1cs_constraints(true);
-
+        hash.generate_r1cs_constraints();
         signatureVerifier.generate_r1cs_constraints();
     }
 };
