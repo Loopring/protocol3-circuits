@@ -179,11 +179,6 @@ public:
 
     }
 
-    ~DepositCircuit()
-    {
-
-    }
-
     void generate_r1cs_constraints(int numAccounts)
     {
         this->numAccounts = numAccounts;

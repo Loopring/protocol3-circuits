@@ -343,7 +343,7 @@ public:
     const jubjub::VariablePointT publicKey;
     VariableT nonce;
     VariableT balancesRoot_before;
-    UpdateAccountGadget* updateAccount_O = nullptr;
+    std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
     OrderCancellationCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
@@ -363,14 +363,6 @@ public:
         balancesRoot_before(make_variable(pb, 0, FMT(prefix, ".balancesRoot_before")))
     {
 
-    }
-
-    ~OrderCancellationCircuit()
-    {
-        if (updateAccount_O)
-        {
-            delete updateAccount_O;
-        }
     }
 
     void generate_r1cs_constraints(bool onchainDataAvailability, int numCancels)
@@ -415,10 +407,10 @@ public:
 
         // Update operator account
         operatorAccountID.generate_r1cs_constraints(true);
-        updateAccount_O = new UpdateAccountGadget(pb, cancels.back().getNewAccountsRoot(), operatorAccountID.bits,
+        updateAccount_O.reset(new UpdateAccountGadget(pb, cancels.back().getNewAccountsRoot(), operatorAccountID.bits,
                 {publicKey.x, publicKey.y, nonce, balancesRoot_before},
                 {publicKey.x, publicKey.y, nonce, cancels.back().getNewOperatorBalancesRoot()},
-                FMT(annotation_prefix, ".updateAccount_O"));
+                FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
         // Check the input hash

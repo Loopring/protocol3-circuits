@@ -1252,7 +1252,7 @@ public:
     libsnark::dual_variable_gadget<FieldT>& inputHash;
     std::vector<VariableArrayT> publicDataBits;
 
-    sha256_many* hasher;
+    std::unique_ptr<sha256_many> hasher;
 
     PublicDataGadget(
         ProtoboardT& pb,
@@ -1262,15 +1262,7 @@ public:
         GadgetT(pb, prefix),
         inputHash(_inputHash)
     {
-        this->hasher = nullptr;
-    }
 
-    ~PublicDataGadget()
-    {
-        if (hasher)
-        {
-            delete hasher;
-        }
     }
 
     void add(const VariableArrayT& bits)
@@ -1308,7 +1300,7 @@ public:
 
     void generate_r1cs_constraints()
     {
-        hasher = new sha256_many(pb, flattenReverse(publicDataBits), ".hasher");
+        hasher.reset(new sha256_many(pb, flattenReverse(publicDataBits), ".hasher"));
         hasher->generate_r1cs_constraints();
 
         // Check that the hash matches the public input

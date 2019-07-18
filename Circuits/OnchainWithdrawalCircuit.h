@@ -227,11 +227,6 @@ public:
 
     }
 
-    ~OnchainWithdrawalCircuit()
-    {
-
-    }
-
     void generate_r1cs_constraints(bool onchainDataAvailability, int numWithdrawals)
     {
         this->onchainDataAvailability = onchainDataAvailability;
