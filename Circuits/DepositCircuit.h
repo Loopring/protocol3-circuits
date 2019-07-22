@@ -45,8 +45,8 @@ public:
 
         constants(_constants),
 
-        accountID(make_var_array(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".accountID"))),
-        tokenID(make_var_array(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".tokenID"))),
+        accountID(make_var_array(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID"))),
+        tokenID(make_var_array(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID"))),
 
         amount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amount")),
         publicKeyX(pb, 256, FMT(prefix, ".publicKeyX")),
@@ -175,11 +175,6 @@ public:
         depositBlockHashStart(make_var_array(pb, 256, FMT(prefix, ".depositBlockHashStart"))),
         startIndex(pb, 32, FMT(prefix, ".startIndex")),
         count(pb, 32, FMT(prefix, ".count"))
-    {
-
-    }
-
-    ~DepositCircuit()
     {
 
     }

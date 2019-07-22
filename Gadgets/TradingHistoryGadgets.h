@@ -4,6 +4,8 @@
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
 
+#include "MerkleTree.h"
+
 #include "ethsnarks.hpp"
 #include "utils.hpp"
 #include "gadgets/mimc.hpp"
@@ -24,15 +26,12 @@ struct TradeHistoryState
 class UpdateTradeHistoryGadget : public GadgetT
 {
 public:
-    typedef merkle_path_authenticator<MiMC_hash_gadget> MerklePathCheckT;
-    typedef markle_path_compute<MiMC_hash_gadget> MerklePathT;
-
     const VariableT merkleRootBefore;
 
     libsnark::dual_variable_gadget<FieldT> fill;
 
-    MiMC_hash_gadget leafBefore;
-    MiMC_hash_gadget leafAfter;
+    HashTradingHistoryLeaf leafBefore;
+    HashTradingHistoryLeaf leafAfter;
 
     const VariableArrayT proof;
     MerklePathCheckT proofVerifierBefore;
@@ -52,12 +51,12 @@ public:
 
         fill(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fill")),
 
-        leafBefore(pb, libsnark::ONE, {before.filled, before.cancelled, before.orderID}, FMT(prefix, ".leafBefore")),
-        leafAfter(pb, libsnark::ONE, {after.filled, after.cancelled, after.orderID}, FMT(prefix, ".leafAfter")),
+        leafBefore(pb, var_array({before.filled, before.cancelled, before.orderID}), FMT(prefix, ".leafBefore")),
+        leafAfter(pb, var_array({after.filled, after.cancelled, after.orderID}), FMT(prefix, ".leafAfter")),
 
-        proof(make_var_array(pb, TREE_DEPTH_TRADING_HISTORY, FMT(prefix, ".proof"))),
-        proofVerifierBefore(pb, TREE_DEPTH_TRADING_HISTORY, address, merkle_tree_IVs(pb), leafBefore.result(), merkleRootBefore, proof, FMT(prefix, ".pathBefore")),
-        rootCalculatorAfter(pb, TREE_DEPTH_TRADING_HISTORY, address, merkle_tree_IVs(pb), leafAfter.result(), proof, FMT(prefix, ".pathAfter"))
+        proof(make_var_array(pb, TREE_DEPTH_TRADING_HISTORY * 3, FMT(prefix, ".proof"))),
+        proofVerifierBefore(pb, TREE_DEPTH_TRADING_HISTORY, address, leafBefore.result(), merkleRootBefore, proof, FMT(prefix, ".pathBefore")),
+        rootCalculatorAfter(pb, TREE_DEPTH_TRADING_HISTORY, address, leafAfter.result(), proof, FMT(prefix, ".pathAfter"))
     {
 
     }

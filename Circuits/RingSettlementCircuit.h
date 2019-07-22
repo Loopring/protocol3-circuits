@@ -201,10 +201,10 @@ public:
 
     UpdateBalanceGadget updateBalanceF_O;
 
-    const VariableArrayT message;
-    SignatureVerifier ringMatcherSignatureVerifier;
-    SignatureVerifier dualAuthASignatureVerifier;
-    SignatureVerifier dualAuthBSignatureVerifier;
+    // Will be removed in next beta release because of fee model changes (no ring-matcher anymore)
+    // The operator will only need to sign something like (blockIdx, merkleRoot)
+    //const VariableArrayT message;
+    //SignatureVerifier ringMatcherSignatureVerifier;
 
     RingSettlementGadget(
         ProtoboardT& pb,
@@ -226,7 +226,7 @@ public:
 
         publicKey(pb, FMT(prefix, ".publicKey")),
         ringMatcherAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".ringMatcherAccountID")),
-        tokenID(make_var_array(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".tokenID"))),
+        tokenID(make_var_array(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID"))),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         fFee(pb, constants, Float12Encoding, FMT(prefix, ".fFee")),
         ensureAccuracyFee(pb, fFee.value(), fee.packed, Float12Accuracy, FMT(prefix, ".ensureAccuracyFee")),
@@ -300,11 +300,11 @@ public:
         balancesRootM(make_variable(pb, FMT(prefix, ".balancesRootM"))),
 
         // Update trading history
-        updateTradeHistoryA(pb, tradingHistoryRootS_A, subArray(orderA.orderID.bits, 0, TREE_DEPTH_TRADING_HISTORY),
+        updateTradeHistoryA(pb, tradingHistoryRootS_A, subArray(orderA.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
                             {orderA.tradeHistoryFilled, orderA.tradeHistoryCancelled, orderA.tradeHistoryOrderID},
                             {filledAfterA.result(), orderA.tradeHistory.getCancelledToStore(), orderA.tradeHistory.getOrderIDToStore()},
                             FMT(prefix, ".updateTradeHistoryA")),
-        updateTradeHistoryB(pb, tradingHistoryRootS_B, subArray(orderB.orderID.bits, 0, TREE_DEPTH_TRADING_HISTORY),
+        updateTradeHistoryB(pb, tradingHistoryRootS_B, subArray(orderB.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
                             {orderB.tradeHistoryFilled, orderB.tradeHistoryCancelled, orderB.tradeHistoryOrderID},
                             {filledAfterB.result(), orderB.tradeHistory.getCancelledToStore(), orderB.tradeHistory.getOrderIDToStore()},
                             FMT(prefix, ".updateTradeHistoryB")),
@@ -373,7 +373,7 @@ public:
         updateBalanceF_O(pb, _operatorBalancesRoot, tokenID,
                          {balanceF_O.front(), tradingHistoryRoot_O},
                          {balanceF_O.back(), tradingHistoryRoot_O},
-                         FMT(prefix, ".updateBalanceF_O")),
+                         FMT(prefix, ".updateBalanceF_O"))/*,
 
         // Signatures
         message(flatten({orderA.getHash(), orderB.getHash(),
@@ -381,9 +381,7 @@ public:
                          orderA.feeBips.bits, orderB.feeBips.bits,
                          orderA.rebateBips.bits, orderB.rebateBips.bits,
                          nonce_before.bits, constants.padding_0})),
-        ringMatcherSignatureVerifier(pb, params, publicKey, message, FMT(prefix, ".ringMatcherSignatureVerifier")),
-        dualAuthASignatureVerifier(pb, params, orderA.dualAuthPublicKey, message, FMT(prefix, ".dualAuthASignatureVerifier")),
-        dualAuthBSignatureVerifier(pb, params, orderB.dualAuthPublicKey, message, FMT(prefix, ".dualAuthBSignatureVerifier"))
+        ringMatcherSignatureVerifier(pb, params, publicKey, message, FMT(prefix, ".ringMatcherSignatureVerifier"))*/
     {
 
     }
@@ -538,9 +536,7 @@ public:
         updateBalanceF_O.generate_r1cs_witness(ringSettlement.balanceUpdateF_O.proof);
 
         // Signatures
-        ringMatcherSignatureVerifier.generate_r1cs_witness(ringSettlement.ring.ringMatcherSignature);
-        dualAuthASignatureVerifier.generate_r1cs_witness(ringSettlement.ring.dualAuthASignature);
-        dualAuthBSignatureVerifier.generate_r1cs_witness(ringSettlement.ring.dualAuthBSignature);
+        //ringMatcherSignatureVerifier.generate_r1cs_witness(ringSettlement.ring.ringMatcherSignature);
     }
 
 
@@ -612,9 +608,7 @@ public:
         updateBalanceF_O.generate_r1cs_constraints();
 
         // Signatures
-        ringMatcherSignatureVerifier.generate_r1cs_constraints();
-        dualAuthASignatureVerifier.generate_r1cs_constraints();
-        dualAuthBSignatureVerifier.generate_r1cs_constraints();
+        //ringMatcherSignatureVerifier.generate_r1cs_constraints();
     }
 };
 
@@ -625,7 +619,7 @@ public:
     bool onchainDataAvailability;
     unsigned int numRings;
     jubjub::Params params;
-    std::vector<RingSettlementGadget*> ringSettlements;
+    std::vector<RingSettlementGadget> ringSettlements;
 
     libsnark::dual_variable_gadget<FieldT> publicDataHash;
     Bitstream dataAvailabityData;
@@ -644,14 +638,14 @@ public:
 
     // Protocol fee pool
     const VariableT balancesRootP_before;
-    UpdateAccountGadget* updateAccount_P;
+    std::unique_ptr<UpdateAccountGadget> updateAccount_P;
 
     // Operator
     libsnark::dual_variable_gadget<FieldT> operatorAccountID;
     const jubjub::VariablePointT publicKey;
     const VariableT balancesRootO_before;
     const VariableT nonce_O;
-    UpdateAccountGadget* updateAccount_O;
+    std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
     RingSettlementCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
@@ -671,31 +665,12 @@ public:
 
         balancesRootP_before(make_variable(pb, FMT(prefix, ".balancesRootP_before"))),
 
-        operatorAccountID(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".operatorAccountID")),
+        operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
         publicKey(pb, FMT(prefix, ".publicKey")),
         balancesRootO_before(make_variable(pb, FMT(prefix, ".balancesRootO_before"))),
         nonce_O(make_variable(pb, FMT(prefix, ".nonce_O")))
     {
-        this->updateAccount_P = nullptr;
-        this->updateAccount_O = nullptr;
-    }
 
-    ~RingSettlementCircuit()
-    {
-        if (updateAccount_P)
-        {
-            delete updateAccount_P;
-        }
-
-        if (updateAccount_O)
-        {
-            delete updateAccount_O;
-        }
-
-        for(unsigned int i = 0; i < ringSettlements.size(); i++)
-        {
-            delete ringSettlements[i];
-        }
     }
 
     void generate_r1cs_constraints(bool onchainDataAvailability, int numRings)
@@ -727,10 +702,10 @@ public:
         }
         for (size_t j = 0; j < numRings; j++)
         {
-            const VariableT ringAccountsRoot = (j == 0) ? merkleRootBefore.packed : ringSettlements.back()->getNewAccountsRoot();
-            const VariableT& ringProtocolBalancesRoot = (j == 0) ? balancesRootP_before : ringSettlements.back()->getNewProtocolBalancesRoot();
-            const VariableT& ringOperatorBalancesRoot = (j == 0) ? balancesRootO_before : ringSettlements.back()->getNewOperatorBalancesRoot();
-            ringSettlements.push_back(new RingSettlementGadget(
+            const VariableT ringAccountsRoot = (j == 0) ? merkleRootBefore.packed : ringSettlements.back().getNewAccountsRoot();
+            const VariableT& ringProtocolBalancesRoot = (j == 0) ? balancesRootP_before : ringSettlements.back().getNewProtocolBalancesRoot();
+            const VariableT& ringOperatorBalancesRoot = (j == 0) ? balancesRootO_before : ringSettlements.back().getNewOperatorBalancesRoot();
+            ringSettlements.emplace_back(
                 pb,
                 params,
                 constants,
@@ -742,28 +717,28 @@ public:
                 ringProtocolBalancesRoot,
                 ringOperatorBalancesRoot,
                 std::string("trade_") + std::to_string(j)
-            ));
-            ringSettlements.back()->generate_r1cs_constraints();
+            );
+            ringSettlements.back().generate_r1cs_constraints();
 
             if (onchainDataAvailability)
             {
                 // Store data from ring settlement
-                dataAvailabityData.add(ringSettlements.back()->getPublicData());
+                dataAvailabityData.add(ringSettlements.back().getPublicData());
             }
         }
 
         // Update the protocol fee pool
-        updateAccount_P = new UpdateAccountGadget(pb, ringSettlements.back()->getNewAccountsRoot(), constants.zeroAccount,
+        updateAccount_P.reset(new UpdateAccountGadget(pb, ringSettlements.back().getNewAccountsRoot(), constants.zeroAccount,
                       {constants.zero, constants.zero, constants.zero, balancesRootP_before},
-                      {constants.zero, constants.zero, constants.zero, ringSettlements.back()->getNewProtocolBalancesRoot()},
-                      FMT(annotation_prefix, ".updateAccount_P"));
+                      {constants.zero, constants.zero, constants.zero, ringSettlements.back().getNewProtocolBalancesRoot()},
+                      FMT(annotation_prefix, ".updateAccount_P")));
         updateAccount_P->generate_r1cs_constraints();
 
         // Update the operator
-        updateAccount_O = new UpdateAccountGadget(pb, updateAccount_P->result(), operatorAccountID.bits,
+        updateAccount_O.reset(new UpdateAccountGadget(pb, updateAccount_P->result(), operatorAccountID.bits,
                       {publicKey.x, publicKey.y, nonce_O, balancesRootO_before},
-                      {publicKey.x, publicKey.y, nonce_O, ringSettlements.back()->getNewOperatorBalancesRoot()},
-                      FMT(annotation_prefix, ".updateAccount_O"));
+                      {publicKey.x, publicKey.y, nonce_O, ringSettlements.back().getNewOperatorBalancesRoot()},
+                      FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
         if (onchainDataAvailability)
@@ -822,7 +797,7 @@ public:
 
         for(unsigned int i = 0; i < block.ringSettlements.size(); i++)
         {
-            ringSettlements[i]->generate_r1cs_witness(block.ringSettlements[i]);
+            ringSettlements[i].generate_r1cs_witness(block.ringSettlements[i]);
         }
         updateAccount_P->generate_r1cs_witness(block.accountUpdate_P.proof);
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);

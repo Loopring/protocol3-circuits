@@ -4,10 +4,13 @@
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
 
+#include "MerkleTree.h"
+
 #include "ethsnarks.hpp"
 #include "utils.hpp"
 #include "gadgets/mimc.hpp"
 #include "gadgets/merkle_tree.hpp"
+#include "gadgets/poseidon.hpp"
 
 using namespace ethsnarks;
 
@@ -25,11 +28,8 @@ struct AccountState
 class UpdateAccountGadget : public GadgetT
 {
 public:
-    typedef merkle_path_authenticator<MiMC_hash_gadget> MerklePathCheckT;
-    typedef markle_path_compute<MiMC_hash_gadget> MerklePathT;
-
-    MiMC_hash_gadget leafBefore;
-    MiMC_hash_gadget leafAfter;
+    HashAccountLeaf leafBefore;
+    HashAccountLeaf leafAfter;
 
     const VariableArrayT proof;
     MerklePathCheckT proofVerifierBefore;
@@ -45,12 +45,12 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        leafBefore(pb, libsnark::ONE, {before.publicKeyX, before.publicKeyY, before.nonce, before.balancesRoot}, FMT(prefix, ".leafBefore")),
-        leafAfter(pb, libsnark::ONE, {after.publicKeyX, after.publicKeyY, after.nonce, after.balancesRoot}, FMT(prefix, ".leafAfter")),
+        leafBefore(pb, var_array({before.publicKeyX, before.publicKeyY, before.nonce, before.balancesRoot}), FMT(prefix, ".leafBefore")),
+        leafAfter(pb, var_array({after.publicKeyX, after.publicKeyY, after.nonce, after.balancesRoot}), FMT(prefix, ".leafAfter")),
 
-        proof(make_var_array(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".proof"))),
-        proofVerifierBefore(pb, TREE_DEPTH_ACCOUNTS, address, merkle_tree_IVs(pb), leafBefore.result(), root, proof, FMT(prefix, ".pathBefore")),
-        rootCalculatorAfter(pb, TREE_DEPTH_ACCOUNTS, address, merkle_tree_IVs(pb), leafAfter.result(), proof, FMT(prefix, ".pathAfter"))
+        proof(make_var_array(pb, TREE_DEPTH_ACCOUNTS * 3, FMT(prefix, ".proof"))),
+        proofVerifierBefore(pb, TREE_DEPTH_ACCOUNTS, address, leafBefore.result(), root, proof, FMT(prefix, ".pathBefore")),
+        rootCalculatorAfter(pb, TREE_DEPTH_ACCOUNTS, address, leafAfter.result(), proof, FMT(prefix, ".pathAfter"))
     {
 
     }
@@ -89,11 +89,8 @@ struct BalanceState
 class UpdateBalanceGadget : public GadgetT
 {
 public:
-    typedef merkle_path_authenticator<MiMC_hash_gadget> MerklePathCheckT;
-    typedef markle_path_compute<MiMC_hash_gadget> MerklePathT;
-
-    MiMC_hash_gadget leafBefore;
-    MiMC_hash_gadget leafAfter;
+    HashBalanceLeaf leafBefore;
+    HashBalanceLeaf leafAfter;
 
     const VariableArrayT proof;
     MerklePathCheckT proofVerifierBefore;
@@ -109,12 +106,12 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        leafBefore(pb, libsnark::ONE, {before.balance, before.tradingHistory}, FMT(prefix, ".leafBefore")),
-        leafAfter(pb, libsnark::ONE, {after.balance, after.tradingHistory}, FMT(prefix, ".leafAfter")),
+        leafBefore(pb, var_array({before.balance, before.tradingHistory}), FMT(prefix, ".leafBefore")),
+        leafAfter(pb, var_array({after.balance, after.tradingHistory}), FMT(prefix, ".leafAfter")),
 
-        proof(make_var_array(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".proof"))),
-        proofVerifierBefore(pb, TREE_DEPTH_TOKENS, tokenID, merkle_tree_IVs(pb), leafBefore.result(), root, proof, FMT(prefix, ".pathBefore")),
-        rootCalculatorAfter(pb, TREE_DEPTH_TOKENS, tokenID, merkle_tree_IVs(pb), leafAfter.result(), proof, FMT(prefix, ".pathAfter"))
+        proof(make_var_array(pb, TREE_DEPTH_TOKENS * 3, FMT(prefix, ".proof"))),
+        proofVerifierBefore(pb, TREE_DEPTH_TOKENS, tokenID, leafBefore.result(), root, proof, FMT(prefix, ".pathBefore")),
+        rootCalculatorAfter(pb, TREE_DEPTH_TOKENS, tokenID, leafAfter.result(), proof, FMT(prefix, ".pathAfter"))
     {
 
     }

@@ -56,8 +56,8 @@ public:
 
         constants(_constants),
 
-        accountID(make_var_array(pb, TREE_DEPTH_ACCOUNTS, FMT(prefix, ".accountID"))),
-        tokenID(make_var_array(pb, TREE_DEPTH_TOKENS, FMT(prefix, ".tokenID"))),
+        accountID(make_var_array(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID"))),
+        tokenID(make_var_array(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID"))),
         amountRequested(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amountRequested")),
 
         // User
@@ -223,11 +223,6 @@ public:
         count(pb, 32, FMT(prefix, ".count")),
 
         bShutdownMode(pb, count.packed, constants.zero, 32, FMT(prefix, ".bShutdownMode"))
-    {
-
-    }
-
-    ~OnchainWithdrawalCircuit()
     {
 
     }

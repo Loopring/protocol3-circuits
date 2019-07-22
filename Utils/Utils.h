@@ -90,6 +90,11 @@ const VariableArrayT subArray(const VariableArrayT& bits, unsigned int start, un
     return result;
 }
 
+inline const VariableArrayT var_array(const std::vector<VariableT>& inputs)
+{
+    return VariableArrayT(inputs.begin(), inputs.end());
+}
+
 BigInt toBigInt(ethsnarks::FieldT value)
 {
     BigInt bi = 0;
