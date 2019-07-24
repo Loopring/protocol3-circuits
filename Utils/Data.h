@@ -203,30 +203,12 @@ class Ring
 public:
     Order orderA;
     Order orderB;
-
-    ethsnarks::FieldT ringMatcherAccountID;
-    ethsnarks::FieldT tokenID;
-    ethsnarks::FieldT fee;
-    ethsnarks::FieldT nonce;
-
-    Signature ringMatcherSignature;
-    Signature dualAuthASignature;
-    Signature dualAuthBSignature;
 };
 
 void from_json(const json& j, Ring& ring)
 {
     ring.orderA = j.at("orderA").get<Order>();
     ring.orderB = j.at("orderB").get<Order>();
-
-    ring.ringMatcherAccountID = ethsnarks::FieldT(j.at("ringMatcherAccountID"));
-    ring.tokenID = ethsnarks::FieldT(j.at("tokenID"));
-    ring.fee = ethsnarks::FieldT(j.at("fee").get<std::string>().c_str());
-    ring.nonce = ethsnarks::FieldT(j.at("nonce"));
-
-    ring.ringMatcherSignature = j.at("ringMatcherSignature").get<Signature>();
-    ring.dualAuthASignature = j.at("dualAuthASignature").get<Signature>();
-    ring.dualAuthBSignature = j.at("dualAuthBSignature").get<Signature>();
 }
 
 class RingSettlement
@@ -247,15 +229,11 @@ public:
     BalanceUpdate balanceUpdateB_B;
     AccountUpdate accountUpdate_B;
 
-    BalanceUpdate balanceUpdateA_M;
-    BalanceUpdate balanceUpdateB_M;
-    BalanceUpdate balanceUpdateO_M;
-    AccountUpdate accountUpdate_M;
-
     BalanceUpdate balanceUpdateA_P;
     BalanceUpdate balanceUpdateB_P;
 
-    BalanceUpdate balanceUpdateF_O;
+    BalanceUpdate balanceUpdateA_O;
+    BalanceUpdate balanceUpdateB_O;
 };
 
 void from_json(const json& j, RingSettlement& ringSettlement)
@@ -275,15 +253,11 @@ void from_json(const json& j, RingSettlement& ringSettlement)
     ringSettlement.balanceUpdateB_B = j.at("balanceUpdateB_B").get<BalanceUpdate>();
     ringSettlement.accountUpdate_B = j.at("accountUpdate_B").get<AccountUpdate>();
 
-    ringSettlement.balanceUpdateA_M = j.at("balanceUpdateA_M").get<BalanceUpdate>();
-    ringSettlement.balanceUpdateB_M = j.at("balanceUpdateB_M").get<BalanceUpdate>();
-    ringSettlement.balanceUpdateO_M = j.at("balanceUpdateO_M").get<BalanceUpdate>();
-    ringSettlement.accountUpdate_M = j.at("accountUpdate_M").get<AccountUpdate>();
-
     ringSettlement.balanceUpdateA_P = j.at("balanceUpdateA_P").get<BalanceUpdate>();
     ringSettlement.balanceUpdateB_P = j.at("balanceUpdateB_P").get<BalanceUpdate>();
 
-    ringSettlement.balanceUpdateF_O = j.at("balanceUpdateF_O").get<BalanceUpdate>();
+    ringSettlement.balanceUpdateA_O = j.at("balanceUpdateA_O").get<BalanceUpdate>();
+    ringSettlement.balanceUpdateB_O = j.at("balanceUpdateB_O").get<BalanceUpdate>();
 }
 
 class RingSettlementBlock
@@ -299,6 +273,8 @@ public:
 
     ethsnarks::FieldT protocolTakerFeeBips;
     ethsnarks::FieldT protocolMakerFeeBips;
+
+    Signature signature;
 
     AccountUpdate accountUpdate_P;
 
@@ -319,6 +295,8 @@ void from_json(const json& j, RingSettlementBlock& block)
 
     block.protocolTakerFeeBips = ethsnarks::FieldT(j["protocolTakerFeeBips"].get<unsigned int>());
     block.protocolMakerFeeBips = ethsnarks::FieldT(j["protocolMakerFeeBips"].get<unsigned int>());
+
+    block.signature = j.at("signature").get<Signature>();
 
     block.accountUpdate_P = j.at("accountUpdate_P").get<AccountUpdate>();
 
