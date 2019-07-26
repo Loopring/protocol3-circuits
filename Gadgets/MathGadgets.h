@@ -1249,6 +1249,8 @@ class PublicDataGadget : public GadgetT
 {
 public:
 
+    static const unsigned int numStrippedBits = 3;
+
     libsnark::dual_variable_gadget<FieldT>& inputHash;
     std::vector<VariableArrayT> publicDataBits;
 
@@ -1279,10 +1281,10 @@ public:
     {
         hasher->generate_r1cs_witness();
 
-         // Get the calculated hash in bits
+        // Get the calculated hash in bits
         auto full_output_bits = hasher->result().get_digest();
         BigInt publicDataHashDec = 0;
-        for (unsigned int i = 0; i < full_output_bits.size(); i++)
+        for (unsigned int i = 0; i < full_output_bits.size() - numStrippedBits; i++)
         {
             publicDataHashDec = publicDataHashDec * 2 + (full_output_bits[i] ? 1 : 0);
         }
@@ -1291,7 +1293,7 @@ public:
         printBits("[ZKS]publicDataHash: 0x", flattenReverse({hasher->result().bits}).get_bits(pb), true);
 
         // Store the input hash
-        for (unsigned int i = 0; i < 256; i++)
+        for (unsigned int i = 0; i < 256 - numStrippedBits; i++)
         {
             pb.val(inputHash.bits[i]) = bn.test_bit(i);
         }
@@ -1304,9 +1306,9 @@ public:
         hasher->generate_r1cs_constraints();
 
         // Check that the hash matches the public input
-        for (unsigned int i = 0; i < 256; i++)
+        for (unsigned int i = 0; i < 256 - numStrippedBits; i++)
         {
-            pb.add_r1cs_constraint(ConstraintT(hasher->result().bits[255-i], 1, inputHash.bits[i]), "publicData.check()");
+            pb.add_r1cs_constraint(ConstraintT(hasher->result().bits[255 - numStrippedBits - i], 1, inputHash.bits[i]), "publicData.check()");
         }
     }
 };
