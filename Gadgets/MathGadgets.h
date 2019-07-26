@@ -328,9 +328,9 @@ public:
         pb.val(z) = (pb.val(b) == FieldT::one()) ? pb.val(x) : pb.val(y);
     }
 
-    void generate_r1cs_constraints(bool enforeBitness = true)
+    void generate_r1cs_constraints(bool enforceBitness = true)
     {
-        if (enforeBitness)
+        if (enforceBitness)
         {
             libsnark::generate_boolean_r1cs_constraint<ethsnarks::FieldT>(pb, b, FMT(annotation_prefix, ".bitness"));
         }
@@ -859,38 +859,6 @@ public:
     }
 };
 
-class PercentageGadget : public GadgetT
-{
-public:
-    libsnark::dual_variable_gadget<FieldT> value;
-    LeqGadget leq100Gadget;
-
-    PercentageGadget(
-        ProtoboardT& pb,
-        const Constants& constants,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix),
-        value(pb, NUM_BITS_PERCENTAGE, FMT(prefix, ".value")),
-        leq100Gadget(pb, value.packed, constants._100, NUM_BITS_PERCENTAGE, FMT(prefix, ".percentage <= 100"))
-    {
-
-    }
-
-    void generate_r1cs_witness(ethsnarks::FieldT percentage)
-    {
-        value.bits.fill_with_bits_of_field_element(pb, percentage);
-        value.generate_r1cs_witness_from_bits();
-        leq100Gadget.generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        value.generate_r1cs_constraints(true);
-        leq100Gadget.generate_r1cs_constraints();
-    }
-};
-
 class MulDivGadget : public GadgetT
 {
 public:
@@ -967,54 +935,6 @@ public:
         pb.add_r1cs_constraint(ConstraintT(C, D, X - remainder), FMT(annotation_prefix, ".D * C == X - remainder"));
 
         remainder_lt_C.generate_r1cs_constraints();
-    }
-};
-
-class RoundingErrorGadget : public GadgetT
-{
-public:
-    MulDivGadget mulDiv;
-    VariableT remainderx100;
-    LeqGadget multiplied_lt_remainderx100;
-    VariableT valid;
-
-    RoundingErrorGadget(
-        ProtoboardT& pb,
-        const Constants& constants,
-        const VariableT& _value,
-        const VariableT& _numerator,
-        const VariableT& _denominator,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix),
-
-        mulDiv(pb, constants, _value, _numerator, _denominator, FMT(prefix, ".multiplied")),
-        remainderx100(make_variable(pb, FMT(prefix, ".remainderx100"))),
-        multiplied_lt_remainderx100(pb, mulDiv.multiplied(), remainderx100, NUM_BITS_AMOUNT * 2, FMT(prefix, ".multiplied_lt_remainderx100")),
-        valid(make_variable(pb, FMT(prefix, ".valid")))
-    {
-
-    }
-
-    const VariableT& isValid()
-    {
-        return valid;
-    }
-
-    void generate_r1cs_witness()
-    {
-        mulDiv.generate_r1cs_witness();
-        pb.val(remainderx100) = pb.val(mulDiv.getRemainder()) * 100;
-        multiplied_lt_remainderx100.generate_r1cs_witness();
-        pb.val(valid) = FieldT::one() - pb.val(multiplied_lt_remainderx100.lt());
-    }
-
-    void generate_r1cs_constraints()
-    {
-        mulDiv.generate_r1cs_constraints();
-        pb.add_r1cs_constraint(ConstraintT(mulDiv.getRemainder() * 100, FieldT::one(), remainderx100), FMT(annotation_prefix, ".remainder * 100 == remainderx100"));
-        multiplied_lt_remainderx100.generate_r1cs_constraints();
-        pb.add_r1cs_constraint(ConstraintT(FieldT::one() - multiplied_lt_remainderx100.lt(), FieldT::one(), valid), FMT(annotation_prefix, ".valid"));
     }
 };
 
@@ -1411,6 +1331,80 @@ public:
         }
     }
 };
+
+class LabelHasher : public GadgetT
+{
+public:
+    static const unsigned numInputsStage1 = 80;
+    std::vector<Poseidon_gadget_T<96, 1, 6, 56, numInputsStage1, 1>> stage1Hashes;
+
+    static const unsigned numInputsStage2 = 4;
+    std::vector<Poseidon_gadget_T<6, 1, 6, 52, numInputsStage2 + 1, 1>> stage2Hashes;
+
+    LabelHasher(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const std::vector<VariableT>& labels,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix)
+    {
+        unsigned int numStage1Hashes = (labels.size() + numInputsStage1 - 1) / numInputsStage1;
+        for (unsigned int i = 0; i < numStage1Hashes; i++)
+        {
+            std::vector<VariableT> inputs;
+            for (unsigned int j = 0; j < numInputsStage1; j++)
+            {
+                const unsigned int labelIdx = i * numInputsStage1 + j;
+                inputs.push_back((labelIdx < labels.size()) ? labels[labelIdx] : constants.zero);
+            }
+            stage1Hashes.emplace_back(pb, var_array(inputs), FMT(this->annotation_prefix, ".stage1"));
+        }
+
+        unsigned int numStage2Hashes = (numStage1Hashes + numInputsStage2 - 1) / numInputsStage2;
+        for (unsigned int i = 0; i < numStage2Hashes; i++)
+        {
+            std::vector<VariableT> inputs;
+            inputs.push_back(i == 0 ? constants.zero : stage2Hashes.back().result());
+            for (unsigned int j = 0; j < numInputsStage2; j++)
+            {
+                const unsigned int hashIdx = i * numInputsStage2 + j;
+                inputs.push_back((hashIdx < stage1Hashes.size()) ? stage1Hashes[hashIdx].result() : constants.zero);
+            }
+            stage2Hashes.emplace_back(pb, var_array(inputs), FMT(this->annotation_prefix, ".stage2"));
+        }
+    }
+
+    VariableT result()
+    {
+        return stage2Hashes.back().result();
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (auto hasher : stage1Hashes)
+        {
+            hasher.generate_r1cs_witness();
+        }
+        for (auto hasher : stage2Hashes)
+        {
+            hasher.generate_r1cs_witness();
+        }
+    }
+
+    void generate_r1cs_constraints()
+    {
+        for (auto hasher : stage1Hashes)
+        {
+            hasher.generate_r1cs_constraints();
+        }
+        for (auto hasher : stage2Hashes)
+        {
+            hasher.generate_r1cs_constraints();
+        }
+    }
+};
+
 
 }
 

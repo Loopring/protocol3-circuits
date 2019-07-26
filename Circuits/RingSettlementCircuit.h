@@ -535,8 +535,12 @@ public:
     libsnark::dual_variable_gadget<FieldT> operatorAccountID;
     const jubjub::VariablePointT publicKey;
     const VariableT balancesRootO_before;
-    const VariableT nonce_O;
+    const VariableT nonce_before;
+    UnsafeAddGadget nonce_after;
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
+
+    std::vector<VariableT> labels;
+    std::unique_ptr<LabelHasher> labelHasher;
 
     Poseidon_gadget_T<6, 1, 6, 52, 5, 1> hash;
     SignatureVerifier signatureVerifier;
@@ -562,14 +566,15 @@ public:
         operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
         publicKey(pb, FMT(prefix, ".publicKey")),
         balancesRootO_before(make_variable(pb, FMT(prefix, ".balancesRootO_before"))),
-        nonce_O(make_variable(pb, FMT(prefix, ".nonce_O"))),
+        nonce_before(make_variable(pb, FMT(prefix, ".nonce_before"))),
+        nonce_after(pb, nonce_before, constants.one, FMT(prefix, ".nonce_after")),
 
         hash(pb, var_array({
             exchangeID.packed,
             timestamp.packed,
             merkleRootBefore.packed,
-            constants.zero,
-            constants.zero
+            merkleRootAfter.packed,
+            nonce_before
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
@@ -591,9 +596,7 @@ public:
         timestamp.generate_r1cs_constraints(true);
         protocolTakerFeeBips.generate_r1cs_constraints(true);
         protocolMakerFeeBips.generate_r1cs_constraints(true);
-
-        hash.generate_r1cs_constraints();
-        signatureVerifier.generate_r1cs_constraints();
+        nonce_after.generate_r1cs_constraints();
 
         publicData.add(exchangeID.bits);
         publicData.add(merkleRootBefore.bits);
@@ -626,6 +629,9 @@ public:
             );
             ringSettlements.back().generate_r1cs_constraints();
 
+            labels.push_back(ringSettlements.back().orderA.label.packed);
+            labels.push_back(ringSettlements.back().orderB.label.packed);
+
             if (onchainDataAvailability)
             {
                 // Store data from ring settlement
@@ -642,10 +648,14 @@ public:
 
         // Update the operator
         updateAccount_O.reset(new UpdateAccountGadget(pb, updateAccount_P->result(), operatorAccountID.bits,
-                      {publicKey.x, publicKey.y, nonce_O, balancesRootO_before},
-                      {publicKey.x, publicKey.y, nonce_O, ringSettlements.back().getNewOperatorBalancesRoot()},
+                      {publicKey.x, publicKey.y, nonce_before, balancesRootO_before},
+                      {publicKey.x, publicKey.y, nonce_after.result(), ringSettlements.back().getNewOperatorBalancesRoot()},
                       FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
+
+        // Calculate the labels hash
+        labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelsHash")));
+        labelHasher->generate_r1cs_constraints();
 
         if (onchainDataAvailability)
         {
@@ -660,6 +670,9 @@ public:
 
         // Check the new merkle root
         forceEqual(pb, updateAccount_O->result(), merkleRootAfter.packed, "newMerkleRoot");
+
+        hash.generate_r1cs_constraints();
+        signatureVerifier.generate_r1cs_constraints();
     }
 
     void printInfo()
@@ -698,11 +711,9 @@ public:
         pb.val(publicKey.x) = block.accountUpdate_O.before.publicKey.x;
         pb.val(publicKey.y) = block.accountUpdate_O.before.publicKey.y;
         pb.val(balancesRootO_before) = block.accountUpdate_O.before.balancesRoot;
-        pb.val(nonce_O) = block.accountUpdate_O.before.nonce;
+        pb.val(nonce_before) = block.accountUpdate_O.before.nonce;
+        nonce_after.generate_r1cs_witness();
         pb.val(balancesRootP_before) = block.accountUpdate_P.before.balancesRoot;
-
-        hash.generate_r1cs_witness();
-        signatureVerifier.generate_r1cs_witness(block.signature);
 
         for(unsigned int i = 0; i < block.ringSettlements.size(); i++)
         {
@@ -711,11 +722,18 @@ public:
         updateAccount_P->generate_r1cs_witness(block.accountUpdate_P.proof);
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
 
+        // Calculate the labels hash
+        labelHasher->generate_r1cs_witness();
+        print(pb, "labelHash", labelHasher->result());
+
         if (onchainDataAvailability)
         {
             transformData.generate_r1cs_witness();
         }
         publicData.generate_r1cs_witness();
+
+        hash.generate_r1cs_witness();
+        signatureVerifier.generate_r1cs_witness(block.signature);
 
         return true;
     }

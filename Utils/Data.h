@@ -160,12 +160,12 @@ public:
     ethsnarks::FieldT tokenB;
     ethsnarks::FieldT amountS;
     ethsnarks::FieldT amountB;
-
     ethsnarks::FieldT allOrNone;
     ethsnarks::FieldT validSince;
     ethsnarks::FieldT validUntil;
     ethsnarks::FieldT maxFeeBips;
     ethsnarks::FieldT buy;
+    ethsnarks::FieldT label;
 
     ethsnarks::FieldT feeBips;
     ethsnarks::FieldT rebateBips;
@@ -191,6 +191,7 @@ void from_json(const json& j, Order& order)
     order.validUntil = ethsnarks::FieldT(j.at("validUntil"));
     order.maxFeeBips = ethsnarks::FieldT(j.at("maxFeeBips"));
     order.buy = ethsnarks::FieldT(j.at("buy").get<bool>() ? 1 : 0);
+    order.label = ethsnarks::FieldT(j.at("label"));
 
     order.feeBips = ethsnarks::FieldT(j.at("feeBips"));
     order.rebateBips = ethsnarks::FieldT(j.at("rebateBips"));
@@ -422,14 +423,11 @@ class OffchainWithdrawal
 public:
     ethsnarks::FieldT amountRequested;
     ethsnarks::FieldT fee;
-    ethsnarks::FieldT walletSplitPercentage;
     Signature signature;
 
     BalanceUpdate balanceUpdateF_A;
     BalanceUpdate balanceUpdateW_A;
     AccountUpdate accountUpdate_A;
-    BalanceUpdate balanceUpdateF_W;
-    AccountUpdate accountUpdate_W;
     BalanceUpdate balanceUpdateF_O;
 };
 
@@ -437,14 +435,11 @@ void from_json(const json& j, OffchainWithdrawal& withdrawal)
 {
     withdrawal.amountRequested = ethsnarks::FieldT(j.at("amountRequested").get<std::string>().c_str());
     withdrawal.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
-    withdrawal.walletSplitPercentage = ethsnarks::FieldT(j.at("walletSplitPercentage"));
     withdrawal.signature = j.at("signature").get<Signature>();
 
     withdrawal.balanceUpdateF_A = j.at("balanceUpdateF_A").get<BalanceUpdate>();
     withdrawal.balanceUpdateW_A = j.at("balanceUpdateW_A").get<BalanceUpdate>();
     withdrawal.accountUpdate_A = j.at("accountUpdate_A").get<AccountUpdate>();
-    withdrawal.balanceUpdateF_W = j.at("balanceUpdateF_W").get<BalanceUpdate>();
-    withdrawal.accountUpdate_W = j.at("accountUpdate_W").get<AccountUpdate>();
     withdrawal.balanceUpdateF_O = j.at("balanceUpdateF_O").get<BalanceUpdate>();
 }
 
@@ -491,30 +486,24 @@ class Cancellation
 {
 public:
     ethsnarks::FieldT fee;
-    ethsnarks::FieldT walletSplitPercentage;
     Signature signature;
 
     TradeHistoryUpdate tradeHistoryUpdate_A;
     BalanceUpdate balanceUpdateT_A;
     BalanceUpdate balanceUpdateF_A;
     AccountUpdate accountUpdate_A;
-    BalanceUpdate balanceUpdateF_W;
-    AccountUpdate accountUpdate_W;
     BalanceUpdate balanceUpdateF_O;
 };
 
 void from_json(const json& j, Cancellation& cancellation)
 {
     cancellation.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
-    cancellation.walletSplitPercentage = ethsnarks::FieldT(j.at("walletSplitPercentage"));
     cancellation.signature = j.at("signature").get<Signature>();
 
     cancellation.tradeHistoryUpdate_A = j.at("tradeHistoryUpdate_A").get<TradeHistoryUpdate>();
     cancellation.balanceUpdateT_A = j.at("balanceUpdateT_A").get<BalanceUpdate>();
     cancellation.balanceUpdateF_A = j.at("balanceUpdateF_A").get<BalanceUpdate>();
     cancellation.accountUpdate_A = j.at("accountUpdate_A").get<AccountUpdate>();
-    cancellation.balanceUpdateF_W = j.at("balanceUpdateF_W").get<BalanceUpdate>();
-    cancellation.accountUpdate_W = j.at("accountUpdate_W").get<AccountUpdate>();
     cancellation.balanceUpdateF_O = j.at("balanceUpdateF_O").get<BalanceUpdate>();
 }
 

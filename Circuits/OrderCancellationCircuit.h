@@ -28,12 +28,10 @@ public:
     libsnark::dual_variable_gadget<FieldT> accountID;
     libsnark::dual_variable_gadget<FieldT> orderTokenID;
     libsnark::dual_variable_gadget<FieldT> orderID;
-    libsnark::dual_variable_gadget<FieldT> walletAccountID;
     libsnark::dual_variable_gadget<FieldT> feeTokenID;
     libsnark::dual_variable_gadget<FieldT> fee;
     FloatGadget fFee;
     EnsureAccuracyGadget ensureAccuracyFee;
-    PercentageGadget walletSplitPercentage;
 
     VariableT filled;
     VariableT cancelled_before;
@@ -46,11 +44,6 @@ public:
     VariableT balanceF_A_before;
     VariableT tradingHistoryRootF_A;
 
-    VariableT balancesRoot_W_before;
-    VariableT balanceF_W_before;
-    VariableT nonce_W;
-    VariableT tradingHistoryRootF_W;
-
     VariableT balanceF_O_before;
     VariableT tradingHistoryRootF_O;
 
@@ -58,25 +51,18 @@ public:
     UnsafeAddGadget nonce_after;
     VariableT balancesRoot_before;
 
-    MulDivGadget feeToWallet;
-    UnsafeSubGadget feeToOperator;
-
-    subadd_gadget feePaymentWallet;
-    subadd_gadget feePaymentOperator;
+    subadd_gadget feePayment;
 
     UpdateTradeHistoryGadget updateTradeHistory_A;
     UpdateBalanceGadget updateBalanceT_A;
     UpdateBalanceGadget updateBalanceF_A;
     UpdateAccountGadget updateAccount_A;
 
-    UpdateBalanceGadget updateBalanceF_W;
-    UpdateAccountGadget updateAccount_W;
-
     UpdateBalanceGadget updateBalanceF_O;
 
     ForceLeqGadget checkOrderID;
 
-    Poseidon_gadget_T<11, 1, 6, 53, 9, 1> hash;
+    Poseidon_gadget_T<9, 1, 6, 53, 7, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OrderCancellationGadget(
@@ -98,11 +84,9 @@ public:
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
         orderTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".orderTokenID")),
         orderID(pb, NUM_BITS_ORDERID, FMT(prefix, ".orderID")),
-        walletAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".walletAccountID")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
-        walletSplitPercentage(pb, constants, FMT(prefix, ".walletSplitPercentage")),
 
         ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, FMT(prefix, ".ensureAccuracyFee")),
 
@@ -116,11 +100,6 @@ public:
         balanceF_A_before(make_variable(pb, FMT(prefix, ".balanceF_A_before"))),
         tradingHistoryRootF_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_A"))),
 
-        balancesRoot_W_before(make_variable(pb, FMT(prefix, ".balancesRoot_W_before"))),
-        balanceF_W_before(make_variable(pb, FMT(prefix, ".balanceF_W_before"))),
-        nonce_W(make_variable(pb, FMT(prefix, ".nonce_W"))),
-        tradingHistoryRootF_W(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_W"))),
-
         balanceF_O_before(make_variable(pb, FMT(prefix, ".balanceF_O_before"))),
         tradingHistoryRootF_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_O"))),
 
@@ -129,12 +108,8 @@ public:
         nonce_after(pb, nonce_before.packed, constants.one, FMT(prefix, ".nonce_after")),
         balancesRoot_before(make_variable(pb, FMT(prefix, ".balancesRoot_before"))),
 
-        // Fee payment calculations
-        feeToWallet(pb, constants, fFee.value(), walletSplitPercentage.value.packed, constants._100, FMT(prefix, ".feeToWallet")),
-        feeToOperator(pb, fFee.value(), feeToWallet.result(), FMT(prefix, ".feeToOperator")),
-        // Calculate the balances after fee payment of the wallet and operator
-        feePaymentWallet(pb, NUM_BITS_AMOUNT, balanceF_A_before, balanceF_W_before, feeToWallet.result(), FMT(prefix, ".feePaymentWallet")),
-        feePaymentOperator(pb, NUM_BITS_AMOUNT, feePaymentWallet.X, balanceF_O_before, feeToOperator.result(), FMT(prefix, ".feePaymentOperator")),
+        // Fee payment to the operator
+        feePayment(pb, NUM_BITS_AMOUNT, balanceF_A_before, balanceF_O_before, fFee.value(), FMT(prefix, ".feePayment")),
 
         // Trade history
         updateTradeHistory_A(pb, tradingHistoryRootT_A_before, subArray(orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
@@ -149,7 +124,7 @@ public:
         // Balance Fee
         updateBalanceF_A(pb, updateBalanceT_A.getNewRoot(), feeTokenID.bits,
                          {balanceF_A_before, tradingHistoryRootF_A},
-                         {feePaymentOperator.X, tradingHistoryRootF_A},
+                         {feePayment.X, tradingHistoryRootF_A},
                          FMT(prefix, ".updateBalanceF_A")),
         // Account
         updateAccount_A(pb, _accountsMerkleRoot, accountID.bits,
@@ -157,22 +132,10 @@ public:
                         {publicKey.x, publicKey.y, nonce_after.result(), updateBalanceF_A.getNewRoot()},
                         FMT(prefix, ".updateAccount_A")),
 
-
-        // Wallet balance
-        updateBalanceF_W(pb, balancesRoot_W_before, feeTokenID.bits,
-                         {balanceF_W_before, tradingHistoryRootF_W},
-                         {feePaymentWallet.Y, tradingHistoryRootF_W},
-                         FMT(prefix, ".updateBalanceF_W")),
-        // Wallet account
-        updateAccount_W(pb, updateAccount_A.result(), walletAccountID.bits,
-                        {walletPublicKey.x, walletPublicKey.y, nonce_W, balancesRoot_W_before},
-                        {walletPublicKey.x, walletPublicKey.y, nonce_W, updateBalanceF_W.getNewRoot()},
-                        FMT(prefix, ".updateAccount_W")),
-
         // Operator balance
         updateBalanceF_O(pb, _operatorBalancesRoot, feeTokenID.bits,
                          {balanceF_O_before, tradingHistoryRootF_O},
-                         {feePaymentOperator.Y, tradingHistoryRootF_O},
+                         {feePayment.Y, tradingHistoryRootF_O},
                          FMT(prefix, ".updateBalanceF_O")),
 
         // OrderID check
@@ -184,10 +147,8 @@ public:
             accountID.packed,
             orderTokenID.packed,
             orderID.packed,
-            walletAccountID.packed,
             feeTokenID.packed,
             fee.packed,
-            walletSplitPercentage.value.packed,
             nonce_before.packed
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
@@ -197,7 +158,7 @@ public:
 
     const VariableT getNewAccountsRoot() const
     {
-        return updateAccount_W.result();
+        return updateAccount_A.result();
     }
 
     const VariableT getNewOperatorBalancesRoot() const
@@ -208,20 +169,16 @@ public:
     const std::vector<VariableArrayT> getPublicData() const
     {
         return {accountID.bits,
-                walletAccountID.bits,
+                orderID.bits,
                 orderTokenID.bits,
-                constants.accountPadding, orderID.bits,
                 feeTokenID.bits,
-                fFee.bits(),
-                constants.padding_0, walletSplitPercentage.value.bits};
+                fFee.bits()};
     }
 
     void generate_r1cs_witness(const Cancellation& cancellation)
     {
         pb.val(publicKey.x) = cancellation.accountUpdate_A.before.publicKey.x;
         pb.val(publicKey.y) = cancellation.accountUpdate_A.before.publicKey.y;
-        pb.val(walletPublicKey.x) = cancellation.accountUpdate_W.before.publicKey.x;
-        pb.val(walletPublicKey.y) = cancellation.accountUpdate_W.before.publicKey.y;
 
         accountID.bits.fill_with_bits_of_field_element(pb, cancellation.accountUpdate_A.accountID);
         accountID.generate_r1cs_witness_from_bits();
@@ -229,15 +186,12 @@ public:
         orderTokenID.generate_r1cs_witness_from_bits();
         orderID.bits.fill_with_bits_of_field_element(pb, cancellation.tradeHistoryUpdate_A.orderID);
         orderID.generate_r1cs_witness_from_bits();
-        walletAccountID.bits.fill_with_bits_of_field_element(pb, cancellation.accountUpdate_W.accountID);
-        walletAccountID.generate_r1cs_witness_from_bits();
         feeTokenID.bits.fill_with_bits_of_field_element(pb, cancellation.balanceUpdateF_A.tokenID);
         feeTokenID.generate_r1cs_witness_from_bits();
         fee.bits.fill_with_bits_of_field_element(pb, cancellation.fee);
         fee.generate_r1cs_witness_from_bits();
         fFee.generate_r1cs_witness(toFloat(cancellation.fee, Float16Encoding));
         ensureAccuracyFee.generate_r1cs_witness();
-        walletSplitPercentage.generate_r1cs_witness(cancellation.walletSplitPercentage);
 
         pb.val(filled) = cancellation.tradeHistoryUpdate_A.before.filled;
         pb.val(cancelled_before) = cancellation.tradeHistoryUpdate_A.before.cancelled;
@@ -249,11 +203,6 @@ public:
         pb.val(balanceF_A_before) = cancellation.balanceUpdateF_A.before.balance;
         pb.val(tradingHistoryRootF_A) = cancellation.balanceUpdateF_A.before.tradingHistoryRoot;
 
-        pb.val(balancesRoot_W_before) = cancellation.accountUpdate_W.before.balancesRoot;
-        pb.val(balanceF_W_before) = cancellation.balanceUpdateF_W.before.balance;
-        pb.val(nonce_W) = cancellation.accountUpdate_W.before.nonce;
-        pb.val(tradingHistoryRootF_W) = cancellation.balanceUpdateF_W.before.tradingHistoryRoot;
-
         pb.val(balanceF_O_before) = cancellation.balanceUpdateF_O.before.balance;
         pb.val(tradingHistoryRootF_O) = cancellation.balanceUpdateF_O.before.tradingHistoryRoot;
 
@@ -262,19 +211,13 @@ public:
         nonce_after.generate_r1cs_witness();
         pb.val(balancesRoot_before) = cancellation.accountUpdate_A.before.balancesRoot;
 
-        feeToWallet.generate_r1cs_witness();
-        feeToOperator.generate_r1cs_witness();
-
-        feePaymentWallet.generate_r1cs_witness();
-        feePaymentOperator.generate_r1cs_witness();
+        // Fee payment calculations
+        feePayment.generate_r1cs_witness();
 
         updateTradeHistory_A.generate_r1cs_witness(cancellation.tradeHistoryUpdate_A.proof);
         updateBalanceT_A.generate_r1cs_witness(cancellation.balanceUpdateT_A.proof);
         updateBalanceF_A.generate_r1cs_witness(cancellation.balanceUpdateF_A.proof);
         updateAccount_A.generate_r1cs_witness(cancellation.accountUpdate_A.proof);
-
-        updateBalanceF_W.generate_r1cs_witness(cancellation.balanceUpdateF_W.proof);
-        updateAccount_W.generate_r1cs_witness(cancellation.accountUpdate_W.proof);
 
         updateBalanceF_O.generate_r1cs_witness(cancellation.balanceUpdateF_O.proof);
 
@@ -292,23 +235,15 @@ public:
         ensureAccuracyFee.generate_r1cs_constraints();
         nonce_before.generate_r1cs_constraints(true);
         nonce_after.generate_r1cs_constraints();
-        walletSplitPercentage.generate_r1cs_constraints();
 
         // Fee payment calculations
-        feeToWallet.generate_r1cs_constraints();
-        feeToOperator.generate_r1cs_constraints();
-        feePaymentWallet.generate_r1cs_constraints();
-        feePaymentOperator.generate_r1cs_constraints();
+        feePayment.generate_r1cs_constraints();
 
         // Account
         updateTradeHistory_A.generate_r1cs_constraints();
         updateBalanceT_A.generate_r1cs_constraints();
         updateBalanceF_A.generate_r1cs_constraints();
         updateAccount_A.generate_r1cs_constraints();
-
-        // Wallet
-        updateBalanceF_W.generate_r1cs_constraints();
-        updateAccount_W.generate_r1cs_constraints();
 
         // Operator
         updateBalanceF_O.generate_r1cs_constraints();

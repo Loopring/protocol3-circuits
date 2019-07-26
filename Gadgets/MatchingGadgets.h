@@ -16,6 +16,54 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
+class RoundingErrorGadget : public GadgetT
+{
+public:
+    MulDivGadget mulDiv;
+    VariableT remainderx100;
+    LeqGadget multiplied_lt_remainderx100;
+    VariableT valid;
+
+    RoundingErrorGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const VariableT& _value,
+        const VariableT& _numerator,
+        const VariableT& _denominator,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        mulDiv(pb, constants, _value, _numerator, _denominator, FMT(prefix, ".multiplied")),
+        remainderx100(make_variable(pb, FMT(prefix, ".remainderx100"))),
+        multiplied_lt_remainderx100(pb, mulDiv.multiplied(), remainderx100, NUM_BITS_AMOUNT * 2, FMT(prefix, ".multiplied_lt_remainderx100")),
+        valid(make_variable(pb, FMT(prefix, ".valid")))
+    {
+
+    }
+
+    const VariableT& isValid()
+    {
+        return valid;
+    }
+
+    void generate_r1cs_witness()
+    {
+        mulDiv.generate_r1cs_witness();
+        pb.val(remainderx100) = pb.val(mulDiv.getRemainder()) * 100;
+        multiplied_lt_remainderx100.generate_r1cs_witness();
+        pb.val(valid) = FieldT::one() - pb.val(multiplied_lt_remainderx100.lt());
+    }
+
+    void generate_r1cs_constraints()
+    {
+        mulDiv.generate_r1cs_constraints();
+        pb.add_r1cs_constraint(ConstraintT(mulDiv.getRemainder() * 100, FieldT::one(), remainderx100), FMT(annotation_prefix, ".remainder * 100 == remainderx100"));
+        multiplied_lt_remainderx100.generate_r1cs_constraints();
+        pb.add_r1cs_constraint(ConstraintT(FieldT::one() - multiplied_lt_remainderx100.lt(), FieldT::one(), valid), FMT(annotation_prefix, ".valid"));
+    }
+};
+
 class FeeCalculatorGadget : public GadgetT
 {
 public:

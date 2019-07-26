@@ -29,6 +29,7 @@ public:
     libsnark::dual_variable_gadget<FieldT> validUntil;
     libsnark::dual_variable_gadget<FieldT> maxFeeBips;
     libsnark::dual_variable_gadget<FieldT> buy;
+    libsnark::dual_variable_gadget<FieldT> label;
 
     libsnark::dual_variable_gadget<FieldT> feeBips;
     libsnark::dual_variable_gadget<FieldT> rebateBips;
@@ -59,7 +60,7 @@ public:
     // Largest value in the order hash is currently 96bit so we can go up to t == 16
     // (but we need 3 inputs for capacity for 128bit security)
     // Packing small values together in a single input is also possible
-    Poseidon_gadget_T<15, 1, 6, 53, 12, 1> hash;
+    Poseidon_gadget_T<16, 1, 6, 54, 13, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OrderGadget(
@@ -82,6 +83,7 @@ public:
         validUntil(pb, NUM_BITS_TIMESTAMP, FMT(prefix, ".validUntil")),
         maxFeeBips(pb, NUM_BITS_BIPS, FMT(prefix, ".maxFeeBips")),
         buy(pb, 1, FMT(prefix, ".buy")),
+        label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
 
         feeBips(pb, NUM_BITS_BIPS, FMT(prefix, ".feeBips")),
         rebateBips(pb, NUM_BITS_BIPS, FMT(prefix, ".rebateBips")),
@@ -121,7 +123,8 @@ public:
             validSince.packed,
             validUntil.packed,
             maxFeeBips.packed,
-            buy.packed
+            buy.packed,
+            label.packed
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
@@ -159,6 +162,8 @@ public:
         maxFeeBips.generate_r1cs_witness_from_bits();
         buy.bits.fill_with_bits_of_field_element(pb, order.buy);
         buy.generate_r1cs_witness_from_bits();
+        label.bits.fill_with_bits_of_field_element(pb, order.label);
+        label.generate_r1cs_witness_from_bits();
 
         feeBips.bits.fill_with_bits_of_field_element(pb, order.feeBips);
         feeBips.generate_r1cs_witness_from_bits();
@@ -207,6 +212,7 @@ public:
         validUntil.generate_r1cs_constraints(true);
         maxFeeBips.generate_r1cs_constraints(true);
         buy.generate_r1cs_constraints(true);
+        label.generate_r1cs_constraints(true);
 
         feeBips.generate_r1cs_constraints(true);
         rebateBips.generate_r1cs_constraints(true);
