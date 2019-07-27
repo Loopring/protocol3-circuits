@@ -743,7 +743,7 @@ public:
         {
             // Transform the data
             transformData.generate_r1cs_constraints(numRings, flattenReverse(dataAvailabityData.data));
-            publicData.add(flattenReverse({transformData.result()}));
+            publicData.add(reverse(transformData.result()));
         }
 
         // Check the input hash

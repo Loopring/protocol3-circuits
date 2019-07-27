@@ -190,7 +190,7 @@ public:
         publicData.add(exchangeID.bits);
         publicData.add(merkleRootBefore.bits);
         publicData.add(merkleRootAfter.bits);
-        publicData.add(flattenReverse({depositBlockHashStart}));
+        publicData.add(reverse(depositBlockHashStart));
         for (size_t j = 0; j < numAccounts; j++)
         {
             VariableT depositAccountsRoot = (j == 0) ? merkleRootBefore.packed : deposits.back().getNewAccountsRoot();
@@ -207,14 +207,14 @@ public:
             // Hash data from deposit
             std::vector<VariableArrayT> depositData = deposits.back().getOnchainData();
             std::vector<VariableArrayT> hashBits;
-            hashBits.push_back(flattenReverse({depositBlockHash}));
+            hashBits.push_back(reverse(depositBlockHash));
             hashBits.insert(hashBits.end(), depositData.begin(), depositData.end());
             hashers.emplace_back(pb, flattenReverse(hashBits), std::string("hash_") + std::to_string(j));
             hashers.back().generate_r1cs_constraints();
         }
 
         // Add the block hash
-        publicData.add(flattenReverse({hashers.back().result().bits}));
+        publicData.add(reverse(hashers.back().result().bits));
         publicData.add(startIndex.bits);
         publicData.add(count.bits);
 

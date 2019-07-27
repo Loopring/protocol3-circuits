@@ -262,15 +262,15 @@ public:
             // Hash data from withdrawal request
             std::vector<VariableArrayT> withdrawalRequestData = withdrawals.back().getOnchainData();
             std::vector<VariableArrayT> hash;
-            hash.push_back(flattenReverse({withdrawalBlockHash}));
+            hash.push_back(reverse(withdrawalBlockHash));
             hash.insert(hash.end(), withdrawalRequestData.begin(), withdrawalRequestData.end());
             hashers.emplace_back(pb, flattenReverse(hash), std::string("hash_") + std::to_string(j));
             hashers.back().generate_r1cs_constraints();
         }
 
         // Add the ending hash
-        publicData.add(flattenReverse({withdrawalBlockHashStart}));
-        publicData.add(flattenReverse({hashers.back().result().bits}));
+        publicData.add(reverse(withdrawalBlockHashStart));
+        publicData.add(reverse(hashers.back().result().bits));
         publicData.add(startIndex.bits);
         publicData.add(count.bits);
 
@@ -328,7 +328,7 @@ public:
         {
             hasher.generate_r1cs_witness();
         }
-        printBits("WithdrawBlockHash: 0x", flattenReverse({hashers.back().result().bits}).get_bits(pb), true);
+        printBits("WithdrawBlockHash: 0x", hashers.back().result().bits.get_bits(pb));
 
         // Public data
         publicData.generate_r1cs_witness();

@@ -1249,8 +1249,6 @@ class PublicDataGadget : public GadgetT
 {
 public:
 
-    static const unsigned int numBitsStripped = 3;
-
     const VariableT publicInput;
     std::vector<VariableArrayT> publicDataBits;
 
@@ -1299,7 +1297,7 @@ public:
 
         // Check that the hash matches the public input
         calculatedHash.reset(new libsnark::dual_variable_gadget<FieldT>(
-            pb, subArray(flattenReverse({hasher->result().bits}), numBitsStripped, 256 - numBitsStripped), ".packCalculatedHash")
+            pb, reverse(subArray(hasher->result().bits, 0, FieldT::capacity())), ".packCalculatedHash")
         );
         calculatedHash->generate_r1cs_constraints(false);
         forceEqual(pb, calculatedHash->packed, publicInput, ".publicDataCheck");
