@@ -1251,20 +1251,20 @@ public:
 
     static const unsigned int numStrippedBits = 3;
 
-    libsnark::dual_variable_gadget<FieldT>& inputHash;
+    const VariableT publicInput;
     std::vector<VariableArrayT> publicDataBits;
 
     std::unique_ptr<sha256_many> hasher;
+    std::unique_ptr<libsnark::dual_variable_gadget<FieldT>> calculatedHash;
 
     PublicDataGadget(
         ProtoboardT& pb,
-        libsnark::dual_variable_gadget<FieldT>& _inputHash,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
-        inputHash(_inputHash)
+        publicInput(make_variable(pb, FMT(prefix, ".publicInput")))
     {
-
+        pb.set_input_sizes(1);
     }
 
     void add(const VariableArrayT& bits)
@@ -1279,37 +1279,28 @@ public:
 
     void generate_r1cs_witness()
     {
+        // Calculate the hash
         hasher->generate_r1cs_witness();
 
-        // Get the calculated hash in bits
-        auto full_output_bits = hasher->result().get_digest();
-        BigInt publicDataHashDec = 0;
-        for (unsigned int i = 0; i < full_output_bits.size() - numStrippedBits; i++)
-        {
-            publicDataHashDec = publicDataHashDec * 2 + (full_output_bits[i] ? 1 : 0);
-        }
-        libff::bigint<libff::alt_bn128_r_limbs> bn = libff::bigint<libff::alt_bn128_r_limbs>(publicDataHashDec.to_string().c_str());
-        printBits("[ZKS]publicData: 0x", flattenReverse(publicDataBits).get_bits(pb), false);
-        printBits("[ZKS]publicDataHash: 0x", flattenReverse({hasher->result().bits}).get_bits(pb), true);
+        // Calculate the expected public input
+        calculatedHash->generate_r1cs_witness_from_bits();
+        pb.val(publicInput) = pb.val(calculatedHash->packed);
 
-        // Store the input hash
-        for (unsigned int i = 0; i < 256 - numStrippedBits; i++)
-        {
-            pb.val(inputHash.bits[i]) = bn.test_bit(i);
-        }
-        inputHash.generate_r1cs_witness_from_bits();
+        printBits("[ZKS]publicData: 0x", flattenReverse(publicDataBits).get_bits(pb), false);
+        printBits("[ZKS]publicDataHash: 0x", hasher->result().bits.get_bits(pb));
+        print(pb, "[ZKS]publicInput", calculatedHash->packed);
     }
 
     void generate_r1cs_constraints()
     {
+        // Calculate the hash
         hasher.reset(new sha256_many(pb, flattenReverse(publicDataBits), ".hasher"));
         hasher->generate_r1cs_constraints();
 
         // Check that the hash matches the public input
-        for (unsigned int i = 0; i < 256 - numStrippedBits; i++)
-        {
-            pb.add_r1cs_constraint(ConstraintT(hasher->result().bits[255 - numStrippedBits - i], 1, inputHash.bits[i]), "publicData.check()");
-        }
+        calculatedHash.reset(new libsnark::dual_variable_gadget<FieldT>(pb, subArray(flattenReverse({hasher->result().bits}), 3, 253), ".packCalculatedHash"));
+        calculatedHash->generate_r1cs_constraints(false);
+        forceEqual(pb, calculatedHash->packed, publicInput, ".publicDataCheck");
     }
 };
 

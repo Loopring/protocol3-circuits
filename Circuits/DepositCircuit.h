@@ -145,7 +145,6 @@ public:
     unsigned int numAccounts;
     std::vector<DepositGadget> deposits;
 
-    libsnark::dual_variable_gadget<FieldT> publicDataHash;
     PublicDataGadget publicData;
 
     Constants constants;
@@ -163,8 +162,7 @@ public:
     DepositCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
 
-        publicDataHash(pb, 256, FMT(prefix, ".publicDataHash")),
-        publicData(pb, publicDataHash, FMT(prefix, ".publicData")),
+        publicData(pb, FMT(prefix, ".publicData")),
 
         constants(pb, FMT(prefix, ".constants")),
 
@@ -182,8 +180,6 @@ public:
     void generate_r1cs_constraints(int numAccounts)
     {
         this->numAccounts = numAccounts;
-
-        pb.set_input_sizes(1);
 
         constants.generate_r1cs_constraints();
 
@@ -223,7 +219,6 @@ public:
         publicData.add(count.bits);
 
         // Check the input hash
-        publicDataHash.generate_r1cs_constraints(true);
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root

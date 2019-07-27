@@ -189,7 +189,6 @@ public:
     unsigned int numWithdrawals;
     std::vector<OnchainWithdrawalGadget> withdrawals;
 
-    libsnark::dual_variable_gadget<FieldT> publicDataHash;
     PublicDataGadget publicData;
 
     Constants constants;
@@ -209,8 +208,7 @@ public:
     OnchainWithdrawalCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
 
-        publicDataHash(pb, 256, FMT(prefix, ".publicDataHash")),
-        publicData(pb, publicDataHash, FMT(prefix, ".publicData")),
+        publicData(pb, FMT(prefix, ".publicData")),
 
         constants(pb, FMT(prefix, ".constants")),
 
@@ -231,8 +229,6 @@ public:
     {
         this->onchainDataAvailability = onchainDataAvailability;
         this->numWithdrawals = numWithdrawals;
-
-        pb.set_input_sizes(1);
 
         constants.generate_r1cs_witness();
 
@@ -285,7 +281,6 @@ public:
         }
 
         // Check the input hash
-        publicDataHash.generate_r1cs_constraints(true);
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root

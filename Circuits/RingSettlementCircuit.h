@@ -621,10 +621,10 @@ public:
     jubjub::Params params;
     std::vector<RingSettlementGadget> ringSettlements;
 
-    libsnark::dual_variable_gadget<FieldT> publicDataHash;
+    PublicDataGadget publicData;
+
     Bitstream dataAvailabityData;
     TransformRingSettlementDataGadget transformData;
-    PublicDataGadget publicData;
 
     Constants constants;
 
@@ -650,11 +650,11 @@ public:
     RingSettlementCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
 
-        publicDataHash(pb, 256, FMT(prefix, ".publicDataHash")),
-        transformData(pb, FMT(prefix, ".transformData")),
-        publicData(pb, publicDataHash, FMT(prefix, ".publicData")),
+        publicData(pb, FMT(prefix, ".publicData")),
 
         constants(pb, FMT(prefix, ".constants")),
+
+        transformData(pb, FMT(prefix, ".transformData")),
 
         exchangeID(pb, 32, FMT(prefix, ".exchangeID")),
         merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
@@ -677,8 +677,6 @@ public:
     {
         this->onchainDataAvailability = onchainDataAvailability;
         this->numRings = numRings;
-
-        pb.set_input_sizes(1);
 
         constants.generate_r1cs_constraints();
 
@@ -749,7 +747,6 @@ public:
         }
 
         // Check the input hash
-        publicDataHash.generate_r1cs_constraints(true);
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root
