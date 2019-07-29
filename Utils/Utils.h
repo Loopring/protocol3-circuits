@@ -76,6 +76,11 @@ const VariableArrayT flattenReverse( const std::vector<VariableArrayT> &in_scala
     return result;
 }
 
+const VariableArrayT reverse(const VariableArrayT& values)
+{
+    return flattenReverse({values});
+}
+
 const VariableArrayT subArray(const VariableArrayT& bits, unsigned int start, unsigned int length)
 {
     VariableArrayT result;

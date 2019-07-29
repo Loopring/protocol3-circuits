@@ -330,7 +330,6 @@ public:
     unsigned int numCancels;
     std::vector<OrderCancellationGadget> cancels;
 
-    libsnark::dual_variable_gadget<FieldT> publicDataHash;
     PublicDataGadget publicData;
 
     Constants constants;
@@ -348,8 +347,7 @@ public:
     OrderCancellationCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
 
-        publicDataHash(pb, 256, FMT(prefix, ".publicDataHash")),
-        publicData(pb, publicDataHash, FMT(prefix, ".publicData")),
+        publicData(pb, FMT(prefix, ".publicData")),
 
         constants(pb, FMT(prefix, ".constants")),
 
@@ -369,8 +367,6 @@ public:
     {
         this->onchainDataAvailability = onchainDataAvailability;
         this->numCancels = numCancels;
-
-        pb.set_input_sizes(1);
 
         constants.generate_r1cs_constraints();
 
@@ -414,7 +410,6 @@ public:
         updateAccount_O->generate_r1cs_constraints();
 
         // Check the input hash
-        publicDataHash.generate_r1cs_constraints(true);
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root

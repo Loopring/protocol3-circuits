@@ -189,7 +189,6 @@ public:
     unsigned int numWithdrawals;
     std::vector<OnchainWithdrawalGadget> withdrawals;
 
-    libsnark::dual_variable_gadget<FieldT> publicDataHash;
     PublicDataGadget publicData;
 
     Constants constants;
@@ -209,8 +208,7 @@ public:
     OnchainWithdrawalCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
 
-        publicDataHash(pb, 256, FMT(prefix, ".publicDataHash")),
-        publicData(pb, publicDataHash, FMT(prefix, ".publicData")),
+        publicData(pb, FMT(prefix, ".publicData")),
 
         constants(pb, FMT(prefix, ".constants")),
 
@@ -231,8 +229,6 @@ public:
     {
         this->onchainDataAvailability = onchainDataAvailability;
         this->numWithdrawals = numWithdrawals;
-
-        pb.set_input_sizes(1);
 
         constants.generate_r1cs_witness();
 
@@ -266,15 +262,15 @@ public:
             // Hash data from withdrawal request
             std::vector<VariableArrayT> withdrawalRequestData = withdrawals.back().getOnchainData();
             std::vector<VariableArrayT> hash;
-            hash.push_back(flattenReverse({withdrawalBlockHash}));
+            hash.push_back(reverse(withdrawalBlockHash));
             hash.insert(hash.end(), withdrawalRequestData.begin(), withdrawalRequestData.end());
             hashers.emplace_back(pb, flattenReverse(hash), std::string("hash_") + std::to_string(j));
             hashers.back().generate_r1cs_constraints();
         }
 
         // Add the ending hash
-        publicData.add(flattenReverse({withdrawalBlockHashStart}));
-        publicData.add(flattenReverse({hashers.back().result().bits}));
+        publicData.add(reverse(withdrawalBlockHashStart));
+        publicData.add(reverse(hashers.back().result().bits));
         publicData.add(startIndex.bits);
         publicData.add(count.bits);
 
@@ -285,7 +281,6 @@ public:
         }
 
         // Check the input hash
-        publicDataHash.generate_r1cs_constraints(true);
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root
@@ -333,7 +328,7 @@ public:
         {
             hasher.generate_r1cs_witness();
         }
-        printBits("WithdrawBlockHash: 0x", flattenReverse({hashers.back().result().bits}).get_bits(pb), true);
+        printBits("WithdrawBlockHash: 0x", hashers.back().result().bits.get_bits(pb));
 
         // Public data
         publicData.generate_r1cs_witness();
