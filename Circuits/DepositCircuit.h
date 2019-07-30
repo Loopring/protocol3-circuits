@@ -145,7 +145,6 @@ public:
     unsigned int numAccounts;
     std::vector<DepositGadget> deposits;
 
-    libsnark::dual_variable_gadget<FieldT> publicDataHash;
     PublicDataGadget publicData;
 
     Constants constants;
@@ -163,8 +162,7 @@ public:
     DepositCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
 
-        publicDataHash(pb, 256, FMT(prefix, ".publicDataHash")),
-        publicData(pb, publicDataHash, FMT(prefix, ".publicData")),
+        publicData(pb, FMT(prefix, ".publicData")),
 
         constants(pb, FMT(prefix, ".constants")),
 
@@ -183,8 +181,6 @@ public:
     {
         this->numAccounts = numAccounts;
 
-        pb.set_input_sizes(1);
-
         constants.generate_r1cs_constraints();
 
         exchangeID.generate_r1cs_constraints(true);
@@ -194,7 +190,7 @@ public:
         publicData.add(exchangeID.bits);
         publicData.add(merkleRootBefore.bits);
         publicData.add(merkleRootAfter.bits);
-        publicData.add(flattenReverse({depositBlockHashStart}));
+        publicData.add(reverse(depositBlockHashStart));
         for (size_t j = 0; j < numAccounts; j++)
         {
             VariableT depositAccountsRoot = (j == 0) ? merkleRootBefore.packed : deposits.back().getNewAccountsRoot();
@@ -211,19 +207,18 @@ public:
             // Hash data from deposit
             std::vector<VariableArrayT> depositData = deposits.back().getOnchainData();
             std::vector<VariableArrayT> hashBits;
-            hashBits.push_back(flattenReverse({depositBlockHash}));
+            hashBits.push_back(reverse(depositBlockHash));
             hashBits.insert(hashBits.end(), depositData.begin(), depositData.end());
             hashers.emplace_back(pb, flattenReverse(hashBits), std::string("hash_") + std::to_string(j));
             hashers.back().generate_r1cs_constraints();
         }
 
         // Add the block hash
-        publicData.add(flattenReverse({hashers.back().result().bits}));
+        publicData.add(reverse(hashers.back().result().bits));
         publicData.add(startIndex.bits);
         publicData.add(count.bits);
 
         // Check the input hash
-        publicDataHash.generate_r1cs_constraints(true);
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root
