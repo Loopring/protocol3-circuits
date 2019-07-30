@@ -23,7 +23,6 @@ public:
     const Constants& constants;
 
     const jubjub::VariablePointT publicKey;
-    const jubjub::VariablePointT walletPublicKey;
 
     libsnark::dual_variable_gadget<FieldT> accountID;
     libsnark::dual_variable_gadget<FieldT> orderTokenID;
@@ -81,7 +80,6 @@ public:
         constants(_constants),
 
         publicKey(pb, FMT(prefix, ".publicKey")),
-        walletPublicKey(pb, FMT(prefix, ".walletPublicKey")),
 
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
         orderTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".orderTokenID")),
