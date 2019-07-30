@@ -142,7 +142,7 @@ public:
         // OrderID check
         checkOrderID(pb, orderID_before, orderID.packed, NUM_BITS_ORDERID, FMT(prefix, ".checkOrderID")),
 
-         // Signature
+        // Signature
         hash(pb, var_array({
             blockExchangeID,
             accountID.packed,
@@ -289,6 +289,9 @@ public:
     const jubjub::VariablePointT publicKey;
     VariableT nonce;
     VariableT balancesRoot_before;
+
+    ForceNotZeroGadget publicKeyX_notZero;
+
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
     std::vector<VariableT> labels;
@@ -308,7 +311,9 @@ public:
         operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
         publicKey(pb, FMT(prefix, ".publicKey")),
         nonce(make_variable(pb, 0, FMT(prefix, ".nonce"))),
-        balancesRoot_before(make_variable(pb, 0, FMT(prefix, ".balancesRoot_before")))
+        balancesRoot_before(make_variable(pb, 0, FMT(prefix, ".balancesRoot_before"))),
+
+        publicKeyX_notZero(pb, publicKey.x, FMT(prefix, ".publicKeyX_notZero"))
     {
 
     }
@@ -319,6 +324,8 @@ public:
         this->numCancels = numCancels;
 
         constants.generate_r1cs_constraints();
+
+        publicKeyX_notZero.generate_r1cs_constraints();
 
         for (size_t j = 0; j < numCancels; j++)
         {
@@ -400,6 +407,8 @@ public:
         pb.val(publicKey.x) = block.accountUpdate_O.before.publicKey.x;
         pb.val(publicKey.y) = block.accountUpdate_O.before.publicKey.y;
         pb.val(nonce) = block.accountUpdate_O.before.nonce;
+
+        publicKeyX_notZero.generate_r1cs_witness();
 
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
 

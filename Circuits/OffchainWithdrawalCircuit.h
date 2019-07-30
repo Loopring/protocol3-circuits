@@ -292,6 +292,9 @@ public:
     const jubjub::VariablePointT publicKey;
     VariableT nonce;
     VariableT balancesRoot_before;
+
+    ForceNotZeroGadget publicKeyX_notZero;
+
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
     std::vector<VariableT> labels;
@@ -311,7 +314,9 @@ public:
         operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
         publicKey(pb, FMT(prefix, ".publicKey")),
         nonce(make_variable(pb, 0, FMT(prefix, ".nonce"))),
-        balancesRoot_before(make_variable(pb, 0, FMT(prefix, ".balancesRoot_before")))
+        balancesRoot_before(make_variable(pb, 0, FMT(prefix, ".balancesRoot_before"))),
+
+        publicKeyX_notZero(pb, publicKey.x, FMT(prefix, ".publicKeyX_notZero"))
     {
 
     }
@@ -322,6 +327,8 @@ public:
         this->numWithdrawals = numWithdrawals;
 
         constants.generate_r1cs_witness();
+
+        publicKeyX_notZero.generate_r1cs_constraints();
 
         exchangeID.generate_r1cs_constraints(true);
         merkleRootBefore.generate_r1cs_constraints(true);
@@ -409,6 +416,8 @@ public:
         pb.val(publicKey.y) = block.accountUpdate_O.before.publicKey.y;
         pb.val(nonce) = block.accountUpdate_O.before.nonce;
         pb.val(balancesRoot_before) = block.accountUpdate_O.before.balancesRoot;
+
+        publicKeyX_notZero.generate_r1cs_witness();
 
         for(unsigned int i = 0; i < block.withdrawals.size(); i++)
         {
