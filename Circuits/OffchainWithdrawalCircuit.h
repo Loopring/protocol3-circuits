@@ -26,6 +26,8 @@ public:
     libsnark::dual_variable_gadget<FieldT> amountRequested;
     libsnark::dual_variable_gadget<FieldT> fee;
     libsnark::dual_variable_gadget<FieldT> feeTokenID;
+    libsnark::dual_variable_gadget<FieldT> label;
+
     FloatGadget fFee;
     EnsureAccuracyGadget ensureAccuracyFee;
 
@@ -75,8 +77,9 @@ public:
         amountRequested(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amountRequested")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
-        fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
+        label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
 
+        fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
         ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, FMT(prefix, ".ensureAccuracyFee")),
 
         // User
@@ -146,8 +149,8 @@ public:
             amountRequested.packed,
             feeTokenID.packed,
             fee.packed,
-            nonce_before.packed,
-            constants.zero
+            label.packed,
+            nonce_before.packed
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, jubjub::VariablePointT(accountBefore.publicKeyX, accountBefore.publicKeyY),
                           hash.result(), FMT(prefix, ".signatureVerifier"))
@@ -188,11 +191,14 @@ public:
         feeTokenID.generate_r1cs_witness_from_bits();
         fee.bits.fill_with_bits_of_field_element(pb, withdrawal.fee);
         fee.generate_r1cs_witness_from_bits();
+        label.bits.fill_with_bits_of_field_element(pb, withdrawal.label);
+        label.generate_r1cs_witness_from_bits();
+
         fFee.generate_r1cs_witness(toFloat(withdrawal.fee, Float16Encoding));
+        ensureAccuracyFee.generate_r1cs_witness();
+
         amountRequested.bits.fill_with_bits_of_field_element(pb, withdrawal.amountRequested);
         amountRequested.generate_r1cs_witness_from_bits();
-
-        ensureAccuracyFee.generate_r1cs_witness();
 
         // User
         pb.val(balanceFBefore.tradingHistory) = withdrawal.balanceUpdateF_A.before.tradingHistoryRoot;
@@ -239,8 +245,11 @@ public:
         tokenID.generate_r1cs_constraints(true);
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
+        label.generate_r1cs_constraints(true);
+
         fFee.generate_r1cs_constraints();
         ensureAccuracyFee.generate_r1cs_constraints();
+
         nonce_before.generate_r1cs_constraints(true);
         nonce_after.generate_r1cs_constraints();
 
@@ -286,6 +295,9 @@ public:
     VariableT balancesRoot_before;
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
+    std::vector<VariableT> labels;
+    std::unique_ptr<LabelHasher> labelHasher;
+
     OffchainWithdrawalCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
 
@@ -319,9 +331,6 @@ public:
         merkleRootBefore.generate_r1cs_constraints(true);
         merkleRootAfter.generate_r1cs_constraints(true);
 
-        publicData.add(exchangeID.bits);
-        publicData.add(merkleRootBefore.bits);
-        publicData.add(merkleRootAfter.bits);
         for (size_t j = 0; j < numWithdrawals; j++)
         {
             VariableT withdrawalAccountsRoot = (j == 0) ? merkleRootBefore.packed : withdrawals.back().getNewAccountsRoot();
@@ -336,6 +345,7 @@ public:
                 std::string("withdrawals_") + std::to_string(j)
             );
             withdrawals.back().generate_r1cs_constraints();
+            labels.push_back(withdrawals.back().label.packed);
         }
 
         operatorAccountID.generate_r1cs_constraints(true);
@@ -347,12 +357,20 @@ public:
             FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
+        // Calculate the label hash
+        labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelHash")));
+        labelHasher->generate_r1cs_constraints();
+
+        // Public data
+        publicData.add(exchangeID.bits);
+        publicData.add(merkleRootBefore.bits);
+        publicData.add(merkleRootAfter.bits);
         // Store the approved data for all withdrawals
         for (auto& withdrawal : withdrawals)
         {
             publicData.add(withdrawal.getApprovedWithdrawalData());
         }
-
+        publicData.add(labelHasher->result()->bits);
         // Data availability
         if (onchainDataAvailability)
         {
@@ -403,6 +421,9 @@ public:
         }
 
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
+
+        // Calculate the label hash
+        labelHasher->generate_r1cs_witness();
 
         publicData.generate_r1cs_witness();
 

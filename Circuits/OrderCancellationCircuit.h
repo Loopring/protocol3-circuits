@@ -30,6 +30,8 @@ public:
     libsnark::dual_variable_gadget<FieldT> orderID;
     libsnark::dual_variable_gadget<FieldT> feeTokenID;
     libsnark::dual_variable_gadget<FieldT> fee;
+    libsnark::dual_variable_gadget<FieldT> label;
+
     FloatGadget fFee;
     EnsureAccuracyGadget ensureAccuracyFee;
 
@@ -62,7 +64,7 @@ public:
 
     ForceLeqGadget checkOrderID;
 
-    Poseidon_gadget_T<9, 1, 6, 53, 7, 1> hash;
+    Poseidon_gadget_T<10, 1, 6, 53, 8, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OrderCancellationGadget(
@@ -86,8 +88,9 @@ public:
         orderID(pb, NUM_BITS_ORDERID, FMT(prefix, ".orderID")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
-        fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
+        label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
 
+        fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
         ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, FMT(prefix, ".ensureAccuracyFee")),
 
         filled(make_variable(pb, 0, FMT(prefix, ".filled"))),
@@ -149,6 +152,7 @@ public:
             orderID.packed,
             feeTokenID.packed,
             fee.packed,
+            label.packed,
             nonce_before.packed
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
@@ -190,6 +194,9 @@ public:
         feeTokenID.generate_r1cs_witness_from_bits();
         fee.bits.fill_with_bits_of_field_element(pb, cancellation.fee);
         fee.generate_r1cs_witness_from_bits();
+        label.bits.fill_with_bits_of_field_element(pb, cancellation.label);
+        label.generate_r1cs_witness_from_bits();
+
         fFee.generate_r1cs_witness(toFloat(cancellation.fee, Float16Encoding));
         ensureAccuracyFee.generate_r1cs_witness();
 
@@ -230,9 +237,16 @@ public:
 
     void generate_r1cs_constraints()
     {
+        accountID.generate_r1cs_constraints(true);
+        orderTokenID.generate_r1cs_constraints(true);
+        orderID.generate_r1cs_constraints(true);
+        feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
+        label.generate_r1cs_constraints(true);
+
         fFee.generate_r1cs_constraints();
         ensureAccuracyFee.generate_r1cs_constraints();
+
         nonce_before.generate_r1cs_constraints(true);
         nonce_after.generate_r1cs_constraints();
 
@@ -280,6 +294,9 @@ public:
     VariableT balancesRoot_before;
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
+    std::vector<VariableT> labels;
+    std::unique_ptr<LabelHasher> labelHasher;
+
     OrderCancellationCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
 
@@ -309,14 +326,6 @@ public:
 
         constants.generate_r1cs_constraints();
 
-        publicData.add(exchangeID.bits);
-        publicData.add(merkleRootBefore.bits);
-        publicData.add(merkleRootAfter.bits);
-        if (onchainDataAvailability)
-        {
-            publicData.add(constants.accountPadding);
-            publicData.add(operatorAccountID.bits);
-        }
         for (size_t j = 0; j < numCancels; j++)
         {
             VariableT cancelAccountsRoot = (j == 0) ? merkleRootBefore.packed : cancels.back().getNewAccountsRoot();
@@ -331,13 +340,7 @@ public:
                 std::string("cancels_") + std::to_string(j)
             );
             cancels.back().generate_r1cs_constraints();
-
-            if (onchainDataAvailability)
-            {
-                // Store data from cancellation
-                std::vector<VariableArrayT> ringPublicData = cancels.back().getPublicData();
-                publicData.add(cancels.back().getPublicData());
-            }
+            labels.push_back(cancels.back().label.packed);
         }
 
         // Update operator account
@@ -347,6 +350,25 @@ public:
                 {publicKey.x, publicKey.y, nonce, cancels.back().getNewOperatorBalancesRoot()},
                 FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
+
+        // Calculate the label hash
+        labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelHash")));
+        labelHasher->generate_r1cs_constraints();
+
+        // Public data
+        publicData.add(exchangeID.bits);
+        publicData.add(merkleRootBefore.bits);
+        publicData.add(merkleRootAfter.bits);
+        publicData.add(labelHasher->result()->bits);
+        if (onchainDataAvailability)
+        {
+            publicData.add(constants.accountPadding);
+            publicData.add(operatorAccountID.bits);
+            for (const OrderCancellationGadget& cancel : cancels)
+            {
+                publicData.add(cancel.getPublicData());
+            }
+        }
 
         // Check the input hash
         publicDataHash.generate_r1cs_constraints(true);
@@ -387,6 +409,9 @@ public:
         pb.val(nonce) = block.accountUpdate_O.before.nonce;
 
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
+
+        // Calculate the label hash
+        labelHasher->generate_r1cs_witness();
 
         publicData.generate_r1cs_witness();
 

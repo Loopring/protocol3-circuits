@@ -598,17 +598,6 @@ public:
         protocolMakerFeeBips.generate_r1cs_constraints(true);
         nonce_after.generate_r1cs_constraints();
 
-        publicData.add(exchangeID.bits);
-        publicData.add(merkleRootBefore.bits);
-        publicData.add(merkleRootAfter.bits);
-        publicData.add(timestamp.bits);
-        publicData.add(protocolTakerFeeBips.bits);
-        publicData.add(protocolMakerFeeBips.bits);
-        if (onchainDataAvailability)
-        {
-            publicData.add(constants.accountPadding);
-            publicData.add(operatorAccountID.bits);
-        }
         for (size_t j = 0; j < numRings; j++)
         {
             const VariableT ringAccountsRoot = (j == 0) ? merkleRootBefore.packed : ringSettlements.back().getNewAccountsRoot();
@@ -653,13 +642,23 @@ public:
                       FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
-        // Calculate the labels hash
-        labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelsHash")));
+        // Calculate the label hash
+        labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelHash")));
         labelHasher->generate_r1cs_constraints();
 
+        // Public data
+        publicData.add(exchangeID.bits);
+        publicData.add(merkleRootBefore.bits);
+        publicData.add(merkleRootAfter.bits);
+        publicData.add(timestamp.bits);
+        publicData.add(protocolTakerFeeBips.bits);
+        publicData.add(protocolMakerFeeBips.bits);
+        publicData.add(labelHasher->result()->bits);
         if (onchainDataAvailability)
         {
-            // Transform the data
+            publicData.add(constants.accountPadding);
+            publicData.add(operatorAccountID.bits);
+            // Transform the ring data
             transformData.generate_r1cs_constraints(numRings, flattenReverse(dataAvailabityData.data));
             publicData.add(flattenReverse({transformData.result()}));
         }
@@ -722,9 +721,8 @@ public:
         updateAccount_P->generate_r1cs_witness(block.accountUpdate_P.proof);
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
 
-        // Calculate the labels hash
+        // Calculate the label hash
         labelHasher->generate_r1cs_witness();
-        print(pb, "labelHash", labelHasher->result());
 
         if (onchainDataAvailability)
         {

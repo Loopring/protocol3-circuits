@@ -152,7 +152,6 @@ void from_json(const json& j, Signature& signature)
 class Order
 {
 public:
-    ethsnarks::jubjub::EdwardsPoint dualAuthPublicKey;
     ethsnarks::FieldT exchangeID;
     ethsnarks::FieldT orderID;
     ethsnarks::FieldT accountID;
@@ -175,9 +174,6 @@ public:
 
 void from_json(const json& j, Order& order)
 {
-    order.dualAuthPublicKey.x = ethsnarks::FieldT(j.at("dualAuthPublicKeyX").get<std::string>().c_str());
-    order.dualAuthPublicKey.y = ethsnarks::FieldT(j.at("dualAuthPublicKeyY").get<std::string>().c_str());
-
     order.exchangeID = ethsnarks::FieldT(j.at("exchangeID"));
     order.orderID = ethsnarks::FieldT(j.at("orderID"));
     order.accountID = ethsnarks::FieldT(j.at("accountID"));
@@ -185,7 +181,6 @@ void from_json(const json& j, Order& order)
     order.tokenB = ethsnarks::FieldT(j.at("tokenB"));
     order.amountS = ethsnarks::FieldT(j.at("amountS").get<std::string>().c_str());
     order.amountB = ethsnarks::FieldT(j.at("amountB").get<std::string>().c_str());
-
     order.allOrNone = ethsnarks::FieldT(j.at("allOrNone").get<bool>() ? 1 : 0);
     order.validSince = ethsnarks::FieldT(j.at("validSince"));
     order.validUntil = ethsnarks::FieldT(j.at("validUntil"));
@@ -423,6 +418,7 @@ class OffchainWithdrawal
 public:
     ethsnarks::FieldT amountRequested;
     ethsnarks::FieldT fee;
+    ethsnarks::FieldT label;
     Signature signature;
 
     BalanceUpdate balanceUpdateF_A;
@@ -435,6 +431,7 @@ void from_json(const json& j, OffchainWithdrawal& withdrawal)
 {
     withdrawal.amountRequested = ethsnarks::FieldT(j.at("amountRequested").get<std::string>().c_str());
     withdrawal.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
+    withdrawal.label = ethsnarks::FieldT(j.at("label"));
     withdrawal.signature = j.at("signature").get<Signature>();
 
     withdrawal.balanceUpdateF_A = j.at("balanceUpdateF_A").get<BalanceUpdate>();
@@ -486,6 +483,7 @@ class Cancellation
 {
 public:
     ethsnarks::FieldT fee;
+    ethsnarks::FieldT label;
     Signature signature;
 
     TradeHistoryUpdate tradeHistoryUpdate_A;
@@ -498,6 +496,7 @@ public:
 void from_json(const json& j, Cancellation& cancellation)
 {
     cancellation.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
+    cancellation.label = ethsnarks::FieldT(j.at("label"));
     cancellation.signature = j.at("signature").get<Signature>();
 
     cancellation.tradeHistoryUpdate_A = j.at("tradeHistoryUpdate_A").get<TradeHistoryUpdate>();

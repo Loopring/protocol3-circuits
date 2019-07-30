@@ -1335,11 +1335,13 @@ public:
 class LabelHasher : public GadgetT
 {
 public:
-    static const unsigned numInputsStage1 = 80;
-    std::vector<Poseidon_gadget_T<96, 1, 6, 56, numInputsStage1, 1>> stage1Hashes;
+    static const unsigned numInputsStage1 = 40;
+    std::vector<Poseidon_gadget_T<48, 1, 6, 55, numInputsStage1, 1>> stage1Hashes;
 
     static const unsigned numInputsStage2 = 4;
     std::vector<Poseidon_gadget_T<6, 1, 6, 52, numInputsStage2 + 1, 1>> stage2Hashes;
+
+    std::unique_ptr<libsnark::dual_variable_gadget<FieldT>> hash;
 
     LabelHasher(
         ProtoboardT& pb,
@@ -1373,11 +1375,15 @@ public:
             }
             stage2Hashes.emplace_back(pb, var_array(inputs), FMT(this->annotation_prefix, ".stage2"));
         }
+
+        hash.reset(new libsnark::dual_variable_gadget<FieldT>(
+            pb, stage2Hashes.back().result(), 256, ".labelHashToBits")
+        );
     }
 
-    VariableT result()
+    const std::unique_ptr<libsnark::dual_variable_gadget<FieldT>>& result() const
     {
-        return stage2Hashes.back().result();
+        return hash;
     }
 
     void generate_r1cs_witness()
@@ -1390,6 +1396,8 @@ public:
         {
             hasher.generate_r1cs_witness();
         }
+        hash->generate_r1cs_witness_from_packed();
+        print(pb, "[ZKS]labelHash", hash->packed);
     }
 
     void generate_r1cs_constraints()
@@ -1402,6 +1410,7 @@ public:
         {
             hasher.generate_r1cs_constraints();
         }
+        hash->generate_r1cs_constraints(true);
     }
 };
 

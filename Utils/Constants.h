@@ -16,7 +16,7 @@ namespace Loopring
     static const unsigned int NUM_BITS_TIMESTAMP = 32;
     static const unsigned int NUM_BITS_NONCE = 32;
     static const unsigned int NUM_BITS_BIPS = 6;
-    static const unsigned int NUM_BITS_LABEL = 16;
+    static const unsigned int NUM_BITS_LABEL = 32;
 
     static const char* EMPTY_TRADE_HISTORY = "6592749167578234498153410564243369229486412054742481069049239297514590357090";
     static const char* MAX_AMOUNT = "79228162514264337593543950335"; // 2^96 - 1
