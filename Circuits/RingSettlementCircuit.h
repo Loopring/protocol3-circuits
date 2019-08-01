@@ -542,7 +542,7 @@ public:
     std::vector<VariableT> labels;
     std::unique_ptr<LabelHasher> labelHasher;
 
-    Poseidon_gadget_T<6, 1, 6, 52, 5, 1> hash;
+    Poseidon_gadget_T<3, 1, 6, 51, 2, 1> hash;
     SignatureVerifier signatureVerifier;
 
     RingSettlementCircuit(ProtoboardT& pb, const std::string& prefix) :
@@ -570,10 +570,7 @@ public:
         nonce_after(pb, nonce_before, constants.one, FMT(prefix, ".nonce_after")),
 
         hash(pb, var_array({
-            exchangeID.packed,
-            timestamp.packed,
-            merkleRootBefore.packed,
-            merkleRootAfter.packed,
+            publicData.publicInput,
             nonce_before
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
