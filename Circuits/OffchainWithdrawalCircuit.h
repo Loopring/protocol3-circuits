@@ -386,7 +386,7 @@ public:
         this->onchainDataAvailability = onchainDataAvailability;
         this->numWithdrawals = numWithdrawals;
 
-        constants.generate_r1cs_witness();
+        constants.generate_r1cs_constraints();
 
         exchangeID.generate_r1cs_constraints(true);
         merkleRootBefore.generate_r1cs_constraints(true);
