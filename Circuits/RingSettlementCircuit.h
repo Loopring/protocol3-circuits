@@ -210,8 +210,8 @@ public:
         uFillS_B(pb, orderMatching.isValid(), orderMatching.getFillB_S(), constants.zero, FMT(prefix, ".uFillS_B")),
         fillS_A(pb, constants, Float24Encoding, FMT(prefix, ".fillS_A")),
         fillS_B(pb, constants, Float24Encoding, FMT(prefix, ".fillS_B")),
-        ensureAccuracyFillS_A(pb, fillS_A.value(), uFillS_A.result(), Float24Accuracy, FMT(prefix, ".ensureAccuracyFillS_A")),
-        ensureAccuracyFillS_B(pb, fillS_B.value(), uFillS_B.result(), Float24Accuracy, FMT(prefix, ".ensureAccuracyFillS_B")),
+        ensureAccuracyFillS_A(pb, fillS_A.value(), uFillS_A.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFillS_A")),
+        ensureAccuracyFillS_B(pb, fillS_B.value(), uFillS_B.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFillS_B")),
 
         // Filled amounts
         filledA(pb, orderA.buy.packed, fillS_B.value(), fillS_A.value(), FMT(prefix, ".filledA")),

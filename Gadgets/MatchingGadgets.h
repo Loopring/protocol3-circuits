@@ -30,11 +30,12 @@ public:
         const VariableT& _value,
         const VariableT& _numerator,
         const VariableT& _denominator,
+        unsigned int numBitsDenominator,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
-        mulDiv(pb, constants, _value, _numerator, _denominator, FMT(prefix, ".multiplied")),
+        mulDiv(pb, constants, _value, _numerator, _denominator, numBitsDenominator, FMT(prefix, ".multiplied")),
         remainderx100(make_variable(pb, FMT(prefix, ".remainderx100"))),
         multiplied_lt_remainderx100(pb, mulDiv.multiplied(), remainderx100, NUM_BITS_AMOUNT * 2, FMT(prefix, ".multiplied_lt_remainderx100")),
         valid(make_variable(pb, FMT(prefix, ".valid")))
@@ -83,9 +84,9 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        protocolFee(pb, constants, amountB, protocolFeeBips, constants._100000, FMT(prefix, ".protocolFee")),
-        fee(pb, constants, amountB, feeBips, constants._10000, FMT(prefix, ".fee")),
-        rebate(pb, constants, amountB, rebateBips, constants._10000, FMT(prefix, ".rebate"))
+        protocolFee(pb, constants, amountB, protocolFeeBips, constants._100000, 17 /*=ceil(log2(100000))*/, FMT(prefix, ".protocolFee")),
+        fee(pb, constants, amountB, feeBips, constants._10000, 14 /*=ceil(log2(10000))*/, FMT(prefix, ".fee")),
+        rebate(pb, constants, amountB, rebateBips, constants._10000, 14 /*=ceil(log2(10000))*/, FMT(prefix, ".rebate"))
     {
 
     }
@@ -170,7 +171,7 @@ public:
         validAllOrNoneSell(pb, notValidAllOrNoneSell.result(), FMT(prefix, "validAllOrNoneSell")),
         validAllOrNoneBuy(pb, notValidAllOrNoneBuy.result(), FMT(prefix, "validAllOrNoneBuy")),
 
-        checkRoundingError(pb, constants, fillAmountS, order.amountB.packed, order.amountS.packed, FMT(prefix, ".checkRoundingError")),
+        checkRoundingError(pb, constants, fillAmountS, order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, FMT(prefix, ".checkRoundingError")),
 
         zero_lt_fillAmountS(pb, constants.zero, fillAmountS, NUM_BITS_AMOUNT, FMT(prefix, "0 < _fillAmountS")),
         zero_lt_fillAmountB(pb, constants.zero, fillAmountB, NUM_BITS_AMOUNT, FMT(prefix, "0 < _fillAmountB")),
@@ -269,10 +270,10 @@ public:
         filledLimited(pb, limit.result(), order.tradeHistory.getFilled(), NUM_BITS_AMOUNT, FMT(prefix, ".filledLimited")),
         remainingBeforeCancelled(pb, limit.result(), filledLimited.result(), FMT(prefix, ".remainingBeforeCancelled")),
         remaining(pb, order.tradeHistory.getCancelled(), constants.zero, remainingBeforeCancelled.result(), FMT(prefix, ".remaining")),
-        remainingS_buy(pb, constants, remaining.result(), order.amountS.packed, order.amountB.packed, FMT(prefix, ".remainingS_buy")),
+        remainingS_buy(pb, constants, remaining.result(), order.amountS.packed, order.amountB.packed, NUM_BITS_AMOUNT, FMT(prefix, ".remainingS_buy")),
         remainingS(pb, order.buy.packed, remainingS_buy.result(), remaining.result(), FMT(prefix, ".remainingS")),
         fillAmountS(pb, order.balanceS, remainingS.result(), NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountS")),
-        fillAmountB(pb, constants, fillAmountS.result(), order.amountB.packed, order.amountS.packed, FMT(prefix, ".fillAmountB"))
+        fillAmountB(pb, constants, fillAmountS.result(), order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB"))
     {
 
     }
@@ -371,8 +372,8 @@ public:
 
         takerFillB_lt_makerFillS(pb, takerFill.B, makerFill.S, NUM_BITS_AMOUNT * 2, FMT(prefix, ".takerFill.B < makerFill.B")),
 
-        makerFillB_T(pb, constants, takerFill.B, makerOrder.amountB, makerOrder.amountS, FMT(prefix, ".makerFillB_T")),
-        takerFillS_F(pb, constants, makerFill.S, takerOrder.amountS, takerOrder.amountB, FMT(prefix, ".takerFillS_F")),
+        makerFillB_T(pb, constants, takerFill.B, makerOrder.amountB, makerOrder.amountS, NUM_BITS_AMOUNT, FMT(prefix, ".makerFillB_T")),
+        takerFillS_F(pb, constants, makerFill.S, takerOrder.amountS, takerOrder.amountB, NUM_BITS_AMOUNT, FMT(prefix, ".takerFillS_F")),
 
         makerFillS(pb, takerFillB_lt_makerFillS.lt(), takerFill.B, makerFill.S, FMT(prefix, ".makerFillS")),
         makerFillB(pb, takerFillB_lt_makerFillS.lt(), makerFillB_T.result(), makerFill.B, FMT(prefix, ".makerFillB")),

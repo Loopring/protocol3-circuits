@@ -89,7 +89,7 @@ public:
         label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
 
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
-        ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, FMT(prefix, ".ensureAccuracyFee")),
+        ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFee")),
 
         filled(make_variable(pb, 0, FMT(prefix, ".filled"))),
         cancelled_before(make_variable(pb, 0, FMT(prefix, ".cancelled_before"))),

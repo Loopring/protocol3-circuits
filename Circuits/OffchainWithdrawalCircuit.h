@@ -80,7 +80,7 @@ public:
         label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
 
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
-        ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, FMT(prefix, ".ensureAccuracyFee")),
+        ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFee")),
 
         // User
         balanceFBefore({
@@ -111,10 +111,10 @@ public:
         // Calculate how much can be withdrawn
         amountToWithdraw(pb, amountRequested.packed, balanceBefore.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
         amountWithdrawn(pb, constants, Float28Encoding, FMT(prefix, ".amountWithdrawn")),
-        ensureAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, FMT(prefix, ".ensureAccuracyAmountRequested")),
+        ensureAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyAmountRequested")),
 
         // Calculate new balance
-        balance_after(pb, balanceBefore.balance, amountWithdrawn.value(), NUM_BITS_MAX_VALUE - 1, FMT(prefix, ".balance_after")),
+        balance_after(pb, balanceBefore.balance, amountWithdrawn.value(), NUM_BITS_AMOUNT, FMT(prefix, ".balance_after")),
 
         // Update User
         balanceFAfter({
