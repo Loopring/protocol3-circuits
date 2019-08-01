@@ -57,10 +57,7 @@ public:
     VariableT balanceS;
     VariableT balanceB;
 
-    // Largest value in the order hash is currently 96bit so we can go up to t == 16
-    // (but we need 3 inputs for capacity for 128bit security)
-    // Packing small values together in a single input is also possible
-    Poseidon_gadget_T<16, 1, 6, 54, 13, 1> hash;
+    Poseidon_gadget_T<14, 1, 6, 53, 13, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OrderGadget(

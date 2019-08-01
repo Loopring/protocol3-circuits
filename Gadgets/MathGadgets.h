@@ -1333,14 +1333,17 @@ public:
     }
 };
 
+ // Hashes the labels in different stages so we only need a single Poseidon permutation.
+ // Currently hashes 64 labels + the hash of the previous stage in a single stage.
+ // There is no particular reason 64 labels are hashed together at once
+ // (and depending on our understanding of Poseidon this could still change).
+ // This doesn't need to be very secure, the only requirement is that it shouldn't be completely
+ // trivial to find a different set of labels with the same hash.
 class LabelHasher : public GadgetT
 {
 public:
-    static const unsigned numInputsStage1 = 40;
-    std::vector<Poseidon_gadget_T<48, 1, 6, 55, numInputsStage1, 1>> stage1Hashes;
-
-    static const unsigned numInputsStage2 = 4;
-    std::vector<Poseidon_gadget_T<6, 1, 6, 52, numInputsStage2 + 1, 1>> stage2Hashes;
+    static const unsigned numInputs = 64;
+    std::vector<Poseidon_gadget_T<66, 1, 6, 56, numInputs + 1, 1>> stageHashers;
 
     std::unique_ptr<libsnark::dual_variable_gadget<FieldT>> hash;
 
@@ -1352,33 +1355,21 @@ public:
     ) :
         GadgetT(pb, prefix)
     {
-        unsigned int numStage1Hashes = (labels.size() + numInputsStage1 - 1) / numInputsStage1;
-        for (unsigned int i = 0; i < numStage1Hashes; i++)
+        unsigned int numStages = (labels.size() + numInputs - 1) / numInputs;
+        for (unsigned int i = 0; i < numStages; i++)
         {
             std::vector<VariableT> inputs;
-            for (unsigned int j = 0; j < numInputsStage1; j++)
+            inputs.push_back(i == 0 ? constants.zero : stageHashers.back().result());
+            for (unsigned int j = 0; j < numInputs; j++)
             {
-                const unsigned int labelIdx = i * numInputsStage1 + j;
+                const unsigned int labelIdx = i * numInputs + j;
                 inputs.push_back((labelIdx < labels.size()) ? labels[labelIdx] : constants.zero);
             }
-            stage1Hashes.emplace_back(pb, var_array(inputs), FMT(this->annotation_prefix, ".stage1"));
-        }
-
-        unsigned int numStage2Hashes = (numStage1Hashes + numInputsStage2 - 1) / numInputsStage2;
-        for (unsigned int i = 0; i < numStage2Hashes; i++)
-        {
-            std::vector<VariableT> inputs;
-            inputs.push_back(i == 0 ? constants.zero : stage2Hashes.back().result());
-            for (unsigned int j = 0; j < numInputsStage2; j++)
-            {
-                const unsigned int hashIdx = i * numInputsStage2 + j;
-                inputs.push_back((hashIdx < stage1Hashes.size()) ? stage1Hashes[hashIdx].result() : constants.zero);
-            }
-            stage2Hashes.emplace_back(pb, var_array(inputs), FMT(this->annotation_prefix, ".stage2"));
+            stageHashers.emplace_back(pb, var_array(inputs), FMT(this->annotation_prefix, ".stage1"));
         }
 
         hash.reset(new libsnark::dual_variable_gadget<FieldT>(
-            pb, stage2Hashes.back().result(), 256, ".labelHashToBits")
+            pb, stageHashers.back().result(), 256, ".labelHashToBits")
         );
     }
 
@@ -1389,11 +1380,7 @@ public:
 
     void generate_r1cs_witness()
     {
-        for (auto hasher : stage1Hashes)
-        {
-            hasher.generate_r1cs_witness();
-        }
-        for (auto hasher : stage2Hashes)
+        for (auto hasher : stageHashers)
         {
             hasher.generate_r1cs_witness();
         }
@@ -1403,11 +1390,7 @@ public:
 
     void generate_r1cs_constraints()
     {
-        for (auto hasher : stage1Hashes)
-        {
-            hasher.generate_r1cs_constraints();
-        }
-        for (auto hasher : stage2Hashes)
+        for (auto hasher : stageHashers)
         {
             hasher.generate_r1cs_constraints();
         }

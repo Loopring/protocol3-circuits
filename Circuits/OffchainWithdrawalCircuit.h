@@ -56,7 +56,7 @@ public:
 
     UpdateBalanceGadget updateBalanceF_O;
 
-    Poseidon_gadget_T<10, 1, 6, 53, 8, 1> hash;
+    Poseidon_gadget_T<9, 1, 6, 53, 8, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OffchainWithdrawalGadget(
