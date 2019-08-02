@@ -57,7 +57,8 @@ public:
         padding_00(2, zero),
         accountPadding(4, zero)
     {
-        assert(NUM_BITS_MAX_VALUE == FieldT::capacity());
+        assert(NUM_BITS_MAX_VALUE == FieldT::size_in_bits());
+        assert(NUM_BITS_FIELD_CAPACITY == FieldT::capacity());
     }
 
     void generate_r1cs_witness()
@@ -328,9 +329,9 @@ public:
         pb.val(z) = (pb.val(b) == FieldT::one()) ? pb.val(x) : pb.val(y);
     }
 
-    void generate_r1cs_constraints(bool enforeBitness = true)
+    void generate_r1cs_constraints(bool enforceBitness = true)
     {
-        if (enforeBitness)
+        if (enforceBitness)
         {
             libsnark::generate_boolean_r1cs_constraint<ethsnarks::FieldT>(pb, b, FMT(annotation_prefix, ".bitness"));
         }
@@ -358,7 +359,8 @@ public:
         _leq(make_variable(pb, 1, FMT(prefix, ".leq"))),
         comparison(pb, n, A, B, _lt, _leq, FMT(prefix, ".A <(=) B"))
     {
-
+        // The comparison gadget is only guaranteed to work correctly on values in the field capacity - 1
+        assert(n <= NUM_BITS_FIELD_CAPACITY - 1);
     }
 
     const VariableT& lt() const
@@ -855,39 +857,7 @@ public:
     void generate_r1cs_constraints()
     {
         leqGadget.generate_r1cs_constraints();
-        pb.add_r1cs_constraint(ConstraintT(leqGadget.lt(), FieldT::one(), FieldT::one()), FMT(annotation_prefix, ".leq == 1"));
-    }
-};
-
-class PercentageGadget : public GadgetT
-{
-public:
-    libsnark::dual_variable_gadget<FieldT> value;
-    LeqGadget leq100Gadget;
-
-    PercentageGadget(
-        ProtoboardT& pb,
-        const Constants& constants,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix),
-        value(pb, NUM_BITS_PERCENTAGE, FMT(prefix, ".value")),
-        leq100Gadget(pb, value.packed, constants._100, NUM_BITS_PERCENTAGE, FMT(prefix, ".percentage <= 100"))
-    {
-
-    }
-
-    void generate_r1cs_witness(ethsnarks::FieldT percentage)
-    {
-        value.bits.fill_with_bits_of_field_element(pb, percentage);
-        value.generate_r1cs_witness_from_bits();
-        leq100Gadget.generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        value.generate_r1cs_constraints(true);
-        leq100Gadget.generate_r1cs_constraints();
+        pb.add_r1cs_constraint(ConstraintT(leqGadget.lt(), FieldT::one(), FieldT::one()), FMT(annotation_prefix, ".lt == 1"));
     }
 };
 
@@ -902,7 +872,7 @@ public:
     ForceNotZeroGadget C_notZero;
 
     const VariableT X;
-    const VariableT remainder;
+    libsnark::dual_variable_gadget<FieldT> remainder;
 
     ForceLtGadget remainder_lt_C;
 
@@ -913,6 +883,7 @@ public:
         const VariableT& _A,
         const VariableT& _B,
         const VariableT& _C,
+        unsigned int numBitsDenominator,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
@@ -926,9 +897,9 @@ public:
         D(make_variable(pb, FMT(prefix, ".D"))),
 
         X(make_variable(pb, FMT(prefix, ".X"))),
-        remainder(make_variable(pb, FMT(prefix, ".remainder"))),
+        remainder(pb, numBitsDenominator, FMT(prefix, ".remainder")),
 
-        remainder_lt_C(pb, remainder, C, NUM_BITS_MAX_VALUE, FMT(prefix, ".remainder <(=) C"))
+        remainder_lt_C(pb, remainder.packed, C, numBitsDenominator, FMT(prefix, ".remainder < C"))
     {
 
     }
@@ -940,7 +911,7 @@ public:
 
     const VariableT& getRemainder() const
     {
-        return remainder;
+        return remainder.packed;
     }
 
     const VariableT& multiplied() const
@@ -954,7 +925,8 @@ public:
 
         pb.val(X) = pb.val(A) * pb.val(B);
         pb.val(D) = ethsnarks::FieldT((toBigInt(pb.val(X)) / toBigInt(pb.val(C))).to_string().c_str());
-        pb.val(remainder) = pb.val(X) - (pb.val(C) * pb.val(D));
+        pb.val(remainder.packed) = pb.val(X) - (pb.val(C) * pb.val(D));
+        remainder.generate_r1cs_witness_from_packed();
 
         remainder_lt_C.generate_r1cs_witness();
     }
@@ -964,64 +936,17 @@ public:
         C_notZero.generate_r1cs_constraints();
 
         pb.add_r1cs_constraint(ConstraintT(A, B, X), FMT(annotation_prefix, ".A * B == X"));
-        pb.add_r1cs_constraint(ConstraintT(C, D, X - remainder), FMT(annotation_prefix, ".D * C == X - remainder"));
+        pb.add_r1cs_constraint(ConstraintT(C, D, X - remainder.packed), FMT(annotation_prefix, ".D * C == X - remainder"));
 
+        remainder.generate_r1cs_constraints(true);
         remainder_lt_C.generate_r1cs_constraints();
-    }
-};
-
-class RoundingErrorGadget : public GadgetT
-{
-public:
-    MulDivGadget mulDiv;
-    VariableT remainderx100;
-    LeqGadget multiplied_lt_remainderx100;
-    VariableT valid;
-
-    RoundingErrorGadget(
-        ProtoboardT& pb,
-        const Constants& constants,
-        const VariableT& _value,
-        const VariableT& _numerator,
-        const VariableT& _denominator,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix),
-
-        mulDiv(pb, constants, _value, _numerator, _denominator, FMT(prefix, ".multiplied")),
-        remainderx100(make_variable(pb, FMT(prefix, ".remainderx100"))),
-        multiplied_lt_remainderx100(pb, mulDiv.multiplied(), remainderx100, NUM_BITS_AMOUNT * 2, FMT(prefix, ".multiplied_lt_remainderx100")),
-        valid(make_variable(pb, FMT(prefix, ".valid")))
-    {
-
-    }
-
-    const VariableT& isValid()
-    {
-        return valid;
-    }
-
-    void generate_r1cs_witness()
-    {
-        mulDiv.generate_r1cs_witness();
-        pb.val(remainderx100) = pb.val(mulDiv.getRemainder()) * 100;
-        multiplied_lt_remainderx100.generate_r1cs_witness();
-        pb.val(valid) = FieldT::one() - pb.val(multiplied_lt_remainderx100.lt());
-    }
-
-    void generate_r1cs_constraints()
-    {
-        mulDiv.generate_r1cs_constraints();
-        pb.add_r1cs_constraint(ConstraintT(mulDiv.getRemainder() * 100, FieldT::one(), remainderx100), FMT(annotation_prefix, ".remainder * 100 == remainderx100"));
-        multiplied_lt_remainderx100.generate_r1cs_constraints();
-        pb.add_r1cs_constraint(ConstraintT(FieldT::one() - multiplied_lt_remainderx100.lt(), FieldT::one(), valid), FMT(annotation_prefix, ".valid"));
     }
 };
 
 class EnsureAccuracyGadget : public GadgetT
 {
 public:
-    VariableT value;
+    libsnark::dual_variable_gadget<FieldT> value;
     VariableT original;
     Accuracy accuracy;
 
@@ -1038,40 +963,43 @@ public:
         const VariableT& _value,
         const VariableT& _original,
         const Accuracy& _accuracy,
+        unsigned int maxNumBits,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
-        value(_value),
+        value(pb, _value, maxNumBits, FMT(prefix, ".value")),
         original(_original),
         accuracy(_accuracy),
 
-        value_lt_original(pb, value, original, NUM_BITS_MAX_VALUE, FMT(prefix, ".value_lt_original")),
+        value_lt_original(pb, value.packed, original, maxNumBits, FMT(prefix, ".value_lt_original")),
 
         difference(make_variable(pb, FMT(prefix, ".difference"))),
         originalXaccuracyN(make_variable(pb, FMT(prefix, ".originalXaccuracyN"))),
         differenceXaccuracyD(make_variable(pb, FMT(prefix, ".differenceXaccuracyD"))),
 
-        originalXaccuracyN_lt_differenceXaccuracyD(pb, originalXaccuracyN, differenceXaccuracyD, NUM_BITS_MAX_VALUE, FMT(prefix, ".originalXaccuracyN_lt_differenceXaccuracyD"))
+        originalXaccuracyN_lt_differenceXaccuracyD(pb, originalXaccuracyN, differenceXaccuracyD, maxNumBits + 32, FMT(prefix, ".originalXaccuracyN_lt_differenceXaccuracyD"))
     {
 
     }
 
     void generate_r1cs_witness()
     {
+        value.generate_r1cs_witness_from_packed();
         value_lt_original.generate_r1cs_witness();
-        pb.val(difference) = pb.val(original) - pb.val(value);
+        pb.val(difference) = pb.val(original) - pb.val(value.packed);
         pb.val(originalXaccuracyN) = pb.val(original) * accuracy.numerator;
-        pb.val(differenceXaccuracyD) = pb.val(value) * accuracy.denominator;
+        pb.val(differenceXaccuracyD) = pb.val(value.packed) * accuracy.denominator;
         originalXaccuracyN_lt_differenceXaccuracyD.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
+        value.generate_r1cs_constraints(true);
         value_lt_original.generate_r1cs_constraints();
-        pb.add_r1cs_constraint(ConstraintT(value + difference, FieldT::one(), original), FMT(annotation_prefix, ".value + difference == original"));
+        pb.add_r1cs_constraint(ConstraintT(value.packed + difference, FieldT::one(), original), FMT(annotation_prefix, ".value + difference == original"));
         pb.add_r1cs_constraint(ConstraintT(original, accuracy.numerator, originalXaccuracyN), FMT(annotation_prefix, ".original * accuracy.numerator == originalXaccuracyN"));
-        pb.add_r1cs_constraint(ConstraintT(value, accuracy.denominator, differenceXaccuracyD), FMT(annotation_prefix, ".value * accuracy.denominator == differenceXaccuracyD"));
+        pb.add_r1cs_constraint(ConstraintT(value.packed, accuracy.denominator, differenceXaccuracyD), FMT(annotation_prefix, ".value * accuracy.denominator == differenceXaccuracyD"));
         originalXaccuracyN_lt_differenceXaccuracyD.generate_r1cs_constraints();
     }
 };
@@ -1093,7 +1021,7 @@ public:
         GadgetT(in_pb, annotation_prefix),
         // Prefix the message with R and A.
         m_hash_RAM(in_pb, var_array({in_R.x, in_R.y, in_A.x, in_A.y, in_M}), FMT(annotation_prefix, ".hash_RAM")),
-        hash(pb, 254, FMT(annotation_prefix, ".hash"))
+        hash(pb, NUM_BITS_MAX_VALUE, FMT(annotation_prefix, ".hash"))
     {
 
     }
@@ -1404,6 +1332,72 @@ public:
         }
     }
 };
+
+ // Hashes the labels in different stages so we only need a single Poseidon permutation.
+ // Currently hashes 64 labels + the hash of the previous stage in a single stage.
+ // There is no particular reason 64 labels are hashed together at once
+ // (and depending on our understanding of Poseidon this could still change).
+ // This doesn't need to be very secure, the only requirement is that it shouldn't be completely
+ // trivial to find a different set of labels with the same hash.
+class LabelHasher : public GadgetT
+{
+public:
+    static const unsigned numInputs = 64;
+    std::vector<Poseidon_gadget_T<66, 1, 6, 56, numInputs + 1, 1>> stageHashers;
+
+    std::unique_ptr<libsnark::dual_variable_gadget<FieldT>> hash;
+
+    LabelHasher(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const std::vector<VariableT>& labels,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix)
+    {
+        unsigned int numStages = (labels.size() + numInputs - 1) / numInputs;
+        for (unsigned int i = 0; i < numStages; i++)
+        {
+            std::vector<VariableT> inputs;
+            inputs.push_back(i == 0 ? constants.zero : stageHashers.back().result());
+            for (unsigned int j = 0; j < numInputs; j++)
+            {
+                const unsigned int labelIdx = i * numInputs + j;
+                inputs.push_back((labelIdx < labels.size()) ? labels[labelIdx] : constants.zero);
+            }
+            stageHashers.emplace_back(pb, var_array(inputs), FMT(this->annotation_prefix, ".stage1"));
+        }
+
+        hash.reset(new libsnark::dual_variable_gadget<FieldT>(
+            pb, stageHashers.back().result(), 256, ".labelHashToBits")
+        );
+    }
+
+    const std::unique_ptr<libsnark::dual_variable_gadget<FieldT>>& result() const
+    {
+        return hash;
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (auto hasher : stageHashers)
+        {
+            hasher.generate_r1cs_witness();
+        }
+        hash->generate_r1cs_witness_from_packed();
+        print(pb, "[ZKS]labelHash", hash->packed);
+    }
+
+    void generate_r1cs_constraints()
+    {
+        for (auto hasher : stageHashers)
+        {
+            hasher.generate_r1cs_constraints();
+        }
+        hash->generate_r1cs_constraints(true);
+    }
+};
+
 
 }
 

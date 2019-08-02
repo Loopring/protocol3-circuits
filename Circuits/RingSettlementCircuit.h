@@ -22,7 +22,7 @@ class TransformRingSettlementDataGadget : public GadgetT
 {
 public:
 
-    const unsigned int ringSize = 25 * 8;
+    const unsigned int ringSize = 20 * 8;
 
     VariableArrayT data;
     Bitstream transformedData;
@@ -61,8 +61,8 @@ public:
 
         // XOR compress
         Bitstream compressedData;
-        compressedData.add(subArray(data, 0, ringSize));
-        for (unsigned int i = 1; i < numRings; i++)
+        compressedData.add(subArray(data, 0, numRings * ringSize));
+        /*for (unsigned int i = 1; i < numRings; i++)
         {
             unsigned int previousRingStart = (i - 1) * ringSize;
             unsigned int ringStart = i * ringSize;
@@ -73,7 +73,7 @@ public:
             xorGadgets.back().generate_r1cs_constraints();
             compressedData.add(xorGadgets.back().result());
             compressedData.add(subArray(data, ringStart + 5 * 8, ringSize - 5 * 8));
-        }
+        }*/
 
         // Transform
         struct Range
@@ -82,13 +82,12 @@ public:
             unsigned int length;
         };
         std::vector<std::vector<Range>> ranges;
-        ranges.push_back({{0, 40}});                    // ringMatcherID + fFee + tokenID
-        ranges.push_back({{40, 40}});                   // orderA.orderID + orderB.orderID
-        ranges.push_back({{80, 40}});                   // orderA.accountID + orderB.accountID
-        ranges.push_back({{120, 8}, {160, 8}});         // orderA.tokenS + orderB.tokenS
-        ranges.push_back({{128, 24},{168, 24}});        // orderA.fillS + orderB.fillS
-        ranges.push_back({{152, 8}});                   // orderA.data
-        ranges.push_back({{192, 8}});                   // orderB.data
+        ranges.push_back({{0, 40}});                   // orderA.orderID + orderB.orderID
+        ranges.push_back({{40, 40}});                  // orderA.accountID + orderB.accountID
+        ranges.push_back({{80, 8}, {120, 8}});         // orderA.tokenS + orderB.tokenS
+        ranges.push_back({{88, 24},{128, 24}});        // orderA.fillS + orderB.fillS
+        ranges.push_back({{112, 8}});                  // orderA.data
+        ranges.push_back({{152, 8}});                  // orderB.data
         for (const std::vector<Range>& subRanges : ranges)
         {
             for (unsigned int i = 0; i < numRings; i++)
@@ -115,25 +114,13 @@ public:
     const VariableT tradingHistoryRootB_A;
     const VariableT tradingHistoryRootS_B;
     const VariableT tradingHistoryRootB_B;
-    const VariableT tradingHistoryRootA_M;
-    const VariableT tradingHistoryRootB_M;
-    const VariableT tradingHistoryRootO_M;
-    const VariableT tradingHistoryRoot_O;
+    const VariableT tradingHistoryRootA_O;
+    const VariableT tradingHistoryRootB_O;
 
     const VariableT balancesRootA;
     const VariableT balancesRootB;
-    const VariableT balancesRootM;
 
     VariableT blockexchangeID;
-
-    const jubjub::VariablePointT publicKey;
-    libsnark::dual_variable_gadget<FieldT> ringMatcherAccountID;
-    VariableArrayT tokenID;
-    libsnark::dual_variable_gadget<FieldT> fee;
-    FloatGadget fFee;
-    EnsureAccuracyGadget ensureAccuracyFee;
-    libsnark::dual_variable_gadget<FieldT> nonce_before;
-    UnsafeAddGadget nonce_after;
 
     OrderGadget orderA;
     OrderGadget orderB;
@@ -163,20 +150,17 @@ public:
     DynamicVariableGadget balanceB_B;
     DynamicVariableGadget balanceA_P;
     DynamicVariableGadget balanceB_P;
-    DynamicVariableGadget balanceA_M;
-    DynamicVariableGadget balanceB_M;
-    DynamicVariableGadget balanceO_M;
-    DynamicVariableGadget balanceF_O;
+    DynamicVariableGadget balanceA_O;
+    DynamicVariableGadget balanceB_O;
 
     TransferGadget fillBB_from_balanceSA_to_balanceBB;
     TransferGadget fillSB_from_balanceSB_to_balanceBA;
-    TransferGadget feeA_from_balanceBA_to_balanceAM;
-    TransferGadget feeB_from_balanceBB_to_balanceBM;
-    TransferGadget rebateA_from_balanceAM_to_balanceBA;
-    TransferGadget rebateB_from_balanceBM_to_balanceBB;
-    TransferGadget protocolFeeA_from_balanceAM_to_balanceAP;
-    TransferGadget protocolFeeB_from_balanceBM_to_balanceBP;
-    TransferGadget ringFee_from_balanceOM_to_balanceO;
+    TransferGadget feeA_from_balanceBA_to_balanceAO;
+    TransferGadget feeB_from_balanceBB_to_balanceBO;
+    TransferGadget rebateA_from_balanceAO_to_balanceBA;
+    TransferGadget rebateB_from_balanceBO_to_balanceBB;
+    TransferGadget protocolFeeA_from_balanceAO_to_balanceAP;
+    TransferGadget protocolFeeB_from_balanceBO_to_balanceBP;
 
     UpdateTradeHistoryGadget updateTradeHistoryA;
     UpdateTradeHistoryGadget updateTradeHistoryB;
@@ -191,20 +175,11 @@ public:
     VariableT nonce_B;
     UpdateAccountGadget updateAccount_B;
 
-    UpdateBalanceGadget updateBalanceA_M;
-    UpdateBalanceGadget updateBalanceB_M;
-    UpdateBalanceGadget updateBalanceO_M;
-    UpdateAccountGadget updateAccount_M;
-
     UpdateBalanceGadget updateBalanceA_P;
     UpdateBalanceGadget updateBalanceB_P;
 
-    UpdateBalanceGadget updateBalanceF_O;
-
-    // Will be removed in next beta release because of fee model changes (no ring-matcher anymore)
-    // The operator will only need to sign something like (blockIdx, merkleRoot)
-    //const VariableArrayT message;
-    //SignatureVerifier ringMatcherSignatureVerifier;
+    UpdateBalanceGadget updateBalanceA_O;
+    UpdateBalanceGadget updateBalanceB_O;
 
     RingSettlementGadget(
         ProtoboardT& pb,
@@ -224,15 +199,6 @@ public:
 
         constants(_constants),
 
-        publicKey(pb, FMT(prefix, ".publicKey")),
-        ringMatcherAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".ringMatcherAccountID")),
-        tokenID(make_var_array(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID"))),
-        fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
-        fFee(pb, constants, Float12Encoding, FMT(prefix, ".fFee")),
-        ensureAccuracyFee(pb, fFee.value(), fee.packed, Float12Accuracy, FMT(prefix, ".ensureAccuracyFee")),
-        nonce_before(pb, NUM_BITS_NONCE, FMT(prefix, ".nonce_before")),
-        nonce_after(pb, nonce_before.packed, constants.one, FMT(prefix, ".nonce_after")),
-
         orderA(pb, params, constants, _exchangeID, FMT(prefix, ".orderA")),
         orderB(pb, params, constants, _exchangeID, FMT(prefix, ".orderB")),
 
@@ -244,8 +210,8 @@ public:
         uFillS_B(pb, orderMatching.isValid(), orderMatching.getFillB_S(), constants.zero, FMT(prefix, ".uFillS_B")),
         fillS_A(pb, constants, Float24Encoding, FMT(prefix, ".fillS_A")),
         fillS_B(pb, constants, Float24Encoding, FMT(prefix, ".fillS_B")),
-        ensureAccuracyFillS_A(pb, fillS_A.value(), uFillS_A.result(), Float24Accuracy, FMT(prefix, ".ensureAccuracyFillS_A")),
-        ensureAccuracyFillS_B(pb, fillS_B.value(), uFillS_B.result(), Float24Accuracy, FMT(prefix, ".ensureAccuracyFillS_B")),
+        ensureAccuracyFillS_A(pb, fillS_A.value(), uFillS_A.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFillS_A")),
+        ensureAccuracyFillS_B(pb, fillS_B.value(), uFillS_B.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFillS_B")),
 
         // Filled amounts
         filledA(pb, orderA.buy.packed, fillS_B.value(), fillS_A.value(), FMT(prefix, ".filledA")),
@@ -262,42 +228,35 @@ public:
         balanceB_A(pb, FMT(prefix, ".balanceB_A")),
         balanceS_B(pb, FMT(prefix, ".balanceS_B")),
         balanceB_B(pb, FMT(prefix, ".balanceB_B")),
-        balanceA_M(pb, FMT(prefix, ".balanceA_M")),
-        balanceB_M(pb, FMT(prefix, ".balanceB_M")),
-        balanceO_M(pb, FMT(prefix, ".balanceO_M")),
         balanceA_P(pb, FMT(prefix, ".balanceA_P")),
         balanceB_P(pb, FMT(prefix, ".balanceB_P")),
-        balanceF_O(pb, FMT(prefix, ".balanceF_O")),
+        balanceA_O(pb, FMT(prefix, ".balanceA_O")),
+        balanceB_O(pb, FMT(prefix, ".balanceA_O")),
 
-        // Transfers tokens
+        // Actual trade
         fillBB_from_balanceSA_to_balanceBB(pb, balanceS_A, balanceB_B, fillS_A.value(), FMT(prefix, ".fillBB_from_balanceSA_to_balanceBB")),
         fillSB_from_balanceSB_to_balanceBA(pb, balanceS_B, balanceB_A, fillS_B.value(), FMT(prefix, ".fillSB_from_balanceSB_to_balanceBA")),
         // Fees
-        feeA_from_balanceBA_to_balanceAM(pb, balanceB_A, balanceA_M, feeCalculatorA.getFee(), FMT(prefix, ".feeA_from_balanceBA_to_balanceAM")),
-        feeB_from_balanceBB_to_balanceBM(pb, balanceB_B, balanceB_M, feeCalculatorB.getFee(), FMT(prefix, ".feeB_from_balanceBB_to_balanceBM")),
+        feeA_from_balanceBA_to_balanceAO(pb, balanceB_A, balanceA_O, feeCalculatorA.getFee(), FMT(prefix, ".feeA_from_balanceBA_to_balanceAO")),
+        feeB_from_balanceBB_to_balanceBO(pb, balanceB_B, balanceB_O, feeCalculatorB.getFee(), FMT(prefix, ".feeB_from_balanceBB_to_balanceBO")),
         // Rebates
-        rebateA_from_balanceAM_to_balanceBA(pb, balanceA_M, balanceB_A, feeCalculatorA.getRebate(), FMT(prefix, ".rebateA_from_balanceAM_to_balanceBA")),
-        rebateB_from_balanceBM_to_balanceBB(pb, balanceB_M, balanceB_B, feeCalculatorB.getRebate(), FMT(prefix, ".rebateB_from_balanceBM_to_balanceBB")),
+        rebateA_from_balanceAO_to_balanceBA(pb, balanceA_O, balanceB_A, feeCalculatorA.getRebate(), FMT(prefix, ".rebateA_from_balanceAO_to_balanceBA")),
+        rebateB_from_balanceBO_to_balanceBB(pb, balanceB_O, balanceB_B, feeCalculatorB.getRebate(), FMT(prefix, ".rebateB_from_balanceBO_to_balanceBB")),
         // Protocol fees
-        protocolFeeA_from_balanceAM_to_balanceAP(pb, balanceA_M, balanceA_P, feeCalculatorA.getProtocolFee(), FMT(prefix, ".protocolFeeA_from_balanceAM_to_balanceAP")),
-        protocolFeeB_from_balanceBM_to_balanceBP(pb, balanceB_M, balanceB_P, feeCalculatorB.getProtocolFee(), FMT(prefix, ".protocolFeeB_from_balanceBM_to_balanceBP")),
-        // Ring fee
-        ringFee_from_balanceOM_to_balanceO(pb, balanceO_M, balanceF_O, fFee.value(), FMT(prefix, ".ringFee_from_balanceOM_to_balanceO")),
+        protocolFeeA_from_balanceAO_to_balanceAP(pb, balanceA_O, balanceA_P, feeCalculatorA.getProtocolFee(), FMT(prefix, ".protocolFeeA_from_balanceAO_to_balanceAP")),
+        protocolFeeB_from_balanceBO_to_balanceBP(pb, balanceB_O, balanceB_P, feeCalculatorB.getProtocolFee(), FMT(prefix, ".protocolFeeB_from_balanceBO_to_balanceBP")),
 
         // Initial trading history roots
         tradingHistoryRootS_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootS_A"))),
         tradingHistoryRootB_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_A"))),
         tradingHistoryRootS_B(make_variable(pb, FMT(prefix, ".tradingHistoryRootS_B"))),
         tradingHistoryRootB_B(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_B"))),
-        tradingHistoryRootA_M(make_variable(pb, FMT(prefix, ".tradingHistoryRootA_M"))),
-        tradingHistoryRootB_M(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_M"))),
-        tradingHistoryRootO_M(make_variable(pb, FMT(prefix, ".tradingHistoryRootO_M"))),
-        tradingHistoryRoot_O(make_variable(pb, FMT(prefix, ".tradingHistoryRoot_O"))),
+        tradingHistoryRootA_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootA_O"))),
+        tradingHistoryRootB_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_O"))),
 
         // Initial balances roots
         balancesRootA(make_variable(pb, FMT(prefix, ".balancesRootA"))),
         balancesRootB(make_variable(pb, FMT(prefix, ".balancesRootB"))),
-        balancesRootM(make_variable(pb, FMT(prefix, ".balancesRootM"))),
 
         // Update trading history
         updateTradeHistoryA(pb, tradingHistoryRootS_A, subArray(orderA.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
@@ -341,24 +300,6 @@ public:
                         {orderB.publicKey.x, orderB.publicKey.y, nonce_B, updateBalanceB_B.getNewRoot()},
                         FMT(prefix, ".updateAccount_B")),
 
-        // Update Ring-Matcher
-        updateBalanceA_M(pb, balancesRootM, orderA.tokenB.bits,
-                        {balanceA_M.front(), tradingHistoryRootA_M},
-                        {balanceA_M.back(), tradingHistoryRootA_M},
-                        FMT(prefix, ".updateBalanceA_M")),
-        updateBalanceB_M(pb, updateBalanceA_M.getNewRoot(), orderB.tokenB.bits,
-                        {balanceB_M.front(), tradingHistoryRootB_M},
-                        {balanceB_M.back(), tradingHistoryRootB_M},
-                        FMT(prefix, ".updateBalanceB_M")),
-        updateBalanceO_M(pb, updateBalanceB_M.getNewRoot(), tokenID,
-                        {balanceO_M.front(), tradingHistoryRootO_M},
-                        {balanceO_M.back(), tradingHistoryRootO_M},
-                        FMT(prefix, ".updateBalanceO_M")),
-        updateAccount_M(pb, updateAccount_B.result(), ringMatcherAccountID.bits,
-                        {publicKey.x, publicKey.y, nonce_before.packed, balancesRootM},
-                        {publicKey.x, publicKey.y, nonce_after.result(), updateBalanceO_M.getNewRoot()},
-                        FMT(prefix, ".updateAccount_M")),
-
         // Update Protocol pool
         updateBalanceA_P(pb, _protocolBalancesRoot, orderA.tokenB.bits,
                          {balanceA_P.front(), constants.emptyTradeHistory},
@@ -370,25 +311,21 @@ public:
                          FMT(prefix, ".updateBalanceB_P")),
 
         // Update Operator
-        updateBalanceF_O(pb, _operatorBalancesRoot, tokenID,
-                         {balanceF_O.front(), tradingHistoryRoot_O},
-                         {balanceF_O.back(), tradingHistoryRoot_O},
-                         FMT(prefix, ".updateBalanceF_O"))/*,
-
-        // Signatures
-        message(flatten({orderA.getHash(), orderB.getHash(),
-                         ringMatcherAccountID.bits, tokenID, fee.bits,
-                         orderA.feeBips.bits, orderB.feeBips.bits,
-                         orderA.rebateBips.bits, orderB.rebateBips.bits,
-                         nonce_before.bits, constants.padding_0})),
-        ringMatcherSignatureVerifier(pb, params, publicKey, message, FMT(prefix, ".ringMatcherSignatureVerifier"))*/
+        updateBalanceA_O(pb, _operatorBalancesRoot, orderA.tokenB.bits,
+                         {balanceA_O.front(), tradingHistoryRootA_O},
+                         {balanceA_O.back(), tradingHistoryRootA_O},
+                         FMT(prefix, ".updateBalanceA_O")),
+        updateBalanceB_O(pb, updateBalanceA_O.getNewRoot(), orderB.tokenB.bits,
+                         {balanceB_O.front(), tradingHistoryRootB_O},
+                         {balanceB_O.back(), tradingHistoryRootB_O},
+                         FMT(prefix, ".updateBalanceB_O"))
     {
 
     }
 
     const VariableT getNewAccountsRoot() const
     {
-        return updateAccount_M.result();
+        return updateAccount_B.result();
     }
 
     const VariableT getNewProtocolBalancesRoot() const
@@ -398,17 +335,13 @@ public:
 
     const VariableT getNewOperatorBalancesRoot() const
     {
-        return updateBalanceF_O.getNewRoot();
+        return updateBalanceB_O.getNewRoot();
     }
 
     const std::vector<VariableArrayT> getPublicData() const
     {
         return
         {
-            ringMatcherAccountID.bits,
-            fFee.bits(),
-            tokenID,
-
             orderA.orderID.bits, orderB.orderID.bits,
             orderA.accountID.bits, orderB.accountID.bits,
 
@@ -424,20 +357,6 @@ public:
 
     void generate_r1cs_witness(const RingSettlement& ringSettlement)
     {
-        pb.val(publicKey.x) = ringSettlement.accountUpdate_M.before.publicKey.x;
-        pb.val(publicKey.y) = ringSettlement.accountUpdate_M.before.publicKey.y;
-
-        ringMatcherAccountID.bits.fill_with_bits_of_field_element(pb, ringSettlement.ring.ringMatcherAccountID);
-        ringMatcherAccountID.generate_r1cs_witness_from_bits();
-        tokenID.fill_with_bits_of_field_element(pb, ringSettlement.ring.tokenID);
-        fee.bits.fill_with_bits_of_field_element(pb, ringSettlement.ring.fee);
-        fee.generate_r1cs_witness_from_bits();
-        fFee.generate_r1cs_witness(toFloat(ringSettlement.ring.fee, Float12Encoding));
-        ensureAccuracyFee.generate_r1cs_witness();
-        nonce_before.bits.fill_with_bits_of_field_element(pb, ringSettlement.ring.nonce);
-        nonce_before.generate_r1cs_witness_from_bits();
-        nonce_after.generate_r1cs_witness();
-
         orderA.generate_r1cs_witness(ringSettlement.ring.orderA,
                                      ringSettlement.accountUpdate_A.before,
                                      ringSettlement.balanceUpdateS_A.before,
@@ -477,38 +396,32 @@ public:
         balanceB_A.generate_r1cs_witness(ringSettlement.balanceUpdateB_A.before.balance);
         balanceS_B.generate_r1cs_witness(ringSettlement.balanceUpdateS_B.before.balance);
         balanceB_B.generate_r1cs_witness(ringSettlement.balanceUpdateB_B.before.balance);
-        balanceA_M.generate_r1cs_witness(ringSettlement.balanceUpdateA_M.before.balance);
-        balanceB_M.generate_r1cs_witness(ringSettlement.balanceUpdateB_M.before.balance);
-        balanceO_M.generate_r1cs_witness(ringSettlement.balanceUpdateO_M.before.balance);
         balanceA_P.generate_r1cs_witness(ringSettlement.balanceUpdateA_P.before.balance);
         balanceB_P.generate_r1cs_witness(ringSettlement.balanceUpdateB_P.before.balance);
-        balanceF_O.generate_r1cs_witness(ringSettlement.balanceUpdateF_O.before.balance);
+        balanceA_O.generate_r1cs_witness(ringSettlement.balanceUpdateA_O.before.balance);
+        balanceB_O.generate_r1cs_witness(ringSettlement.balanceUpdateB_O.before.balance);
 
         // Calculate new balances
         fillBB_from_balanceSA_to_balanceBB.generate_r1cs_witness();
         fillSB_from_balanceSB_to_balanceBA.generate_r1cs_witness();
-        feeA_from_balanceBA_to_balanceAM.generate_r1cs_witness();
-        feeB_from_balanceBB_to_balanceBM.generate_r1cs_witness();
-        rebateA_from_balanceAM_to_balanceBA.generate_r1cs_witness();
-        rebateB_from_balanceBM_to_balanceBB.generate_r1cs_witness();
-        protocolFeeA_from_balanceAM_to_balanceAP.generate_r1cs_witness();
-        protocolFeeB_from_balanceBM_to_balanceBP.generate_r1cs_witness();
-        ringFee_from_balanceOM_to_balanceO.generate_r1cs_witness();
+        feeA_from_balanceBA_to_balanceAO.generate_r1cs_witness();
+        feeB_from_balanceBB_to_balanceBO.generate_r1cs_witness();
+        rebateA_from_balanceAO_to_balanceBA.generate_r1cs_witness();
+        rebateB_from_balanceBO_to_balanceBB.generate_r1cs_witness();
+        protocolFeeA_from_balanceAO_to_balanceAP.generate_r1cs_witness();
+        protocolFeeB_from_balanceBO_to_balanceBP.generate_r1cs_witness();
 
         // Initial trading history roots
         pb.val(tradingHistoryRootS_A) = ringSettlement.balanceUpdateS_A.before.tradingHistoryRoot;
         pb.val(tradingHistoryRootB_A) = ringSettlement.balanceUpdateB_A.before.tradingHistoryRoot;
         pb.val(tradingHistoryRootS_B) = ringSettlement.balanceUpdateS_B.before.tradingHistoryRoot;
         pb.val(tradingHistoryRootB_B) = ringSettlement.balanceUpdateB_B.before.tradingHistoryRoot;
-        pb.val(tradingHistoryRootA_M) = ringSettlement.balanceUpdateA_M.before.tradingHistoryRoot;
-        pb.val(tradingHistoryRootB_M) = ringSettlement.balanceUpdateB_M.before.tradingHistoryRoot;
-        pb.val(tradingHistoryRootO_M) = ringSettlement.balanceUpdateO_M.before.tradingHistoryRoot;
-        pb.val(tradingHistoryRoot_O) = ringSettlement.balanceUpdateF_O.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRootA_O) = ringSettlement.balanceUpdateA_O.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRootB_O) = ringSettlement.balanceUpdateB_O.before.tradingHistoryRoot;
 
         // Initial balances roots
         pb.val(balancesRootA) = ringSettlement.balanceUpdateS_A.rootBefore;
         pb.val(balancesRootB) = ringSettlement.balanceUpdateS_B.rootBefore;
-        pb.val(balancesRootM) = ringSettlement.balanceUpdateA_M.rootBefore;
 
         // Update trading history
         updateTradeHistoryA.generate_r1cs_witness(ringSettlement.tradeHistoryUpdate_A.proof);
@@ -524,31 +437,17 @@ public:
         updateBalanceS_B.generate_r1cs_witness(ringSettlement.balanceUpdateS_B.proof);
         updateBalanceB_B.generate_r1cs_witness(ringSettlement.balanceUpdateB_B.proof);
         updateAccount_B.generate_r1cs_witness(ringSettlement.accountUpdate_B.proof);
-        // Update Ring-Matcher
-        updateBalanceA_M.generate_r1cs_witness(ringSettlement.balanceUpdateA_M.proof);
-        updateBalanceB_M.generate_r1cs_witness(ringSettlement.balanceUpdateB_M.proof);
-        updateBalanceO_M.generate_r1cs_witness(ringSettlement.balanceUpdateO_M.proof);
-        updateAccount_M.generate_r1cs_witness(ringSettlement.accountUpdate_M.proof);
         // Update Protocol pool
         updateBalanceA_P.generate_r1cs_witness(ringSettlement.balanceUpdateA_P.proof);
         updateBalanceB_P.generate_r1cs_witness(ringSettlement.balanceUpdateB_P.proof);
         // Update Operator
-        updateBalanceF_O.generate_r1cs_witness(ringSettlement.balanceUpdateF_O.proof);
-
-        // Signatures
-        //ringMatcherSignatureVerifier.generate_r1cs_witness(ringSettlement.ring.ringMatcherSignature);
+        updateBalanceA_O.generate_r1cs_witness(ringSettlement.balanceUpdateA_O.proof);
+        updateBalanceB_O.generate_r1cs_witness(ringSettlement.balanceUpdateB_O.proof);
     }
 
 
     void generate_r1cs_constraints()
     {
-        ringMatcherAccountID.generate_r1cs_constraints(true);
-        fee.generate_r1cs_constraints(true);
-        fFee.generate_r1cs_constraints();
-        ensureAccuracyFee.generate_r1cs_constraints();
-        nonce_before.generate_r1cs_constraints(true);
-        nonce_after.generate_r1cs_constraints();
-
         orderA.generate_r1cs_constraints();
         orderB.generate_r1cs_constraints();
 
@@ -576,13 +475,12 @@ public:
         // Calculate new balances
         fillBB_from_balanceSA_to_balanceBB.generate_r1cs_constraints();
         fillSB_from_balanceSB_to_balanceBA.generate_r1cs_constraints();
-        feeA_from_balanceBA_to_balanceAM.generate_r1cs_constraints();
-        feeB_from_balanceBB_to_balanceBM.generate_r1cs_constraints();
-        rebateA_from_balanceAM_to_balanceBA.generate_r1cs_constraints();
-        rebateB_from_balanceBM_to_balanceBB.generate_r1cs_constraints();
-        protocolFeeA_from_balanceAM_to_balanceAP.generate_r1cs_constraints();
-        protocolFeeB_from_balanceBM_to_balanceBP.generate_r1cs_constraints();
-        ringFee_from_balanceOM_to_balanceO.generate_r1cs_constraints();
+        feeA_from_balanceBA_to_balanceAO.generate_r1cs_constraints();
+        feeB_from_balanceBB_to_balanceBO.generate_r1cs_constraints();
+        rebateA_from_balanceAO_to_balanceBA.generate_r1cs_constraints();
+        rebateB_from_balanceBO_to_balanceBB.generate_r1cs_constraints();
+        protocolFeeA_from_balanceAO_to_balanceAP.generate_r1cs_constraints();
+        protocolFeeB_from_balanceBO_to_balanceBP.generate_r1cs_constraints();
 
         // Update trading history
         updateTradeHistoryA.generate_r1cs_constraints();
@@ -596,19 +494,12 @@ public:
         updateBalanceS_B.generate_r1cs_constraints();
         updateBalanceB_B.generate_r1cs_constraints();
         updateAccount_B.generate_r1cs_constraints();
-        // Update Ring-Matcher
-        updateBalanceA_M.generate_r1cs_constraints();
-        updateBalanceB_M.generate_r1cs_constraints();
-        updateBalanceO_M.generate_r1cs_constraints();
-        updateAccount_M.generate_r1cs_constraints();
         // Update Protocol fee pool
         updateBalanceA_P.generate_r1cs_constraints();
         updateBalanceB_P.generate_r1cs_constraints();
         // Update Operator
-        updateBalanceF_O.generate_r1cs_constraints();
-
-        // Signatures
-        //ringMatcherSignatureVerifier.generate_r1cs_constraints();
+        updateBalanceA_O.generate_r1cs_constraints();
+        updateBalanceB_O.generate_r1cs_constraints();
     }
 };
 
@@ -644,8 +535,15 @@ public:
     libsnark::dual_variable_gadget<FieldT> operatorAccountID;
     const jubjub::VariablePointT publicKey;
     const VariableT balancesRootO_before;
-    const VariableT nonce_O;
+    const VariableT nonce_before;
+    UnsafeAddGadget nonce_after;
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
+
+    std::vector<VariableT> labels;
+    std::unique_ptr<LabelHasher> labelHasher;
+
+    Poseidon_gadget_T<3, 1, 6, 51, 2, 1> hash;
+    SignatureVerifier signatureVerifier;
 
     RingSettlementCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
@@ -668,7 +566,14 @@ public:
         operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
         publicKey(pb, FMT(prefix, ".publicKey")),
         balancesRootO_before(make_variable(pb, FMT(prefix, ".balancesRootO_before"))),
-        nonce_O(make_variable(pb, FMT(prefix, ".nonce_O")))
+        nonce_before(make_variable(pb, FMT(prefix, ".nonce_before"))),
+        nonce_after(pb, nonce_before, constants.one, FMT(prefix, ".nonce_after")),
+
+        hash(pb, var_array({
+            publicData.publicInput,
+            nonce_before
+        }), FMT(this->annotation_prefix, ".hash")),
+        signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }
@@ -686,18 +591,8 @@ public:
         timestamp.generate_r1cs_constraints(true);
         protocolTakerFeeBips.generate_r1cs_constraints(true);
         protocolMakerFeeBips.generate_r1cs_constraints(true);
+        nonce_after.generate_r1cs_constraints();
 
-        publicData.add(exchangeID.bits);
-        publicData.add(merkleRootBefore.bits);
-        publicData.add(merkleRootAfter.bits);
-        publicData.add(timestamp.bits);
-        publicData.add(protocolTakerFeeBips.bits);
-        publicData.add(protocolMakerFeeBips.bits);
-        if (onchainDataAvailability)
-        {
-            publicData.add(constants.accountPadding);
-            publicData.add(operatorAccountID.bits);
-        }
         for (size_t j = 0; j < numRings; j++)
         {
             const VariableT ringAccountsRoot = (j == 0) ? merkleRootBefore.packed : ringSettlements.back().getNewAccountsRoot();
@@ -718,6 +613,9 @@ public:
             );
             ringSettlements.back().generate_r1cs_constraints();
 
+            labels.push_back(ringSettlements.back().orderA.label.packed);
+            labels.push_back(ringSettlements.back().orderB.label.packed);
+
             if (onchainDataAvailability)
             {
                 // Store data from ring settlement
@@ -734,14 +632,28 @@ public:
 
         // Update the operator
         updateAccount_O.reset(new UpdateAccountGadget(pb, updateAccount_P->result(), operatorAccountID.bits,
-                      {publicKey.x, publicKey.y, nonce_O, balancesRootO_before},
-                      {publicKey.x, publicKey.y, nonce_O, ringSettlements.back().getNewOperatorBalancesRoot()},
+                      {publicKey.x, publicKey.y, nonce_before, balancesRootO_before},
+                      {publicKey.x, publicKey.y, nonce_after.result(), ringSettlements.back().getNewOperatorBalancesRoot()},
                       FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
+        // Calculate the label hash
+        labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelHash")));
+        labelHasher->generate_r1cs_constraints();
+
+        // Public data
+        publicData.add(exchangeID.bits);
+        publicData.add(merkleRootBefore.bits);
+        publicData.add(merkleRootAfter.bits);
+        publicData.add(timestamp.bits);
+        publicData.add(protocolTakerFeeBips.bits);
+        publicData.add(protocolMakerFeeBips.bits);
+        publicData.add(labelHasher->result()->bits);
         if (onchainDataAvailability)
         {
-            // Transform the data
+            publicData.add(constants.accountPadding);
+            publicData.add(operatorAccountID.bits);
+            // Transform the ring data
             transformData.generate_r1cs_constraints(numRings, flattenReverse(dataAvailabityData.data));
             publicData.add(reverse(transformData.result()));
         }
@@ -751,6 +663,9 @@ public:
 
         // Check the new merkle root
         forceEqual(pb, updateAccount_O->result(), merkleRootAfter.packed, "newMerkleRoot");
+
+        hash.generate_r1cs_constraints();
+        signatureVerifier.generate_r1cs_constraints();
     }
 
     void printInfo()
@@ -789,7 +704,8 @@ public:
         pb.val(publicKey.x) = block.accountUpdate_O.before.publicKey.x;
         pb.val(publicKey.y) = block.accountUpdate_O.before.publicKey.y;
         pb.val(balancesRootO_before) = block.accountUpdate_O.before.balancesRoot;
-        pb.val(nonce_O) = block.accountUpdate_O.before.nonce;
+        pb.val(nonce_before) = block.accountUpdate_O.before.nonce;
+        nonce_after.generate_r1cs_witness();
         pb.val(balancesRootP_before) = block.accountUpdate_P.before.balancesRoot;
 
         for(unsigned int i = 0; i < block.ringSettlements.size(); i++)
@@ -799,11 +715,17 @@ public:
         updateAccount_P->generate_r1cs_witness(block.accountUpdate_P.proof);
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
 
+        // Calculate the label hash
+        labelHasher->generate_r1cs_witness();
+
         if (onchainDataAvailability)
         {
             transformData.generate_r1cs_witness();
         }
         publicData.generate_r1cs_witness();
+
+        hash.generate_r1cs_witness();
+        signatureVerifier.generate_r1cs_witness(block.signature);
 
         return true;
     }
