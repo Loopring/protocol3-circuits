@@ -32,7 +32,7 @@ public:
     libsnark::dual_variable_gadget<FieldT> label;
 
     FloatGadget fFee;
-    EnsureAccuracyGadget ensureAccuracyFee;
+    RequireAccuracyGadget requireAccuracyFee;
 
     VariableT filled;
     VariableT cancelled_before;
@@ -61,7 +61,7 @@ public:
 
     UpdateBalanceGadget updateBalanceF_O;
 
-    ForceLeqGadget checkOrderID;
+    RequireLeqGadget checkOrderID;
 
     Poseidon_gadget_T<9, 1, 6, 53, 8, 1> hash;
     SignatureVerifier signatureVerifier;
@@ -89,7 +89,7 @@ public:
         label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
 
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
-        ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFee")),
+        requireAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFee")),
 
         filled(make_variable(pb, 0, FMT(prefix, ".filled"))),
         cancelled_before(make_variable(pb, 0, FMT(prefix, ".cancelled_before"))),
@@ -196,7 +196,7 @@ public:
         label.generate_r1cs_witness_from_bits();
 
         fFee.generate_r1cs_witness(toFloat(cancellation.fee, Float16Encoding));
-        ensureAccuracyFee.generate_r1cs_witness();
+        requireAccuracyFee.generate_r1cs_witness();
 
         pb.val(filled) = cancellation.tradeHistoryUpdate_A.before.filled;
         pb.val(cancelled_before) = cancellation.tradeHistoryUpdate_A.before.cancelled;
@@ -243,7 +243,7 @@ public:
         label.generate_r1cs_constraints(true);
 
         fFee.generate_r1cs_constraints();
-        ensureAccuracyFee.generate_r1cs_constraints();
+        requireAccuracyFee.generate_r1cs_constraints();
 
         nonce_before.generate_r1cs_constraints(true);
         nonce_after.generate_r1cs_constraints();
@@ -290,7 +290,7 @@ public:
     VariableT nonce;
     VariableT balancesRoot_before;
 
-    ForceNotZeroGadget publicKeyX_notZero;
+    RequireNotZeroGadget publicKeyX_notZero;
 
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 

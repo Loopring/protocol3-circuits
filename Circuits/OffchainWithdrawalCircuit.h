@@ -29,7 +29,7 @@ public:
     libsnark::dual_variable_gadget<FieldT> label;
 
     FloatGadget fFee;
-    EnsureAccuracyGadget ensureAccuracyFee;
+    RequireAccuracyGadget requireAccuracyFee;
 
     BalanceState balanceFBefore;
     BalanceState balanceBefore;
@@ -43,7 +43,7 @@ public:
     subadd_gadget feePayment;
     MinGadget amountToWithdraw;
     FloatGadget amountWithdrawn;
-    EnsureAccuracyGadget ensureAccuracyAmountWithdrawn;
+    RequireAccuracyGadget requireAccuracyAmountWithdrawn;
 
     SubGadget balance_after;
 
@@ -80,7 +80,7 @@ public:
         label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
 
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
-        ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFee")),
+        requireAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFee")),
 
         // User
         balanceFBefore({
@@ -111,7 +111,7 @@ public:
         // Calculate how much can be withdrawn
         amountToWithdraw(pb, amountRequested.packed, balanceBefore.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
         amountWithdrawn(pb, constants, Float28Encoding, FMT(prefix, ".amountWithdrawn")),
-        ensureAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyAmountRequested")),
+        requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
 
         // Calculate new balance
         balance_after(pb, balanceBefore.balance, amountWithdrawn.value(), NUM_BITS_AMOUNT, FMT(prefix, ".balance_after")),
@@ -195,7 +195,7 @@ public:
         label.generate_r1cs_witness_from_bits();
 
         fFee.generate_r1cs_witness(toFloat(withdrawal.fee, Float16Encoding));
-        ensureAccuracyFee.generate_r1cs_witness();
+        requireAccuracyFee.generate_r1cs_witness();
 
         amountRequested.bits.fill_with_bits_of_field_element(pb, withdrawal.amountRequested);
         amountRequested.generate_r1cs_witness_from_bits();
@@ -221,7 +221,7 @@ public:
         feePayment.generate_r1cs_witness();
         amountToWithdraw.generate_r1cs_witness();
         amountWithdrawn.generate_r1cs_witness(toFloat((pb.val(balanceBefore.balance) - pb.val(balanceAfter.balance)), Float28Encoding));
-        ensureAccuracyAmountWithdrawn.generate_r1cs_witness();
+        requireAccuracyAmountWithdrawn.generate_r1cs_witness();
 
         // Calculate new balance
         balance_after.generate_r1cs_witness();
@@ -248,7 +248,7 @@ public:
         label.generate_r1cs_constraints(true);
 
         fFee.generate_r1cs_constraints();
-        ensureAccuracyFee.generate_r1cs_constraints();
+        requireAccuracyFee.generate_r1cs_constraints();
 
         nonce_before.generate_r1cs_constraints(true);
         nonce_after.generate_r1cs_constraints();
@@ -258,7 +258,7 @@ public:
         amountRequested.generate_r1cs_constraints(true);
 
         amountWithdrawn.generate_r1cs_constraints();
-        ensureAccuracyAmountWithdrawn.generate_r1cs_constraints();
+        requireAccuracyAmountWithdrawn.generate_r1cs_constraints();
 
         balance_after.generate_r1cs_constraints();
 
@@ -293,7 +293,7 @@ public:
     VariableT nonce;
     VariableT balancesRoot_before;
 
-    ForceNotZeroGadget publicKeyX_notZero;
+    RequireNotZeroGadget publicKeyX_notZero;
 
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 

@@ -572,8 +572,8 @@ public:
 
     MatchingGadget matchingGadget;
 
-    ForceEqualGadget orderA_tokenS_eq_orderB_tokenB;
-    ForceEqualGadget orderA_tokenB_eq_orderB_tokenS;
+    RequireEqualGadget orderA_tokenS_eq_orderB_tokenB;
+    RequireEqualGadget orderA_tokenB_eq_orderB_tokenS;
 
     CheckValidGadget checkValidA;
     CheckValidGadget checkValidB;

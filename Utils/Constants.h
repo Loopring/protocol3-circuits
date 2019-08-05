@@ -37,9 +37,9 @@ namespace Loopring
         unsigned int numerator;
         unsigned int denominator;
     };
-    static const Accuracy Float28Accuracy = {12, 10000000};
-    static const Accuracy Float24Accuracy = { 2, 100000};
-    static const Accuracy Float16Accuracy = { 5, 1000};
+    static const Accuracy Float28Accuracy = {10000000 - 12, 10000000};
+    static const Accuracy Float24Accuracy = {100000 - 2, 100000};
+    static const Accuracy Float16Accuracy = {1000 - 5, 1000};
 }
 
 #endif

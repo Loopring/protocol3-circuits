@@ -133,8 +133,8 @@ public:
     FloatGadget fillS_A;
     FloatGadget fillS_B;
 
-    EnsureAccuracyGadget ensureAccuracyFillS_A;
-    EnsureAccuracyGadget ensureAccuracyFillS_B;
+    RequireAccuracyGadget requireAccuracyFillS_A;
+    RequireAccuracyGadget requireAccuracyFillS_B;
 
     TernaryGadget filledA;
     TernaryGadget filledB;
@@ -210,8 +210,8 @@ public:
         uFillS_B(pb, orderMatching.isValid(), orderMatching.getFillB_S(), constants.zero, FMT(prefix, ".uFillS_B")),
         fillS_A(pb, constants, Float24Encoding, FMT(prefix, ".fillS_A")),
         fillS_B(pb, constants, Float24Encoding, FMT(prefix, ".fillS_B")),
-        ensureAccuracyFillS_A(pb, fillS_A.value(), uFillS_A.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFillS_A")),
-        ensureAccuracyFillS_B(pb, fillS_B.value(), uFillS_B.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFillS_B")),
+        requireAccuracyFillS_A(pb, fillS_A.value(), uFillS_A.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFillS_A")),
+        requireAccuracyFillS_B(pb, fillS_B.value(), uFillS_B.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFillS_B")),
 
         // Filled amounts
         filledA(pb, orderA.buy.packed, fillS_B.value(), fillS_A.value(), FMT(prefix, ".filledA")),
@@ -376,8 +376,8 @@ public:
         uFillS_B.generate_r1cs_witness();
         fillS_A.generate_r1cs_witness(toFloat(pb.val(uFillS_A.result()), Float24Encoding));
         fillS_B.generate_r1cs_witness(toFloat(pb.val(uFillS_B.result()), Float24Encoding));
-        ensureAccuracyFillS_A.generate_r1cs_witness();
-        ensureAccuracyFillS_B.generate_r1cs_witness();
+        requireAccuracyFillS_A.generate_r1cs_witness();
+        requireAccuracyFillS_B.generate_r1cs_witness();
         // print(pb, "fillS_A", fillS_A.value());
         // print(pb, "fillS_B", fillS_B.value());
 
@@ -459,8 +459,8 @@ public:
         uFillS_B.generate_r1cs_constraints();
         fillS_A.generate_r1cs_constraints();
         fillS_B.generate_r1cs_constraints();
-        ensureAccuracyFillS_A.generate_r1cs_constraints();
-        ensureAccuracyFillS_B.generate_r1cs_constraints();
+        requireAccuracyFillS_A.generate_r1cs_constraints();
+        requireAccuracyFillS_B.generate_r1cs_constraints();
 
         // Filled amounts
         filledA.generate_r1cs_constraints();

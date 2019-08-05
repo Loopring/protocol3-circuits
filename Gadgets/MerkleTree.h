@@ -44,7 +44,7 @@ public:
         m_bit0(bit0),
         m_bit1(bit1),
 
-        bit0_or_bit1(pb, bit0, bit1, FMT(prefix, ".bit0_or_bit1")),
+        bit0_or_bit1(pb, {bit0, bit1}, FMT(prefix, ".bit0_or_bit1")),
         bit0_and_bit1(pb, {bit0, bit1}, FMT(prefix, ".bit0_and_bit1")),
 
         child0(pb, bit0_or_bit1.result(), sideNodes[0], input, FMT(prefix, ".child0")),

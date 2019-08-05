@@ -37,14 +37,14 @@ public:
     libsnark::dual_variable_gadget<FieldT> feeOrRebateBips;
     LeqGadget bRebateNonZero;
     UnsafeAddGadget feeAddRebate;
-    ForceEqualGadget validateFeeOrRebateBips;
+    RequireEqualGadget validateFeeOrRebateBips;
 
-    ForceZeroAorBGadget feeOrRebateZero;
-    ForceLeqGadget validateFeeBips;
+    RequireZeroAorBGadget feeOrRebateZero;
+    RequireLeqGadget validateFeeBips;
 
-    ForceNotEqualGadget tokenS_neq_tokenB;
-    ForceNotZeroGadget amountS_notZero;
-    ForceNotZeroGadget amountB_notZero;
+    RequireNotEqualGadget tokenS_neq_tokenB;
+    RequireNotZeroGadget amountS_notZero;
+    RequireNotZeroGadget amountB_notZero;
 
     const jubjub::VariablePointT publicKey;
 

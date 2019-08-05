@@ -30,7 +30,7 @@ public:
     MinGadget amountToWithdrawMin;
     TernaryGadget amountToWithdraw;
     FloatGadget amountWithdrawn;
-    EnsureAccuracyGadget ensureAccuracyAmountWithdrawn;
+    RequireAccuracyGadget requireAccuracyAmountWithdrawn;
 
     // Shutdown mode
     TernaryGadget amountToSubtract;
@@ -76,7 +76,7 @@ public:
         amountToWithdrawMin(pb, amountRequested.packed, balanceBefore.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
         amountToWithdraw(pb, _bShutdownMode, balanceBefore.balance, amountToWithdrawMin.result(), FMT(prefix, ".amountToWithdraw")),
         amountWithdrawn(pb, constants, Float28Encoding, FMT(prefix, ".amountWithdrawn")),
-        ensureAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyAmountRequested")),
+        requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
 
         // Shutdown mode
         amountToSubtract(pb, _bShutdownMode, amountToWithdraw.result(), amountWithdrawn.value(), FMT(prefix, ".amountToSubtract")),
@@ -143,7 +143,7 @@ public:
         amountToWithdrawMin.generate_r1cs_witness();
         amountToWithdraw.generate_r1cs_witness();
         amountWithdrawn.generate_r1cs_witness(withdrawal.fAmountWithdrawn);
-        ensureAccuracyAmountWithdrawn.generate_r1cs_witness();
+        requireAccuracyAmountWithdrawn.generate_r1cs_witness();
 
         // Shutdown mode
         amountToSubtract.generate_r1cs_witness();
@@ -164,7 +164,7 @@ public:
         amountToWithdrawMin.generate_r1cs_constraints();
         amountToWithdraw.generate_r1cs_constraints();
         amountWithdrawn.generate_r1cs_constraints();
-        ensureAccuracyAmountWithdrawn.generate_r1cs_constraints();
+        requireAccuracyAmountWithdrawn.generate_r1cs_constraints();
 
         // Shutdown mode
         amountToSubtract.generate_r1cs_constraints();
@@ -252,7 +252,7 @@ public:
                 params,
                 constants,
                 withdrawalAccountsRoot,
-                bShutdownMode.eq(),
+                bShutdownMode.result(),
                 std::string("withdrawals_") + std::to_string(j)
             );
             withdrawals.back().generate_r1cs_constraints();
