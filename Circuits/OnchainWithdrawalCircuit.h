@@ -39,6 +39,8 @@ public:
     TernaryGadget publicKeyYAfter;
     TernaryGadget nonceAfter;
 
+    UnsafeSubGadget balance_after;
+
     BalanceState balanceAfter;
     UpdateBalanceGadget updateBalance_A;
     AccountState accountAfter;
@@ -85,9 +87,12 @@ public:
         publicKeyYAfter(pb, _bShutdownMode, constants.zero, accountBefore.publicKeyY, FMT(prefix, ".publicKeyYAfter")),
         nonceAfter(pb, _bShutdownMode, constants.zero, accountBefore.nonce, FMT(prefix, ".tradingHistoryAfter")),
 
+        // Calculate the new balance
+        balance_after(pb, balanceBefore.balance, amountToSubtract.result(), FMT(prefix, ".balance_after")),
+
         // Update User
         balanceAfter({
-            make_variable(pb, FMT(prefix, ".after.balance")),
+            balance_after.result(),
             tradingHistoryAfter.result()
         }),
         updateBalance_A(pb, accountBefore.balancesRoot, tokenID, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance_A")),
@@ -152,6 +157,9 @@ public:
         publicKeyYAfter.generate_r1cs_witness();
         nonceAfter.generate_r1cs_witness();
 
+        // Calculate the new balance
+        balance_after.generate_r1cs_witness();
+
         // Update User
         updateBalance_A.generate_r1cs_witness(withdrawal.balanceUpdate.proof);
         updateAccount_A.generate_r1cs_witness(withdrawal.accountUpdate.proof);
@@ -174,8 +182,10 @@ public:
         publicKeyYAfter.generate_r1cs_constraints();
         nonceAfter.generate_r1cs_constraints();
 
+        // Calculate the new balance
+        balance_after.generate_r1cs_constraints();
+
         // Update User
-        pb.add_r1cs_constraint(ConstraintT(balanceBefore.balance, 1, balanceAfter.balance + amountToSubtract.result()), "balance_before == balance_after + amountToSubtract");
         updateBalance_A.generate_r1cs_constraints();
         updateAccount_A.generate_r1cs_constraints();
     }

@@ -28,7 +28,7 @@ public:
 
     BalanceState balanceBefore;
     AccountState accountBefore;
-    VariableT uncappedBalanceAfter;
+    UnsafeAddGadget uncappedBalanceAfter;
     MinGadget cappedBalanceAfter;
     BalanceState balanceAfter;
     UpdateBalanceGadget updateBalance;
@@ -57,8 +57,8 @@ public:
             make_variable(pb, FMT(prefix, ".before.balance")),
             make_variable(pb, FMT(prefix, ".tradingHistoryRoot"))
         }),
-        uncappedBalanceAfter(make_variable(pb, FMT(prefix, ".uncappedBalanceAfter"))),
-        cappedBalanceAfter(pb, uncappedBalanceAfter, constants.maxAmount, NUM_BITS_AMOUNT + 1, FMT(prefix, ".cappedBalanceAfter")),
+        uncappedBalanceAfter(pb, balanceBefore.balance, amount.packed, FMT(prefix, ".uncappedBalanceAfter")),
+        cappedBalanceAfter(pb, uncappedBalanceAfter.result(), constants.maxAmount, NUM_BITS_AMOUNT + 1, FMT(prefix, ".cappedBalanceAfter")),
         balanceAfter({
             cappedBalanceAfter.result(),
             balanceBefore.tradingHistory
@@ -112,7 +112,7 @@ public:
         pb.val(balanceBefore.balance) = deposit.balanceUpdate.before.balance;
         pb.val(balanceBefore.tradingHistory) = deposit.balanceUpdate.before.tradingHistoryRoot;
 
-        pb.val(uncappedBalanceAfter) = deposit.balanceUpdate.before.balance + deposit.amount;
+        uncappedBalanceAfter.generate_r1cs_witness();
         cappedBalanceAfter.generate_r1cs_witness();
 
         pb.val(accountBefore.publicKeyX) = deposit.accountUpdate.before.publicKey.x;
@@ -130,7 +130,7 @@ public:
         publicKeyX.generate_r1cs_constraints(true);
         publicKeyY.generate_r1cs_constraints(true);
 
-        pb.add_r1cs_constraint(ConstraintT(balanceBefore.balance + amount.packed, 1, uncappedBalanceAfter), "balanceBefore + amount == uncappedBalanceAfter");
+        uncappedBalanceAfter.generate_r1cs_constraints();
         cappedBalanceAfter.generate_r1cs_constraints();
 
         updateBalance.generate_r1cs_constraints();

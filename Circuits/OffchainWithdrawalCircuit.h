@@ -45,7 +45,7 @@ public:
     FloatGadget amountWithdrawn;
     RequireAccuracyGadget requireAccuracyAmountWithdrawn;
 
-    SubGadget balance_after;
+    UnsafeSubGadget balance_after;
 
     BalanceState balanceFAfter;
     UpdateBalanceGadget updateBalanceF_A;
@@ -114,7 +114,7 @@ public:
         requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
 
         // Calculate new balance
-        balance_after(pb, balanceBefore.balance, amountWithdrawn.value(), NUM_BITS_AMOUNT, FMT(prefix, ".balance_after")),
+        balance_after(pb, balanceBefore.balance, amountWithdrawn.value(), FMT(prefix, ".balance_after")),
 
         // Update User
         balanceFAfter({

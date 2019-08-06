@@ -1206,7 +1206,6 @@ TEST_CASE("Float", "[FloatGadget]")
     }
 }
 
-
 TEST_CASE("Float+Accuracy", "[FloatGadget+RequireAccuracy]")
 {
     FloatEncoding encoding = Float24Encoding;
