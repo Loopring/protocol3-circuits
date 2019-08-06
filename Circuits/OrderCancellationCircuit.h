@@ -363,7 +363,7 @@ public:
         publicData.add(labelHasher->result()->bits);
         if (onchainDataAvailability)
         {
-            publicData.add(constants.accountPadding);
+            publicData.add(constants.padding_0000);
             publicData.add(operatorAccountID.bits);
             for (const OrderCancellationGadget& cancel : cancels)
             {

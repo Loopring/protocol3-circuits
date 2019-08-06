@@ -43,15 +43,6 @@ BigInt getRandomFieldElementAsBigInt(unsigned int numBits = 254)
     return v;
 }
 
-struct Initialize
-{
-    Initialize()
-    {
-        ethsnarks::ppT::init_public_params();
-        srand(time(NULL));
-    }
-} initialize;
-
 FieldT getRandomFieldElement(unsigned int numBits = 254)
 {
     return toFieldElement(getRandomFieldElementAsBigInt(numBits));
@@ -68,6 +59,44 @@ FieldT getMaxFieldElement(unsigned int numBits = 254)
         return (FieldT(2)^numBits) - 1;
     }
 }
+
+libff::bit_vector toBits(const FieldT value, unsigned int numBits)
+{
+    libff::bit_vector vector;
+    const bigint<FieldT::num_limbs> rint = value.as_bigint();
+    for (size_t i = 0; i < numBits; ++i)
+    {
+        vector.push_back(rint.test_bit(i));
+    }
+    return vector;
+}
+
+bool compareBits(const libff::bit_vector& A, const libff::bit_vector& B)
+{
+    if (A.size() != B.size())
+    {
+        return false;
+    }
+
+    for (unsigned int i = 0; i < A.size(); i++)
+    {
+        if (A[i] != B[i])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+struct Initialize
+{
+    Initialize()
+    {
+        ethsnarks::ppT::init_public_params();
+        srand(time(NULL));
+    }
+} initialize;
+
 
 TEST_CASE("Variable selection", "[TernaryGadget]")
 {
@@ -982,6 +1011,404 @@ TEST_CASE("RequireAccuracy", "[RequireAccuracyGadget]")
 
                 REQUIRE(pb.is_satisfied() == expectedValue);
             }
+        }
+    }
+}
+
+TEST_CASE("SignatureVerifier", "[SignatureVerifier]")
+{
+    protoboard<FieldT> pb;
+
+    jubjub::Params params;
+    jubjub::VariablePointT publicKey(pb, "publicKey");
+    pb_variable<FieldT> message = make_variable(pb, "message");
+    SignatureVerifier signatureVerifier(pb, params, publicKey, message, "signatureVerifier");
+    signatureVerifier.generate_r1cs_constraints();
+
+    FieldT pubKeyX = FieldT("21607074953141243618425427250695537464636088817373528162920186615872448542319");
+    FieldT pubKeyY = FieldT("3328786100751313619819855397819808730287075038642729822829479432223775713775");
+    FieldT msg = FieldT("18996832849579325290301086811580112302791300834635590497072390271656077158490");
+    FieldT Rx = FieldT("20401810397006237293387786382094924349489854205086853036638326738826249727385");
+    FieldT Ry = FieldT("3339178343289311394427480868578479091766919601142009911922211138735585687725");
+    FieldT s = FieldT("219593190015660463654216479865253652653333952251250676996482368461290160677");
+
+    // All data valid
+    {
+        pb.val(publicKey.x) = pubKeyX;
+        pb.val(publicKey.y) = pubKeyY;
+        pb.val(message) = msg;
+        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(pb.is_satisfied());
+    }
+
+    // All zeros
+    {
+        pb.val(publicKey.x) = 0;
+        pb.val(publicKey.y) = 0;
+        pb.val(message) = 0;
+        Loopring::Signature signature(EdwardsPoint(0, 0), 0);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+
+    // Different publicKey
+    {
+        pb.val(publicKey.x) = pubKeyX + 1;
+        pb.val(publicKey.y) = pubKeyY;
+        pb.val(message) = msg;
+        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+    {
+        pb.val(publicKey.x) = pubKeyX;
+        pb.val(publicKey.y) = pubKeyY + 1;
+        pb.val(message) = msg;
+        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+    {
+        // Different, valid public key
+        pb.val(publicKey.x) = FieldT("19818098172422229289422284899436629503222263750727977198150374245991932884258");
+        pb.val(publicKey.y) = FieldT("5951877988471485350710444403782724110196846988892201970720985561004735218817");
+        pb.val(message) = msg;
+        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+
+    // Different message
+    {
+        pb.val(publicKey.x) = pubKeyX;
+        pb.val(publicKey.y) = pubKeyY;
+        pb.val(message) = msg + 1;
+        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+    {
+        pb.val(publicKey.x) = pubKeyX;
+        pb.val(publicKey.y) = pubKeyY;
+        pb.val(message) = FieldT::zero();
+        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+    {
+        pb.val(publicKey.x) = pubKeyX;
+        pb.val(publicKey.y) = pubKeyY;
+        pb.val(message) = getMaxFieldElement();
+        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+
+    // Different signature
+    {
+        pb.val(publicKey.x) = pubKeyX;
+        pb.val(publicKey.y) = pubKeyY;
+        pb.val(message) = msg;
+        Loopring::Signature signature(EdwardsPoint(Rx + 1, Ry), s);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+    {
+        pb.val(publicKey.x) = pubKeyX;
+        pb.val(publicKey.y) = pubKeyY;
+        pb.val(message) = msg;
+        Loopring::Signature signature(EdwardsPoint(Rx, Ry + 1), s);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+    {
+        pb.val(publicKey.x) = pubKeyX;
+        pb.val(publicKey.y) = pubKeyY;
+        pb.val(message) = msg;
+        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s + 1);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+    {
+        // Valid signature for a different public key (same message)
+        FieldT Rx2 = FieldT("11724635741659369482608508002194555510423986519388485904857477054244428273528");
+        FieldT Ry2 = FieldT("1141584024686665974825800506178016776173372699473828623261155117285910293572");
+        FieldT s2 = FieldT("48808226556453260593782345205957224790810379817643725430561166968302957481");
+        pb.val(publicKey.x) = pubKeyX;
+        pb.val(publicKey.y) = pubKeyY;
+        pb.val(message) = msg;
+        Loopring::Signature signature(EdwardsPoint(Rx2, Ry2), s2);
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(!pb.is_satisfied());
+    }
+}
+
+TEST_CASE("Float", "[FloatGadget]")
+{
+    FloatEncoding encoding = Float24Encoding;
+    unsigned int numBitsFloat = encoding.numBitsExponent + encoding.numBitsMantissa;
+
+    unsigned int maxLength = 127;
+    unsigned int numIterations = 8;
+    for (unsigned int n = 1; n <= maxLength; n++)
+    {
+        protoboard<FieldT> pb;
+
+        Constants constants(pb, "constants");
+        FloatGadget floatGadget(pb, constants, encoding, "floatGadget");
+        floatGadget.generate_r1cs_constraints();
+
+        // 0
+        {
+            FieldT value = FieldT::zero();
+            floatGadget.generate_r1cs_witness(toFloat(value, encoding));
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE((pb.val(floatGadget.value()) == value));
+            REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(value, numBitsFloat)));
+        }
+
+        // 1
+        {
+            FieldT value = FieldT::one();
+            floatGadget.generate_r1cs_witness(toFloat(value, encoding));
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE((pb.val(floatGadget.value()) == value));
+            REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(value, numBitsFloat)));
+        }
+
+        // Random
+        for (unsigned int j = 0; j < numIterations; j++)
+        {
+            FieldT value = getRandomFieldElement(n);
+            unsigned int f = toFloat(value, encoding);
+            floatGadget.generate_r1cs_witness(FieldT(f));
+            FieldT rValue = toFieldElement(fromFloat(f, encoding));
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE((pb.val(floatGadget.value()) == rValue));
+            REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(FieldT(f), numBitsFloat)));
+        }
+    }
+}
+
+
+TEST_CASE("Float+Accuracy", "[FloatGadget+RequireAccuracy]")
+{
+    FloatEncoding encoding = Float24Encoding;
+    Accuracy accuracy = Float24Accuracy;
+    unsigned int n = 96;
+    unsigned int numBitsFloat = encoding.numBitsExponent + encoding.numBitsMantissa;
+
+    protoboard<FieldT> pb;
+
+    Constants constants(pb, "constants");
+    FloatGadget floatGadget(pb, constants, encoding, "floatGadget");
+    floatGadget.generate_r1cs_constraints();
+
+    pb_variable<FieldT> value = make_variable(pb, ".value");
+    pb_variable<FieldT> rValue = make_variable(pb, ".rValue");
+    RequireAccuracyGadget requireAccuracyGadget(pb, rValue, value, accuracy, n, "requireAccuracyGadget");
+    requireAccuracyGadget.generate_r1cs_constraints();
+
+    // Random
+    unsigned int numIterations = 1024;
+    for (unsigned int j = 0; j < numIterations; j++)
+    {
+        FieldT _value = getRandomFieldElement(n);
+        unsigned int f = toFloat(_value, encoding);
+        floatGadget.generate_r1cs_witness(FieldT(f));
+
+        pb.val(value) = _value;
+        pb.val(rValue) = pb.val(floatGadget.value());
+        requireAccuracyGadget.generate_r1cs_witness();
+
+        REQUIRE(pb.is_satisfied());
+    }
+}
+
+TEST_CASE("LabelHasher", "[LabelHasher]")
+{
+    unsigned int maxLength = 1024;
+    for (unsigned int n = 1; n <= maxLength; n = n * 2 + 1)
+    {
+        protoboard<FieldT> pb;
+
+        std::vector<VariableT> labels;
+        for (unsigned int i = 0; i < n; i++)
+        {
+            labels.emplace_back(make_variable(pb, ".label"));
+            pb.val(labels.back()) = getRandomFieldElement();
+        }
+
+        Constants constants(pb, "constants");
+        LabelHasher labelHasher(pb, constants, labels, "labelHasher");
+        labelHasher.generate_r1cs_constraints();
+        labelHasher.generate_r1cs_witness();
+
+        REQUIRE(pb.is_satisfied());
+    }
+}
+
+TEST_CASE("subadd", "[subadd_gadget]")
+{
+    unsigned int maxLength = 252;
+    for (unsigned int n = 1; n <= maxLength; n++)
+    {
+        protoboard<FieldT> pb;
+
+        pb_variable<FieldT> from = make_variable(pb, "from");
+        pb_variable<FieldT> to = make_variable(pb, "to");
+        pb_variable<FieldT> amount = make_variable(pb, "to");
+
+        subadd_gadget subAddGadget(pb, n, from, to, amount, "subAddGadget");
+        subAddGadget.generate_r1cs_constraints();
+
+        FieldT max = getMaxFieldElement(n);
+        FieldT halfMax = getMaxFieldElement(n - 1);
+
+        // (0, 0) -+ 0
+        {
+            pb.val(from) = 0;
+            pb.val(to) = 0;
+            pb.val(amount) = 0;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE(((pb.val(subAddGadget.X)) == FieldT::zero()));
+            REQUIRE(((pb.val(subAddGadget.Y)) == FieldT::zero()));
+        }
+
+        // (1, 0) -+ 1
+        {
+            pb.val(from) = 1;
+            pb.val(to) = 0;
+            pb.val(amount) = 1;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE(((pb.val(subAddGadget.X)) == FieldT::zero()));
+            REQUIRE(((pb.val(subAddGadget.Y)) == FieldT::one()));
+        }
+
+        // (max, 0) -+ 0
+        {
+            pb.val(from) = max;
+            pb.val(to) = 0;
+            pb.val(amount) = 0;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE(((pb.val(subAddGadget.X)) == max));
+            REQUIRE(((pb.val(subAddGadget.Y)) == FieldT::zero()));
+        }
+
+        // (max, 0) -+ max
+        {
+            pb.val(from) = max;
+            pb.val(to) = 0;
+            pb.val(amount) = max;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE(((pb.val(subAddGadget.X)) == FieldT::zero()));
+            REQUIRE(((pb.val(subAddGadget.Y)) == max));
+        }
+
+        // (halfMax, halfMax + 1) -+ halfMax
+        {
+            pb.val(from) = halfMax;
+            pb.val(to) = halfMax + 1;
+            pb.val(amount) = halfMax;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE(((pb.val(subAddGadget.X)) == FieldT::zero()));
+            REQUIRE(((pb.val(subAddGadget.Y)) == max));
+        }
+
+        // (max, max) -+ max  (overflow)
+        {
+            pb.val(from) = max;
+            pb.val(to) = max;
+            pb.val(amount) = max;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(!pb.is_satisfied());
+        }
+
+        // (halfMax, halfMax + 2) -+ halfMax  (overflow)
+        {
+            pb.val(from) = halfMax;
+            pb.val(to) = halfMax + 2;
+            pb.val(amount) = halfMax;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(!pb.is_satisfied());
+        }
+
+        // (halfMax - 1, halfMax + 1) -+ halfMax (underflow)
+        {
+            pb.val(from) = halfMax - 1;
+            pb.val(to) = halfMax + 1;
+            pb.val(amount) = halfMax;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(!pb.is_satisfied());
+        }
+
+        // (0, 0) -+ 1 (underflow)
+        {
+            pb.val(from) = 0;
+            pb.val(to) = 0;
+            pb.val(amount) = 1;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(!pb.is_satisfied());
+        }
+
+        // (0, 0) -+ max (underflow)
+        {
+            pb.val(from) = 0;
+            pb.val(to) = 0;
+            pb.val(amount) = max;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(!pb.is_satisfied());
+        }
+
+        // (max - 1, 0) -+ max  (underflow)
+        {
+            pb.val(from) = max - 1;
+            pb.val(to) = 0;
+            pb.val(amount) = max;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(!pb.is_satisfied());
+        }
+
+        // (max, 1) -+ max  (overflow)
+        {
+            pb.val(from) = max;
+            pb.val(to) = 1;
+            pb.val(amount) = max;
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(!pb.is_satisfied());
         }
     }
 }

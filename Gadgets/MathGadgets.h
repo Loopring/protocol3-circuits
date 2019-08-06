@@ -35,9 +35,7 @@ public:
     const VariableT maxAmount;
     const VariableArrayT zeroAccount;
 
-    const VariableArrayT padding_0;
-    const VariableArrayT padding_00;
-    const VariableArrayT accountPadding;
+    const VariableArrayT padding_0000;
 
     Constants(
         ProtoboardT& pb,
@@ -53,9 +51,7 @@ public:
         emptyTradeHistory(make_variable(pb, ethsnarks::FieldT(EMPTY_TRADE_HISTORY), FMT(prefix, ".emptyTradeHistory"))),
         maxAmount(make_variable(pb, ethsnarks::FieldT(MAX_AMOUNT), FMT(prefix, ".maxAmount"))),
         zeroAccount(NUM_BITS_ACCOUNT, zero),
-        padding_0(1, zero),
-        padding_00(2, zero),
-        accountPadding(4, zero)
+        padding_0000(4, zero)
     {
         assert(NUM_BITS_MAX_VALUE == FieldT::size_in_bits());
         assert(NUM_BITS_FIELD_CAPACITY == FieldT::capacity());
@@ -1211,6 +1207,7 @@ public:
     }
 };
 
+// Decodes a float with the specified encoding
 class FloatGadget : public GadgetT
 {
 public:
@@ -1265,23 +1262,35 @@ public:
     {
         f.fill_with_bits_of_field_element(pb, floatValue);
 
+        // Decodes the mantissa
         for (unsigned int i = 0; i < floatEncoding.numBitsMantissa; i++)
         {
             unsigned j = floatEncoding.numBitsMantissa - 1 - i;
             pb.val(values[i]) = (i == 0) ? pb.val(f[j]) : (pb.val(values[i-1]) * 2 + pb.val(f[j]));
         }
 
+        // Decodes the exponent and shifts the mantissa
         for (unsigned int i = floatEncoding.numBitsMantissa; i < f.size(); i++)
         {
+            // Decode the exponent
             unsigned int j = i - floatEncoding.numBitsMantissa;
             pb.val(baseMultipliers[j]) = (j == 0) ? floatEncoding.exponentBase : pb.val(baseMultipliers[j - 1]) * pb.val(baseMultipliers[j - 1]);
             multipliers[j].generate_r1cs_witness();
+
+            // Shift the value with the partial exponent
             pb.val(values[i]) = pb.val(values[i-1]) * pb.val(multipliers[j].result());
         }
     }
 
     void generate_r1cs_constraints()
     {
+        // Make sure all the bits of the float or 0s and 1s
+        for (unsigned int i = 0; i < f.size(); i++)
+        {
+            libsnark::generate_boolean_r1cs_constraint<ethsnarks::FieldT>(pb, f[i], FMT(annotation_prefix, ".bitness"));
+        }
+
+         // Decodes the mantissa
         for (unsigned int i = 0; i < floatEncoding.numBitsMantissa; i++)
         {
             unsigned j = floatEncoding.numBitsMantissa - 1 - i;
@@ -1295,8 +1304,10 @@ public:
             }
         }
 
+        // Decodes the exponent and shifts the mantissa
         for (unsigned int i = floatEncoding.numBitsMantissa; i < f.size(); i++)
         {
+            // Decode the exponent
             unsigned int j = i - floatEncoding.numBitsMantissa;
             if (j == 0)
             {
@@ -1307,6 +1318,8 @@ public:
                 pb.add_r1cs_constraint(ConstraintT(baseMultipliers[j - 1], baseMultipliers[j - 1], baseMultipliers[j]), ".baseMultipliers");
             }
             multipliers[j].generate_r1cs_constraints();
+
+            // Shift the value with the partial exponent
             pb.add_r1cs_constraint(ConstraintT(values[i - 1], multipliers[j].result(), values[i]), ".valuesExp");
         }
     }
@@ -1322,7 +1335,7 @@ class LabelHasher : public GadgetT
 {
 public:
     static const unsigned numInputs = 64;
-    std::vector<Poseidon_gadget_T<66, 1, 6, 56, numInputs + 1, 1>> stageHashers;
+    std::vector<Poseidon_gadget_T<numInputs + 2, 1, 6, 56, numInputs + 1, 1>> stageHashers;
 
     std::unique_ptr<libsnark::dual_variable_gadget<FieldT>> hash;
 

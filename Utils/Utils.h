@@ -144,6 +144,19 @@ unsigned int toFloat(ethsnarks::FieldT value, const FloatEncoding& encoding)
   return toFloat(toBigInt(value), encoding);
 }
 
+BigInt fromFloat(unsigned int f, const FloatEncoding& encoding)
+{
+  const unsigned int exponent = f >> encoding.numBitsMantissa;
+  const unsigned int mantissa = f & ((1 << encoding.numBitsMantissa) - 1);
+  BigInt multiplier = 1;
+  for (unsigned int i = 0; i < exponent; i++)
+  {
+      multiplier *= 10;
+  }
+  BigInt value = BigInt(mantissa) * multiplier;
+  return value;
+}
+
 }
 
 #endif

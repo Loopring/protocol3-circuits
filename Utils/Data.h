@@ -138,6 +138,17 @@ void from_json(const json& j, AccountUpdate& accountUpdate)
 class Signature
 {
 public:
+
+    Signature()
+    {
+
+    }
+
+    Signature(ethsnarks::jubjub::EdwardsPoint _R, ethsnarks::FieldT _s) : R(_R), s(_s)
+    {
+
+    }
+
     ethsnarks::jubjub::EdwardsPoint R;
     ethsnarks::FieldT s;
 };

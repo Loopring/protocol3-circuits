@@ -651,7 +651,7 @@ public:
         publicData.add(labelHasher->result()->bits);
         if (onchainDataAvailability)
         {
-            publicData.add(constants.accountPadding);
+            publicData.add(constants.padding_0000);
             publicData.add(operatorAccountID.bits);
             // Transform the ring data
             transformData.generate_r1cs_constraints(numRings, flattenReverse(dataAvailabityData.data));

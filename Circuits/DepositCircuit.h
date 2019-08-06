@@ -91,7 +91,7 @@ public:
 
     const std::vector<VariableArrayT> getOnchainData() const
     {
-        return {constants.accountPadding, accountID,
+        return {constants.padding_0000, accountID,
                 publicKeyX.bits, publicKeyY.bits,
                 tokenID,
                 amount.bits};

@@ -377,7 +377,7 @@ public:
         // Data availability
         if (onchainDataAvailability)
         {
-            publicData.add(constants.accountPadding);
+            publicData.add(constants.padding_0000);
             publicData.add(operatorAccountID.bits);
             for (auto& withdrawal : withdrawals)
             {

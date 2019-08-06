@@ -109,7 +109,7 @@ public:
 
     const std::vector<VariableArrayT> getOnchainData() const
     {
-        return {constants.accountPadding, accountID,
+        return {constants.padding_0000, accountID,
                 tokenID,
                 amountRequested.bits};
     }
@@ -161,6 +161,7 @@ public:
     {
         amountRequested.generate_r1cs_constraints(true);
 
+        // Withdrawal calculations
         amountToWithdrawMin.generate_r1cs_constraints();
         amountToWithdraw.generate_r1cs_constraints();
         amountWithdrawn.generate_r1cs_constraints();
