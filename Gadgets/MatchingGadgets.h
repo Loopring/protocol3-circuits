@@ -143,8 +143,8 @@ public:
     NotGadget validAllOrNoneSell;
     NotGadget validAllOrNoneBuy;
 
-    LeqGadget zero_lt_fillAmountS;
-    LeqGadget zero_lt_fillAmountB;
+    IsNonZero isNonZeroFillAmountS;
+    IsNonZero isNonZeroFillAmountB;
 
     AndGadget valid;
 
@@ -159,13 +159,13 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        fillAmountS_lt_amountS(pb, fillAmountS, order.amountS.packed, NUM_BITS_AMOUNT * 2, FMT(prefix, ".fillAmountS_lt_amountS")),
-        fillAmountB_lt_amountB(pb, fillAmountB, order.amountB.packed, NUM_BITS_AMOUNT * 2, FMT(prefix, ".fillAmountB_lt_amountB")),
+        fillAmountS_lt_amountS(pb, fillAmountS, order.amountS.packed, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountS_lt_amountS")),
+        fillAmountB_lt_amountB(pb, fillAmountB, order.amountB.packed, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB_lt_amountB")),
         order_sell(pb, order.buy.packed, FMT(prefix, ".order_sell")),
         notValidAllOrNoneSell(pb, { order.allOrNone.packed, order_sell.result(), fillAmountS_lt_amountS.lt() }, FMT(prefix, ".notValidAllOrNoneSell")),
         notValidAllOrNoneBuy(pb, { order.allOrNone.packed, order.buy.packed, fillAmountB_lt_amountB.lt() }, FMT(prefix, ".notValidAllOrNoneBuy")),
 
-        validSince_leq_timestamp(pb, order.validSince.packed, timestamp, NUM_BITS_AMOUNT * 2, FMT(prefix, "validSince <= timestamp")),
+        validSince_leq_timestamp(pb, order.validSince.packed, timestamp, NUM_BITS_TIMESTAMP, FMT(prefix, "validSince <= timestamp")),
         timestamp_leq_validUntil(pb, timestamp, order.validUntil.packed, NUM_BITS_TIMESTAMP, FMT(prefix, "timestamp <= validUntil")),
 
         validAllOrNoneSell(pb, notValidAllOrNoneSell.result(), FMT(prefix, "validAllOrNoneSell")),
@@ -173,8 +173,8 @@ public:
 
         checkRoundingError(pb, constants, fillAmountS, order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, FMT(prefix, ".checkRoundingError")),
 
-        zero_lt_fillAmountS(pb, constants.zero, fillAmountS, NUM_BITS_AMOUNT, FMT(prefix, "0 < _fillAmountS")),
-        zero_lt_fillAmountB(pb, constants.zero, fillAmountB, NUM_BITS_AMOUNT, FMT(prefix, "0 < _fillAmountB")),
+        isNonZeroFillAmountS(pb, fillAmountS, FMT(prefix, "isNonZeroFillAmountS")),
+        isNonZeroFillAmountB(pb, fillAmountB, FMT(prefix, "isNonZeroFillAmountB")),
 
         valid(pb,
                 {
@@ -183,8 +183,8 @@ public:
                     checkRoundingError.isValid(),
                     validAllOrNoneSell.result(),
                     validAllOrNoneBuy.result(),
-                    zero_lt_fillAmountS.lt(),
-                    zero_lt_fillAmountB.lt()
+                    isNonZeroFillAmountS.result(),
+                    isNonZeroFillAmountB.result()
                 },
                 FMT(prefix, ".valid")
             )
@@ -213,8 +213,8 @@ public:
 
         checkRoundingError.generate_r1cs_witness();
 
-        zero_lt_fillAmountS.generate_r1cs_witness();
-        zero_lt_fillAmountB.generate_r1cs_witness();
+        isNonZeroFillAmountS.generate_r1cs_witness();
+        isNonZeroFillAmountB.generate_r1cs_witness();
 
         valid.generate_r1cs_witness();
     }
@@ -235,8 +235,8 @@ public:
 
         checkRoundingError.generate_r1cs_constraints();
 
-        zero_lt_fillAmountS.generate_r1cs_constraints();
-        zero_lt_fillAmountB.generate_r1cs_constraints();
+        isNonZeroFillAmountS.generate_r1cs_constraints();
+        isNonZeroFillAmountB.generate_r1cs_constraints();
 
         valid.generate_r1cs_constraints();
     }
