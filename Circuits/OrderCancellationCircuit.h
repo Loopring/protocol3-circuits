@@ -120,17 +120,17 @@ public:
         // Balance
         updateBalanceT_A(pb, balancesRoot_before, orderTokenID.bits,
                          {balanceT_A, tradingHistoryRootT_A_before},
-                         {balanceT_A, updateTradeHistory_A.getNewRoot()},
+                         {balanceT_A, updateTradeHistory_A.result()},
                          FMT(prefix, ".updateBalanceT_A")),
         // Balance Fee
-        updateBalanceF_A(pb, updateBalanceT_A.getNewRoot(), feeTokenID.bits,
+        updateBalanceF_A(pb, updateBalanceT_A.result(), feeTokenID.bits,
                          {balanceF_A_before, tradingHistoryRootF_A},
                          {feePayment.X, tradingHistoryRootF_A},
                          FMT(prefix, ".updateBalanceF_A")),
         // Account
         updateAccount_A(pb, _accountsMerkleRoot, accountID.bits,
                         {publicKey.x, publicKey.y, nonce_before.packed, balancesRoot_before},
-                        {publicKey.x, publicKey.y, nonce_after.result(), updateBalanceF_A.getNewRoot()},
+                        {publicKey.x, publicKey.y, nonce_after.result(), updateBalanceF_A.result()},
                         FMT(prefix, ".updateAccount_A")),
 
         // Operator balance
@@ -165,7 +165,7 @@ public:
 
     const VariableT getNewOperatorBalancesRoot() const
     {
-        return updateBalanceF_O.getNewRoot();
+        return updateBalanceF_O.result();
     }
 
     const std::vector<VariableArrayT> getPublicData() const

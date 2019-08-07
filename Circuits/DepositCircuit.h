@@ -76,7 +76,7 @@ public:
             publicKeyX.packed,
             publicKeyY.packed,
             accountBefore.nonce,
-            updateBalance.getNewRoot()
+            updateBalance.result()
         }),
         // Update account
         updateAccount(pb, root, accountID, accountBefore, accountAfter, FMT(prefix, ".updateAccount"))

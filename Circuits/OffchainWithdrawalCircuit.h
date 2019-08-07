@@ -126,12 +126,12 @@ public:
             balance_after.result(),
             balanceBefore.tradingHistory
         }),
-        updateBalance_A(pb, updateBalanceF_A.getNewRoot(), tokenID.bits, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance_A")),
+        updateBalance_A(pb, updateBalanceF_A.result(), tokenID.bits, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance_A")),
         accountAfter({
             accountBefore.publicKeyX,
             accountBefore.publicKeyY,
             nonce_after.result(),
-            updateBalance_A.getNewRoot()
+            updateBalance_A.result()
         }),
         updateAccount_A(pb, accountsMerkleRoot, accountID.bits, accountBefore, accountAfter, FMT(prefix, ".updateAccount_A")),
 
@@ -165,7 +165,7 @@ public:
 
     const VariableT getNewOperatorBalancesRoot() const
     {
-        return updateBalanceF_O.getNewRoot();
+        return updateBalanceF_O.result();
     }
 
     const std::vector<VariableArrayT> getApprovedWithdrawalData() const

@@ -218,6 +218,44 @@ public:
     }
 };
 
+class UnsafeMulGadget : public GadgetT
+{
+public:
+
+    VariableT valueA;
+    VariableT valueB;
+    VariableT product;
+
+    UnsafeMulGadget(
+        ProtoboardT& pb,
+        const VariableT& _valueA,
+        const VariableT& _valueB,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+        valueA(_valueA),
+        valueB(_valueB),
+        product(make_variable(pb, FMT(prefix, ".product")))
+    {
+
+    }
+
+    const VariableT& result() const
+    {
+        return product;
+    }
+
+    void generate_r1cs_witness()
+    {
+        pb.val(product) = pb.val(valueA) * pb.val(valueB);
+    }
+
+    void generate_r1cs_constraints()
+    {
+        pb.add_r1cs_constraint(ConstraintT(valueA, valueB, product), ".valueA * valueB = product");
+    }
+};
+
 class TernaryGadget : public GadgetT
 {
 public:
@@ -769,7 +807,6 @@ public:
 
     // (A * B) / C = D
     // A and B need to be less than <= 126bits
-    // C cannot be 0
     MulDivGadget(
         ProtoboardT& pb,
         const Constants& constants,

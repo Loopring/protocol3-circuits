@@ -8,7 +8,6 @@
 
 #include "ethsnarks.hpp"
 #include "utils.hpp"
-#include "gadgets/mimc.hpp"
 #include "gadgets/merkle_tree.hpp"
 #include "gadgets/poseidon.hpp"
 
@@ -19,10 +18,10 @@ namespace Loopring
 
 struct AccountState
 {
-    const VariableT publicKeyX;
-    const VariableT publicKeyY;
-    const VariableT nonce;
-    const VariableT balancesRoot;
+    VariableT publicKeyX;
+    VariableT publicKeyY;
+    VariableT nonce;
+    VariableT balancesRoot;
 };
 
 class UpdateAccountGadget : public GadgetT
@@ -82,8 +81,8 @@ public:
 
 struct BalanceState
 {
-    const VariableT balance;
-    const VariableT tradingHistory;
+    VariableT balance;
+    VariableT tradingHistory;
 };
 
 class UpdateBalanceGadget : public GadgetT
@@ -116,7 +115,7 @@ public:
 
     }
 
-    const VariableT getNewRoot() const
+    const VariableT result() const
     {
         return rootCalculatorAfter.result();
     }

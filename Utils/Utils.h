@@ -1,5 +1,5 @@
-#ifndef _TRADINGCIRCUIT_H_
-#define _TRADINGCIRCUIT_H_
+#ifndef _UTILS_H_
+#define _UTILS_H_
 
 #include "Constants.h"
 #include "Data.h"
@@ -9,7 +9,6 @@
 #include "utils.hpp"
 #include "jubjub/point.hpp"
 #include "jubjub/eddsa.hpp"
-#include "gadgets/mimc.hpp"
 #include "gadgets/merkle_tree.hpp"
 #include "gadgets/sha256_many.hpp"
 #include "gadgets/subadd.hpp"

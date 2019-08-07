@@ -1,5 +1,5 @@
-#ifndef _MERKLE_TREE_H_
-#define _MERKLE_TREE_H_
+#ifndef _MERKLETREE_H_
+#define _MERKLETREE_H_
 
 #include "ethsnarks.hpp"
 #include "gadgets/poseidon.hpp"

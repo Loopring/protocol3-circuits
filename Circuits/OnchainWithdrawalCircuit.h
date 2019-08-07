@@ -27,6 +27,7 @@ public:
     BalanceState balanceBefore;
     AccountState accountBefore;
 
+    // Calculate how much can be withdrawn
     MinGadget amountToWithdrawMin;
     TernaryGadget amountToWithdraw;
     FloatGadget amountWithdrawn;
@@ -39,8 +40,10 @@ public:
     TernaryGadget publicKeyYAfter;
     TernaryGadget nonceAfter;
 
+    // Calculate the new balance
     UnsafeSubGadget balance_after;
 
+    // Update the state of the account
     BalanceState balanceAfter;
     UpdateBalanceGadget updateBalance_A;
     AccountState accountAfter;
@@ -90,7 +93,7 @@ public:
         // Calculate the new balance
         balance_after(pb, balanceBefore.balance, amountToSubtract.result(), FMT(prefix, ".balance_after")),
 
-        // Update User
+        // Update the state of the account
         balanceAfter({
             balance_after.result(),
             tradingHistoryAfter.result()
@@ -100,7 +103,7 @@ public:
             publicKeyXAfter.result(),
             publicKeyYAfter.result(),
             nonceAfter.result(),
-            updateBalance_A.getNewRoot()
+            updateBalance_A.result()
         }),
         updateAccount_A(pb, _accountsMerkleRoot, accountID, accountBefore, accountAfter, FMT(prefix, ".updateAccount_A"))
     {
@@ -160,7 +163,7 @@ public:
         // Calculate the new balance
         balance_after.generate_r1cs_witness();
 
-        // Update User
+        // Update the state of the account
         updateBalance_A.generate_r1cs_witness(withdrawal.balanceUpdate.proof);
         updateAccount_A.generate_r1cs_witness(withdrawal.accountUpdate.proof);
     }
@@ -185,7 +188,7 @@ public:
         // Calculate the new balance
         balance_after.generate_r1cs_constraints();
 
-        // Update User
+        // Update the state of the account
         updateBalance_A.generate_r1cs_constraints();
         updateAccount_A.generate_r1cs_constraints();
     }

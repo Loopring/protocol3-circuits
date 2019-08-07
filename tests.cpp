@@ -6,12 +6,16 @@
 #include "ThirdParty/BigInt.hpp"
 
 #include "Gadgets/MathGadgets.h"
+#include "Gadgets/TradingHistoryGadgets.h"
+#include "Gadgets/AccountGadgets.h"
 
 using namespace std;
 using namespace libff;
 using namespace libsnark;
 using namespace ethsnarks;
 using namespace Loopring;
+
+static const char* TEST_DATA_PATH = "../../../protocol3-circuits/test/data/";
 
 FieldT toFieldElement(const BigInt& v)
 {
@@ -86,6 +90,51 @@ bool compareBits(const libff::bit_vector& A, const libff::bit_vector& B)
         }
     }
     return true;
+}
+
+AccountState createAccountState(ProtoboardT& pb, const Account& state)
+{
+    AccountState accountState;
+    accountState.publicKeyX = make_variable(pb, state.publicKey.x, ".publicKeyX");
+    accountState.publicKeyY = make_variable(pb, state.publicKey.y, ".publicKeyY");
+    accountState.nonce = make_variable(pb, state.nonce, ".nonce");
+    accountState.balancesRoot = make_variable(pb, state.balancesRoot, ".balancesRoot");
+    return accountState;
+}
+
+BalanceState createBalanceState(ProtoboardT& pb, const BalanceLeaf& state)
+{
+    BalanceState balanceState;
+    balanceState.balance = make_variable(pb, state.balance, ".balance");
+    balanceState.tradingHistory = make_variable(pb, state.tradingHistoryRoot, ".tradingHistory");
+    return balanceState;
+}
+
+TradeHistoryState createTradeHistoryState(ProtoboardT& pb, const TradeHistoryLeaf& state)
+{
+    TradeHistoryState tradeHistoryState;
+    tradeHistoryState.filled = make_variable(pb, state.filled, ".filled");
+    tradeHistoryState.cancelled = make_variable(pb, state.cancelled, ".cancelled");
+    tradeHistoryState.orderID = make_variable(pb, state.orderID, ".orderID");
+    return tradeHistoryState;
+}
+
+RingSettlementBlock getRingSettlementBlock()
+{
+    // Read the JSON file
+    string filename = string(TEST_DATA_PATH) + "settlement_block.json";
+    ifstream file(filename);
+    if (!file.is_open())
+    {
+        cerr << "Cannot open input file: " << filename << endl;
+        REQUIRE(false);
+    }
+    json input;
+    file >> input;
+    file.close();
+
+    RingSettlementBlock block = input.get<RingSettlementBlock>();
+    return block;
 }
 
 struct Initialize
@@ -896,6 +945,84 @@ TEST_CASE("MulDiv", "[MulDivGadget]")
     }
 }
 
+TEST_CASE("UnsafeAdd", "[UnsafeAddGadget]")
+{
+    unsigned int numIterations = 256;
+
+    protoboard<FieldT> pb;
+
+    pb_variable<FieldT> a = make_variable(pb, ".a");
+    pb_variable<FieldT> b = make_variable(pb, ".b");
+
+    UnsafeAddGadget unsafeAddGadget(pb, a, b, "unsafeAddGadget");
+    unsafeAddGadget.generate_r1cs_constraints();
+
+    SECTION("Random")
+    {
+        for (unsigned int j = 0; j < numIterations; j++)
+        {
+            pb.val(a) = getRandomFieldElement();
+            pb.val(b) = getRandomFieldElement();
+            unsafeAddGadget.generate_r1cs_witness();
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE((pb.val(unsafeAddGadget.result()) == pb.val(a) + pb.val(b)));
+        }
+    }
+}
+
+TEST_CASE("UnsafeSub", "[UnsafeSubGadget]")
+{
+    unsigned int numIterations = 256;
+
+    protoboard<FieldT> pb;
+
+    pb_variable<FieldT> a = make_variable(pb, ".a");
+    pb_variable<FieldT> b = make_variable(pb, ".b");
+
+    UnsafeSubGadget unsafeSubGadget(pb, a, b, "unsafeSubGadget");
+    unsafeSubGadget.generate_r1cs_constraints();
+
+    SECTION("Random")
+    {
+        for (unsigned int j = 0; j < numIterations; j++)
+        {
+            pb.val(a) = getRandomFieldElement();
+            pb.val(b) = getRandomFieldElement();
+            unsafeSubGadget.generate_r1cs_witness();
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE((pb.val(unsafeSubGadget.result()) == pb.val(a) - pb.val(b)));
+        }
+    }
+}
+
+TEST_CASE("UnsafeMul", "[UnsafeMulGadget]")
+{
+    unsigned int numIterations = 256;
+
+    protoboard<FieldT> pb;
+
+    pb_variable<FieldT> a = make_variable(pb, ".a");
+    pb_variable<FieldT> b = make_variable(pb, ".b");
+
+    UnsafeMulGadget unsafeMulGadget(pb, a, b, "unsafeMulGadget");
+    unsafeMulGadget.generate_r1cs_constraints();
+
+    SECTION("Random")
+    {
+        for (unsigned int j = 0; j < numIterations; j++)
+        {
+            pb.val(a) = getRandomFieldElement();
+            pb.val(b) = getRandomFieldElement();
+            unsafeMulGadget.generate_r1cs_witness();
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE((pb.val(unsafeMulGadget.result()) == pb.val(a) * pb.val(b)));
+        }
+    }
+}
+
 TEST_CASE("RequireAccuracy", "[RequireAccuracyGadget]")
 {
     unsigned int maxLength = 126;
@@ -1163,7 +1290,8 @@ TEST_CASE("Float", "[FloatGadget]")
 
     unsigned int maxLength = 127;
     unsigned int numIterations = 8;
-    for (unsigned int n = 1; n <= maxLength; n++)
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit length: " << n)
     {
         protoboard<FieldT> pb;
 
@@ -1171,7 +1299,7 @@ TEST_CASE("Float", "[FloatGadget]")
         FloatGadget floatGadget(pb, constants, encoding, "floatGadget");
         floatGadget.generate_r1cs_constraints();
 
-        // 0
+        SECTION("0")
         {
             FieldT value = FieldT::zero();
             floatGadget.generate_r1cs_witness(toFloat(value, encoding));
@@ -1181,7 +1309,7 @@ TEST_CASE("Float", "[FloatGadget]")
             REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(value, numBitsFloat)));
         }
 
-        // 1
+        SECTION("1")
         {
             FieldT value = FieldT::one();
             floatGadget.generate_r1cs_witness(toFloat(value, encoding));
@@ -1191,19 +1319,21 @@ TEST_CASE("Float", "[FloatGadget]")
             REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(value, numBitsFloat)));
         }
 
-        // Random
-        for (unsigned int j = 0; j < numIterations; j++)
+        SECTION("Random")
         {
-            FieldT value = getRandomFieldElement(n);
-            unsigned int f = toFloat(value, encoding);
-            floatGadget.generate_r1cs_witness(FieldT(f));
-            FieldT rValue = toFieldElement(fromFloat(f, encoding));
+            for (unsigned int j = 0; j < numIterations; j++)
+            {
+                FieldT value = getRandomFieldElement(n);
+                unsigned int f = toFloat(value, encoding);
+                floatGadget.generate_r1cs_witness(FieldT(f));
+                FieldT rValue = toFieldElement(fromFloat(f, encoding));
 
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(floatGadget.value()) == rValue));
-            REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(FieldT(f), numBitsFloat)));
+                REQUIRE(pb.is_satisfied());
+                REQUIRE((pb.val(floatGadget.value()) == rValue));
+                REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(FieldT(f), numBitsFloat)));
+            }
         }
-    }
+    }}
 }
 
 TEST_CASE("Float+Accuracy", "[FloatGadget+RequireAccuracy]")
@@ -1224,26 +1354,29 @@ TEST_CASE("Float+Accuracy", "[FloatGadget+RequireAccuracy]")
     RequireAccuracyGadget requireAccuracyGadget(pb, rValue, value, accuracy, n, "requireAccuracyGadget");
     requireAccuracyGadget.generate_r1cs_constraints();
 
-    // Random
-    unsigned int numIterations = 1024;
-    for (unsigned int j = 0; j < numIterations; j++)
+    SECTION("Random")
     {
-        FieldT _value = getRandomFieldElement(n);
-        unsigned int f = toFloat(_value, encoding);
-        floatGadget.generate_r1cs_witness(FieldT(f));
+        unsigned int numIterations = 1024;
+        for (unsigned int j = 0; j < numIterations; j++)
+        {
+            FieldT _value = getRandomFieldElement(n);
+            unsigned int f = toFloat(_value, encoding);
+            floatGadget.generate_r1cs_witness(FieldT(f));
 
-        pb.val(value) = _value;
-        pb.val(rValue) = pb.val(floatGadget.value());
-        requireAccuracyGadget.generate_r1cs_witness();
+            pb.val(value) = _value;
+            pb.val(rValue) = pb.val(floatGadget.value());
+            requireAccuracyGadget.generate_r1cs_witness();
 
-        REQUIRE(pb.is_satisfied());
+            REQUIRE(pb.is_satisfied());
+        }
     }
 }
 
 TEST_CASE("LabelHasher", "[LabelHasher]")
 {
     unsigned int maxLength = 1024;
-    for (unsigned int n = 1; n <= maxLength; n = n * 2 + 1)
+    for (unsigned int n = 1; n <= maxLength; n = n * 2 + 1) {
+        DYNAMIC_SECTION("Num labels: " << n)
     {
         protoboard<FieldT> pb;
 
@@ -1260,154 +1393,362 @@ TEST_CASE("LabelHasher", "[LabelHasher]")
         labelHasher.generate_r1cs_witness();
 
         REQUIRE(pb.is_satisfied());
-    }
+    }}
 }
 
 TEST_CASE("subadd", "[subadd_gadget]")
 {
     unsigned int maxLength = 252;
-    for (unsigned int n = 1; n <= maxLength; n++)
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit length: " << n)
     {
-        protoboard<FieldT> pb;
+        auto subaddChecked = [n](const FieldT& _from, const FieldT& _to, const FieldT& _amount,
+                                 bool expectedSatisfied, const FieldT& expectedFromAfter = 0, const FieldT& expectedToAfter = 0)
+        {
+            protoboard<FieldT> pb;
 
-        pb_variable<FieldT> from = make_variable(pb, "from");
-        pb_variable<FieldT> to = make_variable(pb, "to");
-        pb_variable<FieldT> amount = make_variable(pb, "to");
+            pb_variable<FieldT> from = make_variable(pb, _from, "from");
+            pb_variable<FieldT> to = make_variable(pb, _to, "to");
+            pb_variable<FieldT> amount = make_variable(pb, _amount, "amount");
 
-        subadd_gadget subAddGadget(pb, n, from, to, amount, "subAddGadget");
-        subAddGadget.generate_r1cs_constraints();
+            subadd_gadget subAddGadget(pb, n, from, to, amount, "subAddGadget");
+            subAddGadget.generate_r1cs_constraints();
+            subAddGadget.generate_r1cs_witness();
+
+            REQUIRE(pb.is_satisfied() == expectedSatisfied);
+            if (expectedSatisfied)
+            {
+                REQUIRE(((pb.val(subAddGadget.X)) == expectedFromAfter));
+                REQUIRE(((pb.val(subAddGadget.Y)) == expectedToAfter));
+            }
+        };
 
         FieldT max = getMaxFieldElement(n);
         FieldT halfMax = getMaxFieldElement(n - 1);
 
-        // (0, 0) -+ 0
+        SECTION("(0, 0) -+ 0")
         {
-            pb.val(from) = 0;
-            pb.val(to) = 0;
-            pb.val(amount) = 0;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE(((pb.val(subAddGadget.X)) == FieldT::zero()));
-            REQUIRE(((pb.val(subAddGadget.Y)) == FieldT::zero()));
+            subaddChecked(0, 0, 0, true, 0, 0);
         }
 
-        // (1, 0) -+ 1
+        SECTION("(1, 0) -+ 1")
         {
-            pb.val(from) = 1;
-            pb.val(to) = 0;
-            pb.val(amount) = 1;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE(((pb.val(subAddGadget.X)) == FieldT::zero()));
-            REQUIRE(((pb.val(subAddGadget.Y)) == FieldT::one()));
+            subaddChecked(1, 0, 1, true, 0, 1);
         }
 
-        // (max, 0) -+ 0
+        SECTION("(max, 0) -+ 0")
         {
-            pb.val(from) = max;
-            pb.val(to) = 0;
-            pb.val(amount) = 0;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE(((pb.val(subAddGadget.X)) == max));
-            REQUIRE(((pb.val(subAddGadget.Y)) == FieldT::zero()));
+            subaddChecked(max, 0, 0, true, max, 0);
         }
 
-        // (max, 0) -+ max
+        SECTION("(max, 0) -+ max")
         {
-            pb.val(from) = max;
-            pb.val(to) = 0;
-            pb.val(amount) = max;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE(((pb.val(subAddGadget.X)) == FieldT::zero()));
-            REQUIRE(((pb.val(subAddGadget.Y)) == max));
+            subaddChecked(max, 0, max, true, 0, max);
         }
 
-        // (halfMax, halfMax + 1) -+ halfMax
+        SECTION("(halfMax, halfMax + 1) -+ halfMax")
         {
-            pb.val(from) = halfMax;
-            pb.val(to) = halfMax + 1;
-            pb.val(amount) = halfMax;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE(((pb.val(subAddGadget.X)) == FieldT::zero()));
-            REQUIRE(((pb.val(subAddGadget.Y)) == max));
+            subaddChecked(halfMax, halfMax + 1, halfMax, true, 0, max);
         }
 
-        // (max, max) -+ max  (overflow)
+        SECTION("(max, max) -+ max  (overflow)")
         {
-            pb.val(from) = max;
-            pb.val(to) = max;
-            pb.val(amount) = max;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            subaddChecked(max, max, max, false);
         }
 
-        // (halfMax, halfMax + 2) -+ halfMax  (overflow)
+        SECTION("(halfMax, halfMax + 2) -+ halfMax  (overflow)")
         {
-            pb.val(from) = halfMax;
-            pb.val(to) = halfMax + 2;
-            pb.val(amount) = halfMax;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            subaddChecked(halfMax, halfMax + 2, halfMax, false);
         }
 
-        // (halfMax - 1, halfMax + 1) -+ halfMax (underflow)
+        SECTION("(halfMax - 1, halfMax + 1) -+ halfMax (underflow)")
         {
-            pb.val(from) = halfMax - 1;
-            pb.val(to) = halfMax + 1;
-            pb.val(amount) = halfMax;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            subaddChecked(halfMax - 1, halfMax + 1, halfMax, false);
         }
 
-        // (0, 0) -+ 1 (underflow)
+        SECTION("(0, 0) -+ 1 (underflow)")
         {
-            pb.val(from) = 0;
-            pb.val(to) = 0;
-            pb.val(amount) = 1;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            subaddChecked(0, 0, 1, false);
         }
 
-        // (0, 0) -+ max (underflow)
+        SECTION("(0, 0) -+ max (underflow)")
         {
-            pb.val(from) = 0;
-            pb.val(to) = 0;
-            pb.val(amount) = max;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            subaddChecked(0, 0, max, false);
         }
 
-        // (max - 1, 0) -+ max  (underflow)
+        SECTION("(max - 1, 0) -+ max  (underflow)")
         {
-            pb.val(from) = max - 1;
-            pb.val(to) = 0;
-            pb.val(amount) = max;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            subaddChecked(max - 1, 0, max, false);
         }
 
-        // (max, 1) -+ max  (overflow)
+        SECTION("(max, 1) -+ max  (overflow)")
         {
-            pb.val(from) = max;
-            pb.val(to) = 1;
-            pb.val(amount) = max;
-            subAddGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            subaddChecked(max, 1, max, false);
         }
+    }}
+}
+
+TEST_CASE("Range limit", "[dual_variable_gadget]")
+{
+    unsigned int maxLength = 254;
+    unsigned int numIterations = 16;
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit length: " << n)
+    {
+        auto rangeLimitChecked = [n](const FieldT& v, bool expectedSatisfied)
+        {
+            protoboard<FieldT> pb;
+
+            pb_variable<FieldT> value = make_variable(pb, "value");
+            libsnark::dual_variable_gadget<FieldT> rangeLimitedValue(pb, value, n, "dual_variable_gadget");
+            rangeLimitedValue.generate_r1cs_constraints(true);
+
+            pb.val(value) = v;
+            rangeLimitedValue.generate_r1cs_witness_from_packed();
+
+            REQUIRE(pb.is_satisfied() == expectedSatisfied);
+            if (expectedSatisfied)
+            {
+                REQUIRE((pb.val(rangeLimitedValue.packed) == pb.val(value)));
+                REQUIRE(compareBits(rangeLimitedValue.bits.get_bits(pb), toBits(pb.val(value), n)));
+            }
+        };
+
+        SECTION("0")
+        {
+            rangeLimitChecked(0, true);
+        }
+
+        SECTION("max")
+        {
+            rangeLimitChecked(getMaxFieldElement(n), true);
+        }
+
+        SECTION("max + 1")
+        {
+            // max + 1 == 0 if n == 254
+            if (n < 254)
+            {
+                rangeLimitChecked(getMaxFieldElement(n) + 1, false);
+            }
+        }
+
+        SECTION("max + 1 + max (1 bit too many, LSB the same as max)")
+        {
+            // We need to be able to set all bits to 1s
+            if (n < 253)
+            {
+                rangeLimitChecked(getMaxFieldElement(n) * 2 + 1, false);
+            }
+        }
+
+        SECTION("max snark field element")
+        {
+            // max snark field element == max field element when n == 254
+            if (n < 254)
+            {
+                rangeLimitChecked(getMaxFieldElement(), false);
+            }
+        }
+
+        SECTION("random value in range")
+        {
+            for (unsigned int j = 0; j < numIterations; j++)
+            {
+                rangeLimitChecked(getRandomFieldElement(n), true);
+            }
+        }
+    }}
+}
+
+TEST_CASE("UpdateAccount", "[UpdateAccountGadget]")
+{
+    RingSettlementBlock block = getRingSettlementBlock();
+    REQUIRE(block.ringSettlements.size() > 0);
+    const RingSettlement& ringSettlement = block.ringSettlements[0];
+    const AccountUpdate& accountUpdate = ringSettlement.accountUpdate_B;
+
+    auto updateAccountChecked = [](const AccountUpdate& accountUpdate, bool expectedSatisfied, bool expectedRootAfterCorrect = true)
+    {
+        protoboard<FieldT> pb;
+
+        pb_variable<FieldT> rootBefore = make_variable(pb, "rootBefore");
+        VariableArrayT address = make_var_array(pb, NUM_BITS_ACCOUNT, ".address");
+        AccountState stateBefore = createAccountState(pb, accountUpdate.before);
+        AccountState stateAfter = createAccountState(pb, accountUpdate.after);
+        address.fill_with_bits_of_field_element(pb, accountUpdate.accountID);
+        pb.val(rootBefore) = accountUpdate.rootBefore;
+
+        UpdateAccountGadget updateAccount(pb, rootBefore, address, stateBefore, stateAfter, "updateAccount");
+        updateAccount.generate_r1cs_constraints();
+        updateAccount.generate_r1cs_witness(accountUpdate.proof);
+
+        REQUIRE(pb.is_satisfied() == expectedSatisfied);
+        if (expectedSatisfied)
+        {
+            REQUIRE((pb.val(updateAccount.result()) == accountUpdate.rootAfter) == expectedRootAfterCorrect);
+        }
+    };
+
+    SECTION("Everything correct")
+    {
+        updateAccountChecked(accountUpdate, true, true);
+    }
+
+    SECTION("Incorrect address")
+    {
+        AccountUpdate modifiedAccountUpdate = accountUpdate;
+        modifiedAccountUpdate.accountID -= 1;
+        updateAccountChecked(modifiedAccountUpdate, false);
+    }
+
+    SECTION("Incorrect leaf before")
+    {
+        AccountUpdate modifiedAccountUpdate = accountUpdate;
+        modifiedAccountUpdate.before.nonce += 1;
+        updateAccountChecked(modifiedAccountUpdate, false);
+    }
+
+    SECTION("Different leaf after")
+    {
+        AccountUpdate modifiedAccountUpdate = accountUpdate;
+        modifiedAccountUpdate.after.nonce += 1;
+        updateAccountChecked(modifiedAccountUpdate, true, false);
+    }
+
+    SECTION("Incorrect proof")
+    {
+        AccountUpdate modifiedAccountUpdate = accountUpdate;
+        unsigned int randomIndex = rand() % modifiedAccountUpdate.proof.data.size();
+        modifiedAccountUpdate.proof.data[randomIndex] += 1;
+        updateAccountChecked(modifiedAccountUpdate, false);
+    }
+}
+
+TEST_CASE("UpdateBalance", "[UpdateBalanceGadget]")
+{
+    RingSettlementBlock block = getRingSettlementBlock();
+    REQUIRE(block.ringSettlements.size() > 0);
+    const RingSettlement& ringSettlement = block.ringSettlements[0];
+    const BalanceUpdate& balanceUpdate = ringSettlement.balanceUpdateB_B;
+
+    auto updateBalanceChecked = [](const BalanceUpdate& balanceUpdate, bool expectedSatisfied, bool expectedRootAfterCorrect = true)
+    {
+        protoboard<FieldT> pb;
+
+        pb_variable<FieldT> rootBefore = make_variable(pb, "rootBefore");
+        VariableArrayT address = make_var_array(pb, NUM_BITS_TOKEN, ".address");
+        BalanceState stateBefore = createBalanceState(pb, balanceUpdate.before);
+        BalanceState stateAfter = createBalanceState(pb, balanceUpdate.after);
+        address.fill_with_bits_of_field_element(pb, balanceUpdate.tokenID);
+        pb.val(rootBefore) = balanceUpdate.rootBefore;
+
+        UpdateBalanceGadget updateBalance(pb, rootBefore, address, stateBefore, stateAfter, "updateBalance");
+        updateBalance.generate_r1cs_constraints();
+        updateBalance.generate_r1cs_witness(balanceUpdate.proof);
+
+        REQUIRE(pb.is_satisfied() == expectedSatisfied);
+        if (expectedSatisfied)
+        {
+            REQUIRE((pb.val(updateBalance.result()) == balanceUpdate.rootAfter) == expectedRootAfterCorrect);
+        }
+    };
+
+    SECTION("Everything correct")
+    {
+        updateBalanceChecked(balanceUpdate, true, true);
+    }
+
+    SECTION("Incorrect address")
+    {
+        BalanceUpdate modifiedBalanceUpdate = balanceUpdate;
+        modifiedBalanceUpdate.tokenID += 1;
+        updateBalanceChecked(modifiedBalanceUpdate, true, false);
+    }
+
+    SECTION("Incorrect leaf before")
+    {
+        BalanceUpdate modifiedBalanceUpdate = balanceUpdate;
+        modifiedBalanceUpdate.before.balance += 1;
+        updateBalanceChecked(modifiedBalanceUpdate, false);
+    }
+
+    SECTION("Different leaf after")
+    {
+        BalanceUpdate modifiedBalanceUpdate = balanceUpdate;
+        modifiedBalanceUpdate.after.balance += 1;
+        updateBalanceChecked(modifiedBalanceUpdate, true, false);
+    }
+
+    SECTION("Incorrect proof")
+    {
+        BalanceUpdate modifiedBalanceUpdate = balanceUpdate;
+        unsigned int randomIndex = rand() % modifiedBalanceUpdate.proof.data.size();
+        modifiedBalanceUpdate.proof.data[randomIndex] += 1;
+        updateBalanceChecked(modifiedBalanceUpdate, false);
+    }
+}
+
+TEST_CASE("UpdateTradeHistory", "[UpdateTradeHistoryGadget]")
+{
+    RingSettlementBlock block = getRingSettlementBlock();
+    REQUIRE(block.ringSettlements.size() > 0);
+    const RingSettlement& ringSettlement = block.ringSettlements[0];
+    const TradeHistoryUpdate& tradeHistoryUpdate = ringSettlement.tradeHistoryUpdate_A;
+
+    auto updateTradeHistoryChecked = [](const TradeHistoryUpdate& tradeHistoryUpdate, bool expectedSatisfied, bool expectedRootAfterCorrect = true)
+    {
+        protoboard<FieldT> pb;
+
+        pb_variable<FieldT> rootBefore = make_variable(pb, "rootBefore");
+        VariableArrayT address = make_var_array(pb, NUM_BITS_TRADING_HISTORY, ".address");
+        TradeHistoryState stateBefore = createTradeHistoryState(pb, tradeHistoryUpdate.before);
+        TradeHistoryState stateAfter = createTradeHistoryState(pb, tradeHistoryUpdate.after);
+        address.fill_with_bits_of_field_element(pb, tradeHistoryUpdate.orderID);
+        pb.val(rootBefore) = tradeHistoryUpdate.rootBefore;
+
+        UpdateTradeHistoryGadget updateTradeHistory(pb, rootBefore, subArray(address, 0, NUM_BITS_TRADING_HISTORY), stateBefore, stateAfter, "updateTradeHistory");
+        updateTradeHistory.generate_r1cs_constraints();
+        updateTradeHistory.generate_r1cs_witness(tradeHistoryUpdate.proof);
+
+        REQUIRE(pb.is_satisfied() == expectedSatisfied);
+        if (expectedSatisfied)
+        {
+            REQUIRE((pb.val(updateTradeHistory.result()) == tradeHistoryUpdate.rootAfter) == expectedRootAfterCorrect);
+        }
+    };
+
+    SECTION("Everything correct")
+    {
+        updateTradeHistoryChecked(tradeHistoryUpdate, true, true);
+    }
+
+    SECTION("Incorrect address")
+    {
+        TradeHistoryUpdate modifiedTradeHistoryUpdate = tradeHistoryUpdate;
+        modifiedTradeHistoryUpdate.orderID += 1;
+        updateTradeHistoryChecked(modifiedTradeHistoryUpdate, true, false);
+    }
+
+    SECTION("Incorrect leaf before")
+    {
+        TradeHistoryUpdate modifiedTradeHistoryUpdate = tradeHistoryUpdate;
+        modifiedTradeHistoryUpdate.before.filled += 1;
+        updateTradeHistoryChecked(modifiedTradeHistoryUpdate, false);
+    }
+
+    SECTION("Different leaf after")
+    {
+        TradeHistoryUpdate modifiedTradeHistoryUpdate = tradeHistoryUpdate;
+        modifiedTradeHistoryUpdate.after.filled += 1;
+        updateTradeHistoryChecked(modifiedTradeHistoryUpdate, true, false);
+    }
+
+    SECTION("Incorrect proof")
+    {
+        TradeHistoryUpdate modifiedTradeHistoryUpdate = tradeHistoryUpdate;
+        unsigned int randomIndex = rand() % modifiedTradeHistoryUpdate.proof.data.size();
+        modifiedTradeHistoryUpdate.proof.data[randomIndex] += 1;
+        updateTradeHistoryChecked(modifiedTradeHistoryUpdate, false);
     }
 }

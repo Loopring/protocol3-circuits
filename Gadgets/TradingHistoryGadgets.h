@@ -1,5 +1,5 @@
-#ifndef _TRADINGHISTORYCIRCUIT_H_
-#define _TRADINGHISTORYCIRCUIT_H_
+#ifndef _TRADINGHISTORYGADGETS_H_
+#define _TRADINGHISTORYGADGETS_H_
 
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
@@ -8,7 +8,6 @@
 
 #include "ethsnarks.hpp"
 #include "utils.hpp"
-#include "gadgets/mimc.hpp"
 #include "gadgets/merkle_tree.hpp"
 
 using namespace ethsnarks;
@@ -18,17 +17,15 @@ namespace Loopring
 
 struct TradeHistoryState
 {
-    const VariableT filled;
-    const VariableT cancelled;
-    const VariableT orderID;
+    VariableT filled;
+    VariableT cancelled;
+    VariableT orderID;
 };
 
 class UpdateTradeHistoryGadget : public GadgetT
 {
 public:
     const VariableT merkleRootBefore;
-
-    libsnark::dual_variable_gadget<FieldT> fill;
 
     HashTradingHistoryLeaf leafBefore;
     HashTradingHistoryLeaf leafAfter;
@@ -49,8 +46,6 @@ public:
 
         merkleRootBefore(_merkleRoot),
 
-        fill(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fill")),
-
         leafBefore(pb, var_array({before.filled, before.cancelled, before.orderID}), FMT(prefix, ".leafBefore")),
         leafAfter(pb, var_array({after.filled, after.cancelled, after.orderID}), FMT(prefix, ".leafAfter")),
 
@@ -61,7 +56,7 @@ public:
 
     }
 
-    const VariableT getNewRoot() const
+    const VariableT result() const
     {
         return rootCalculatorAfter.result();
     }

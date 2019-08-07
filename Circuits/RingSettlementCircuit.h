@@ -273,31 +273,31 @@ public:
         // Update OwnerA
         updateBalanceS_A(pb, balancesRootA, orderA.tokenS.bits,
                          {balanceS_A.front(), tradingHistoryRootS_A},
-                         {balanceS_A.back(), updateTradeHistoryA.getNewRoot()},
+                         {balanceS_A.back(), updateTradeHistoryA.result()},
                          FMT(prefix, ".updateBalanceS_A")),
-        updateBalanceB_A(pb, updateBalanceS_A.getNewRoot(), orderA.tokenB.bits,
+        updateBalanceB_A(pb, updateBalanceS_A.result(), orderA.tokenB.bits,
                          {balanceB_A.front(), tradingHistoryRootB_A},
                          {balanceB_A.back(), tradingHistoryRootB_A},
                          FMT(prefix, ".updateBalanceB_A")),
         nonce_A(make_variable(pb, FMT(prefix, ".nonce_A"))),
         updateAccount_A(pb, _accountsRoot, orderA.accountID.bits,
                         {orderA.publicKey.x, orderA.publicKey.y, nonce_A, balancesRootA},
-                        {orderA.publicKey.x, orderA.publicKey.y, nonce_A, updateBalanceB_A.getNewRoot()},
+                        {orderA.publicKey.x, orderA.publicKey.y, nonce_A, updateBalanceB_A.result()},
                         FMT(prefix, ".updateAccount_A")),
 
         // Update OwnerB
         updateBalanceS_B(pb, balancesRootB, orderB.tokenS.bits,
                          {balanceS_B.front(), tradingHistoryRootS_B},
-                         {balanceS_B.back(), updateTradeHistoryB.getNewRoot()},
+                         {balanceS_B.back(), updateTradeHistoryB.result()},
                          FMT(prefix, ".updateBalanceS_B")),
-        updateBalanceB_B(pb, updateBalanceS_B.getNewRoot(), orderB.tokenB.bits,
+        updateBalanceB_B(pb, updateBalanceS_B.result(), orderB.tokenB.bits,
                          {balanceB_B.front(), tradingHistoryRootB_B},
                          {balanceB_B.back(), tradingHistoryRootB_B},
                          FMT(prefix, ".updateBalanceB_B")),
         nonce_B(make_variable(pb, FMT(prefix, ".nonce_B"))),
         updateAccount_B(pb, updateAccount_A.result(), orderB.accountID.bits,
                         {orderB.publicKey.x, orderB.publicKey.y, nonce_B, balancesRootB},
-                        {orderB.publicKey.x, orderB.publicKey.y, nonce_B, updateBalanceB_B.getNewRoot()},
+                        {orderB.publicKey.x, orderB.publicKey.y, nonce_B, updateBalanceB_B.result()},
                         FMT(prefix, ".updateAccount_B")),
 
         // Update Protocol pool
@@ -305,7 +305,7 @@ public:
                          {balanceA_P.front(), constants.emptyTradeHistory},
                          {balanceA_P.back(), constants.emptyTradeHistory},
                          FMT(prefix, ".updateBalanceA_P")),
-        updateBalanceB_P(pb, updateBalanceA_P.getNewRoot(), orderB.tokenB.bits,
+        updateBalanceB_P(pb, updateBalanceA_P.result(), orderB.tokenB.bits,
                          {balanceB_P.front(), constants.emptyTradeHistory},
                          {balanceB_P.back(), constants.emptyTradeHistory},
                          FMT(prefix, ".updateBalanceB_P")),
@@ -315,7 +315,7 @@ public:
                          {balanceA_O.front(), tradingHistoryRootA_O},
                          {balanceA_O.back(), tradingHistoryRootA_O},
                          FMT(prefix, ".updateBalanceA_O")),
-        updateBalanceB_O(pb, updateBalanceA_O.getNewRoot(), orderB.tokenB.bits,
+        updateBalanceB_O(pb, updateBalanceA_O.result(), orderB.tokenB.bits,
                          {balanceB_O.front(), tradingHistoryRootB_O},
                          {balanceB_O.back(), tradingHistoryRootB_O},
                          FMT(prefix, ".updateBalanceB_O"))
@@ -330,12 +330,12 @@ public:
 
     const VariableT getNewProtocolBalancesRoot() const
     {
-        return updateBalanceB_P.getNewRoot();
+        return updateBalanceB_P.result();
     }
 
     const VariableT getNewOperatorBalancesRoot() const
     {
-        return updateBalanceB_O.getNewRoot();
+        return updateBalanceB_O.result();
     }
 
     const std::vector<VariableArrayT> getPublicData() const

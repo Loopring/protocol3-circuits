@@ -16,13 +16,13 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
+// Checks if the rounding error of (A * B / C) is <= 1%
 class RoundingErrorGadget : public GadgetT
 {
 public:
     MulDivGadget mulDiv;
-    VariableT remainderx100;
-    LeqGadget multiplied_lt_remainderx100;
-    VariableT valid;
+    UnsafeMulGadget remainderx100;
+    LeqGadget remainderx100_leq_multiplied;
 
     RoundingErrorGadget(
         ProtoboardT& pb,
@@ -30,38 +30,38 @@ public:
         const VariableT& _value,
         const VariableT& _numerator,
         const VariableT& _denominator,
+        unsigned int numBitsValue,
+        unsigned int numBitsNumerator,
         unsigned int numBitsDenominator,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
         mulDiv(pb, constants, _value, _numerator, _denominator, numBitsDenominator, FMT(prefix, ".multiplied")),
-        remainderx100(make_variable(pb, FMT(prefix, ".remainderx100"))),
-        multiplied_lt_remainderx100(pb, mulDiv.multiplied(), remainderx100, NUM_BITS_AMOUNT * 2, FMT(prefix, ".multiplied_lt_remainderx100")),
-        valid(make_variable(pb, FMT(prefix, ".valid")))
+        remainderx100(pb, mulDiv.getRemainder(), constants._100, FMT(prefix, ".remainderx100")),
+        remainderx100_leq_multiplied(pb, remainderx100.result(), mulDiv.multiplied(), numBitsValue + numBitsNumerator, FMT(prefix, ".remainderx100_leq_multiplied"))
     {
-
+        assert(numBitsValue + numBitsNumerator <= NUM_BITS_FIELD_CAPACITY);
+        assert(numBitsDenominator <= NUM_BITS_FIELD_CAPACITY - 7 /*=ceil(log2(100))*/);
     }
 
     const VariableT& isValid()
     {
-        return valid;
+        return remainderx100_leq_multiplied.leq();
     }
 
     void generate_r1cs_witness()
     {
         mulDiv.generate_r1cs_witness();
-        pb.val(remainderx100) = pb.val(mulDiv.getRemainder()) * 100;
-        multiplied_lt_remainderx100.generate_r1cs_witness();
-        pb.val(valid) = FieldT::one() - pb.val(multiplied_lt_remainderx100.lt());
+        remainderx100.generate_r1cs_witness();
+        remainderx100_leq_multiplied.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
         mulDiv.generate_r1cs_constraints();
-        pb.add_r1cs_constraint(ConstraintT(mulDiv.getRemainder() * 100, FieldT::one(), remainderx100), FMT(annotation_prefix, ".remainder * 100 == remainderx100"));
-        multiplied_lt_remainderx100.generate_r1cs_constraints();
-        pb.add_r1cs_constraint(ConstraintT(FieldT::one() - multiplied_lt_remainderx100.lt(), FieldT::one(), valid), FMT(annotation_prefix, ".valid"));
+        remainderx100.generate_r1cs_constraints();
+        remainderx100_leq_multiplied.generate_r1cs_constraints();
     }
 };
 
@@ -111,10 +111,6 @@ public:
         protocolFee.generate_r1cs_witness();
         fee.generate_r1cs_witness();
         rebate.generate_r1cs_witness();
-
-        // print(pb, "protocolFee: ", protocolFee.result());
-        // print(pb, "fee: ", fee.result());
-        // print(pb, "rebate: ", rebate.result());
     }
 
     void generate_r1cs_constraints()
@@ -171,7 +167,8 @@ public:
         validAllOrNoneSell(pb, notValidAllOrNoneSell.result(), FMT(prefix, "validAllOrNoneSell")),
         validAllOrNoneBuy(pb, notValidAllOrNoneBuy.result(), FMT(prefix, "validAllOrNoneBuy")),
 
-        checkRoundingError(pb, constants, fillAmountS, order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, FMT(prefix, ".checkRoundingError")),
+        checkRoundingError(pb, constants, fillAmountS, order.amountB.packed, order.amountS.packed,
+                           NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".checkRoundingError")),
 
         isNonZeroFillAmountS(pb, fillAmountS, FMT(prefix, "isNonZeroFillAmountS")),
         isNonZeroFillAmountB(pb, fillAmountB, FMT(prefix, "isNonZeroFillAmountB")),
@@ -245,7 +242,6 @@ public:
 class MaxFillAmountsGadget : public GadgetT
 {
 public:
-    const OrderGadget& order;
 
     TernaryGadget limit;
     MinGadget filledLimited;
@@ -259,12 +255,10 @@ public:
     MaxFillAmountsGadget(
         ProtoboardT& pb,
         const Constants& constants,
-        const OrderGadget& _order,
+        const OrderGadget& order,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
-
-        order(_order),
 
         limit(pb, order.buy.packed, order.amountB.packed, order.amountS.packed, FMT(prefix, ".limit")),
         filledLimited(pb, limit.result(), order.tradeHistory.getFilled(), NUM_BITS_AMOUNT, FMT(prefix, ".filledLimited")),
@@ -298,14 +292,6 @@ public:
         remainingS.generate_r1cs_witness();
         fillAmountS.generate_r1cs_witness();
         fillAmountB.generate_r1cs_witness();
-
-        // print(pb, "amountS", order.amountS.packed);
-        // print(pb, "remainingBeforeCancelled", remainingBeforeCancelled.result());
-        // print(pb, "remainingS", remainingS.result());
-        // print(pb, "filledBefore", order.tradeHistory.getFilled());
-        // print(pb, "order.balanceS", order.balanceS);
-        // print(pb, "MaxFillAmountS", fillAmountS.result());
-        // print(pb, "MaxFillAmountB", fillAmountB.result());
     }
 
     void generate_r1cs_constraints()
@@ -337,11 +323,6 @@ class TakerMakerMatchingGadget : public GadgetT
 {
 public:
 
-    const Amounts _takerOrder;
-    const Fill _takerFill;
-    const Amounts _makerOrder;
-    const Fill _makerFill;
-
     LeqGadget takerFillB_lt_makerFillS;
 
     MulDivGadget makerFillB_T;
@@ -364,11 +345,6 @@ public:
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
-
-        _takerOrder(takerOrder),
-        _takerFill(takerFill),
-        _makerOrder(makerOrder),
-        _makerFill(makerFill),
 
         takerFillB_lt_makerFillS(pb, takerFill.B, makerFill.S, NUM_BITS_AMOUNT * 2, FMT(prefix, ".takerFill.B < makerFill.B")),
 
