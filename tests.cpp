@@ -47,6 +47,24 @@ BigInt getRandomFieldElementAsBigInt(unsigned int numBits = 254)
     return v;
 }
 
+BigInt getMaxFieldElementAsBigInt(unsigned int numBits = 254)
+{
+    if (numBits >= 254)
+    {
+        return BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495616");
+    }
+    else
+    {
+        BigInt m(1);
+        for (unsigned int b = 0; b < numBits; b++)
+        {
+            m *= 2;
+        }
+        m -= 1;
+        return m;
+    }
+}
+
 FieldT getRandomFieldElement(unsigned int numBits = 254)
 {
     return toFieldElement(getRandomFieldElementAsBigInt(numBits));
@@ -193,7 +211,8 @@ TEST_CASE("AND", "[AndGadget]")
 {
     unsigned int maxNumInputs = 64;
     unsigned int numIterations = 128;
-    for (unsigned int n = 2; n < maxNumInputs; n++)
+    for (unsigned int n = 2; n < maxNumInputs; n++) {
+        DYNAMIC_SECTION("Num inputs: " << n)
     {
         for (unsigned int j = 0; j < numIterations; j++)
         {
@@ -219,14 +238,15 @@ TEST_CASE("AND", "[AndGadget]")
             REQUIRE(pb.is_satisfied());
             REQUIRE((pb.val(andGadget.result()) == exepectedValue));
         }
-    }
+    }}
 }
 
 TEST_CASE("OR", "[OrGadget]")
 {
     unsigned int maxNumInputs = 64;
     unsigned int numIterations = 128;
-    for (unsigned int n = 2; n < maxNumInputs; n++)
+    for (unsigned int n = 2; n < maxNumInputs; n++) {
+        DYNAMIC_SECTION("Num inputs: " << n)
     {
         for (unsigned int j = 0; j < numIterations; j++)
         {
@@ -252,7 +272,7 @@ TEST_CASE("OR", "[OrGadget]")
             REQUIRE(pb.is_satisfied());
             REQUIRE((pb.val(orGadget.result()) == exepectedValue));
         }
-    }
+    }}
 }
 
 TEST_CASE("NOT", "[NotGadget]")
@@ -288,7 +308,8 @@ TEST_CASE("XOR array", "[XorArrayGadget]")
 {
     unsigned int maxNumInputs = 128;
     unsigned int numIterations = 16;
-    for (unsigned int n = 1; n < maxNumInputs; n++)
+    for (unsigned int n = 1; n < maxNumInputs; n++) {
+        DYNAMIC_SECTION("Num inputs: " << n)
     {
         for (unsigned int j = 0; j < numIterations; j++)
         {
@@ -314,163 +335,104 @@ TEST_CASE("XOR array", "[XorArrayGadget]")
 
             REQUIRE(pb.is_satisfied());
         }
-    }
+    }}
 }
 
 TEST_CASE("Equal", "[EqualGadget]")
 {
-    unsigned int maxLength = 252;
-    unsigned int numIterations = 8;
-    for (unsigned int n = 1; n <= maxLength; n++)
+    unsigned int numIterations = 128;
+
+    auto equalChecked = [](const FieldT& _A, const FieldT& _B)
     {
         protoboard<FieldT> pb;
 
-        pb_variable<FieldT> a = make_variable(pb, ".A");
-        pb_variable<FieldT> b = make_variable(pb, ".B");
+        pb_variable<FieldT> a = make_variable(pb, _A, ".A");
+        pb_variable<FieldT> b = make_variable(pb, _B, ".B");
 
-        EqualGadget equalGadget(pb, a, b, n, "equalGadget");
+        EqualGadget equalGadget(pb, a, b, "equalGadget");
         equalGadget.generate_r1cs_constraints();
+        equalGadget.generate_r1cs_witness();
 
-        // 0 == 0
+        FieldT expectedResult = (_A == _B) ? FieldT::one() : FieldT::zero();
+        REQUIRE(pb.is_satisfied());
+        REQUIRE((pb.val(equalGadget.result()) == expectedResult));
+    };
+
+    FieldT max = getMaxFieldElement();
+
+    SECTION("0 == 0")
+    {
+        equalChecked(0, 0);
+    }
+
+    SECTION("max == max")
+    {
+        equalChecked(max, max);
+    }
+
+    SECTION("random == random")
+    {
+        for (unsigned int i = 0; i < numIterations; i++)
         {
-            pb.val(a) = 0;
-            pb.val(b) = 0;
-            equalGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(equalGadget.result()) == FieldT::one()));
+            FieldT r = getRandomFieldElement();
+            equalChecked(r, r);
         }
+    }
 
-        // max == max
+    SECTION("random")
+    {
+        for (unsigned int i = 0; i < numIterations; i++)
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = getMaxFieldElement(n);
-            equalGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(equalGadget.result()) == FieldT::one()));
-        }
-
-        // Random field elements ==
-        for (unsigned int j = 0; j < numIterations; j++)
-        {
-            pb.val(a) = getRandomFieldElement(n);
-            pb.val(b) = pb.val(a);
-            equalGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(equalGadget.result()) == FieldT::one()));
-        }
-
-        // 0 != max
-        {
-            pb.val(a) = 0;
-            pb.val(b) = getMaxFieldElement(n);
-
-            equalGadget.generate_r1cs_witness();
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(equalGadget.result()) == FieldT::zero()));
-        }
-
-        // max != 0
-        {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = 0;
-            equalGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(equalGadget.result()) == FieldT::zero()));
-        }
-
-        // Random field elements !=
-        for (unsigned int j = 0; j < numIterations; j++)
-        {
-            pb.val(a) = getRandomFieldElement(n);
-            pb.val(b) = getRandomFieldElement(n);
-            equalGadget.generate_r1cs_witness();
-            if (pb.val(a) == pb.val(b))
-            {
-                continue;
-            }
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(equalGadget.result()) == FieldT::zero()));
+            equalChecked(getRandomFieldElement(), getRandomFieldElement());
         }
     }
 }
 
 TEST_CASE("RequireEqual", "[RequireEqualGadget]")
 {
-    unsigned int maxLength = 254;
-    unsigned int numIterations = 8;
-    for (unsigned int n = 1; n <= maxLength; n++)
+    unsigned int numIterations = 128;
+
+    auto requireEqualChecked = [](const FieldT& _A, const FieldT& _B)
     {
         protoboard<FieldT> pb;
 
-        pb_variable<FieldT> a = make_variable(pb, ".A");
-        pb_variable<FieldT> b = make_variable(pb, ".B");
+        pb_variable<FieldT> a = make_variable(pb, _A, ".A");
+        pb_variable<FieldT> b = make_variable(pb, _B, ".B");
 
         RequireEqualGadget requireEqualGadget(pb, a, b, "requireEqualGadget");
         requireEqualGadget.generate_r1cs_constraints();
+        requireEqualGadget.generate_r1cs_witness();
 
-        // 0 == 0
+        bool expectedSatisfied = (_A == _B);
+        REQUIRE(pb.is_satisfied() == expectedSatisfied);
+    };
+
+    FieldT max = getMaxFieldElement();
+
+    SECTION("0 == 0")
+    {
+        requireEqualChecked(0, 0);
+    }
+
+    SECTION("max == max")
+    {
+        requireEqualChecked(max, max);
+    }
+
+    SECTION("random == random")
+    {
+        for (unsigned int i = 0; i < numIterations; i++)
         {
-            pb.val(a) = 0;
-            pb.val(b) = 0;
-            requireEqualGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
+            FieldT r = getRandomFieldElement();
+            requireEqualChecked(r, r);
         }
+    }
 
-        // max == max
+    SECTION("random")
+    {
+        for (unsigned int i = 0; i < numIterations; i++)
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = getMaxFieldElement(n);
-            requireEqualGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-        }
-
-        // Random field elements ==
-        for (unsigned int j = 0; j < numIterations; j++)
-        {
-            pb.val(a) = getRandomFieldElement(n);
-            pb.val(b) = pb.val(a);
-            requireEqualGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-        }
-
-        // 0 != max
-        {
-            pb.val(a) = 0;
-            pb.val(b) = getMaxFieldElement(n);
-
-            requireEqualGadget.generate_r1cs_witness();
-            REQUIRE(!pb.is_satisfied());
-        }
-
-        // max != 0
-        {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = 0;
-            requireEqualGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
-        }
-
-        // Random field elements !=
-        for (unsigned int j = 0; j < numIterations; j++)
-        {
-            pb.val(a) = getRandomFieldElement(n);
-            pb.val(b) = getRandomFieldElement(n);
-            requireEqualGadget.generate_r1cs_witness();
-            if (pb.val(a) == pb.val(b))
-            {
-                continue;
-            }
-
-            REQUIRE(!pb.is_satisfied());
+            requireEqualChecked(getRandomFieldElement(), getRandomFieldElement());
         }
     }
 }
@@ -479,67 +441,47 @@ TEST_CASE("RequireZeroAorB", "[RequireZeroAorBGadget]")
 {
     unsigned int numIterations = 128;
 
-    protoboard<FieldT> pb;
-
-    pb_variable<FieldT> a = make_variable(pb, ".A");
-    pb_variable<FieldT> b = make_variable(pb, ".B");
-
-    RequireZeroAorBGadget requireZeroAorBGadget(pb, a, b, "requireZeroAorBGadget");
-    requireZeroAorBGadget.generate_r1cs_constraints();
-
-    // 0 || 0
+    auto requireZeroAorBChecked = [](const FieldT& _A, const FieldT& _B)
     {
-        pb.val(a) = 0;
-        pb.val(b) = 0;
+        protoboard<FieldT> pb;
+
+        pb_variable<FieldT> a = make_variable(pb, _A, ".A");
+        pb_variable<FieldT> b = make_variable(pb, _B, ".B");
+
+        RequireZeroAorBGadget requireZeroAorBGadget(pb, a, b, "requireZeroAorBGadget");
+        requireZeroAorBGadget.generate_r1cs_constraints();
         requireZeroAorBGadget.generate_r1cs_witness();
 
-        REQUIRE(pb.is_satisfied());
+        bool expectedSatisfied = (_A == 0) || (_B == 0);
+        REQUIRE(pb.is_satisfied() == expectedSatisfied);
+    };
+
+    SECTION("0 || 0")
+    {
+        requireZeroAorBChecked(0, 0);
     }
 
-    for (unsigned int i = 0; i < numIterations; i++)
+    SECTION("0 || random")
     {
-        // 0 || non-zero
+        for (unsigned int i = 0; i < numIterations; i++)
         {
-            pb.val(a) = 0;
-            pb.val(b) = getRandomFieldElement();
-            while(pb.val(b) == 0)
-            {
-                pb.val(b) = getRandomFieldElement();
-            }
-            requireZeroAorBGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
+            requireZeroAorBChecked(0, getRandomFieldElement());
         }
+    }
 
-        // non-zero || 0
+    SECTION("random || 0")
+    {
+        for (unsigned int i = 0; i < numIterations; i++)
         {
-            pb.val(a) = getRandomFieldElement();
-            pb.val(b) = 0;
-            while(pb.val(a) == 0)
-            {
-                pb.val(a) = getRandomFieldElement();
-            }
-            requireZeroAorBGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
+            requireZeroAorBChecked(getRandomFieldElement(), 0);
         }
+    }
 
-        // non-zero || non-zero
-        for (unsigned int j = 0; j < numIterations; j++)
+    SECTION("random || random")
+    {
+        for (unsigned int i = 0; i < numIterations; i++)
         {
-            pb.val(a) = getRandomFieldElement();
-            pb.val(b) = getRandomFieldElement();
-            while(pb.val(a) == 0)
-            {
-                pb.val(a) = getRandomFieldElement();
-            }
-            while(pb.val(b) == 0)
-            {
-                pb.val(b) = getRandomFieldElement();
-            }
-            requireZeroAorBGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            requireZeroAorBChecked(getRandomFieldElement(), getRandomFieldElement());
         }
     }
 }
@@ -555,7 +497,7 @@ TEST_CASE("RequireNotZero", "[RequireNotZeroGadget]")
     RequireNotZeroGadget requireNotZeroGadget(pb, a, "requireNotZeroGadget");
     requireNotZeroGadget.generate_r1cs_constraints();
 
-    // 0
+    SECTION("0")
     {
         pb.val(a) = 0;
         requireNotZeroGadget.generate_r1cs_witness();
@@ -563,17 +505,19 @@ TEST_CASE("RequireNotZero", "[RequireNotZeroGadget]")
         REQUIRE(!pb.is_satisfied());
     }
 
-    // non-zero
-    for (unsigned int i = 0; i < numIterations; i++)
+    SECTION("non-zero")
     {
-        pb.val(a) = getRandomFieldElement();
-        while(pb.val(a) == 0)
+        for (unsigned int i = 0; i < numIterations; i++)
         {
             pb.val(a) = getRandomFieldElement();
-        }
-        requireNotZeroGadget.generate_r1cs_witness();
+            while(pb.val(a) == 0)
+            {
+                pb.val(a) = getRandomFieldElement();
+            }
+            requireNotZeroGadget.generate_r1cs_witness();
 
-        REQUIRE(pb.is_satisfied());
+            REQUIRE(pb.is_satisfied());
+        }
     }
 }
 
@@ -581,368 +525,346 @@ TEST_CASE("RequireNotEqual", "[RequireNotEqualGadget]")
 {
     unsigned int maxLength = 254;
     unsigned int numIterations = 8;
-    for (unsigned int n = 1; n <= maxLength; n++)
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit-length: " << n)
     {
-        protoboard<FieldT> pb;
-
-        pb_variable<FieldT> a = make_variable(pb, ".A");
-        pb_variable<FieldT> b = make_variable(pb, ".B");
-
-        RequireNotEqualGadget requireNotEqualGadget(pb, a, b, "requireNotEqualGadget");
-        requireNotEqualGadget.generate_r1cs_constraints();
-
-        // 0 == 0
+        auto requireNotEqualChecked = [n](const FieldT& _A, const FieldT& _B)
         {
-            pb.val(a) = 0;
-            pb.val(b) = 0;
+            protoboard<FieldT> pb;
+
+            pb_variable<FieldT> a = make_variable(pb, _A, ".A");
+            pb_variable<FieldT> b = make_variable(pb, _B, ".B");
+
+            RequireNotEqualGadget requireNotEqualGadget(pb, a, b, "requireNotEqualGadget");
+            requireNotEqualGadget.generate_r1cs_constraints();
             requireNotEqualGadget.generate_r1cs_witness();
 
-            REQUIRE(!pb.is_satisfied());
+            bool expectedSatisfied = (_A != _B);
+            REQUIRE(pb.is_satisfied() == expectedSatisfied);
+        };
+
+        FieldT max = getMaxFieldElement(n);
+
+        SECTION("0 != 0")
+        {
+            requireNotEqualChecked(0, 0);
         }
 
-        // max == max
+        SECTION("max != max")
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = getMaxFieldElement(n);
-            requireNotEqualGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            requireNotEqualChecked(max, max);
         }
 
-        // Random field elements ==
-        for (unsigned int j = 0; j < numIterations; j++)
+        SECTION("Random value")
         {
-            pb.val(a) = getRandomFieldElement(n);
-            pb.val(b) = pb.val(a);
-            requireNotEqualGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            FieldT r = getRandomFieldElement(n);
+            requireNotEqualChecked(r, r);
         }
 
-        // 0 != max
+        SECTION("0 != max")
         {
-            pb.val(a) = 0;
-            pb.val(b) = getMaxFieldElement(n);
-
-            requireNotEqualGadget.generate_r1cs_witness();
-            REQUIRE(pb.is_satisfied());
+            requireNotEqualChecked(0, max);
         }
 
-        // max != 0
+        SECTION("max != 0")
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = 0;
-            requireNotEqualGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
+            requireNotEqualChecked(max, 0);
         }
 
-        // Random field elements !=
-        for (unsigned int j = 0; j < numIterations; j++)
+        SECTION("Random")
         {
-            pb.val(a) = getRandomFieldElement(n);
-            pb.val(b) = getRandomFieldElement(n);
-            requireNotEqualGadget.generate_r1cs_witness();
-            if (pb.val(a) == pb.val(b))
+            for (unsigned int j = 0; j < numIterations; j++)
             {
-                continue;
+                requireNotEqualChecked(getRandomFieldElement(n), getRandomFieldElement(n));
             }
-
-            REQUIRE(pb.is_satisfied());
         }
-    }
+    }}
 }
 
 TEST_CASE("Min", "[MinGadget]")
 {
     unsigned int maxLength = 252;
     unsigned int numIterations = 8;
-    for (unsigned int n = 1; n <= maxLength; n++)
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit-length: " << n)
     {
-        protoboard<FieldT> pb;
-
-        pb_variable<FieldT> a = make_variable(pb, ".A");
-        pb_variable<FieldT> b = make_variable(pb, ".B");
-
-        MinGadget minGadget(pb, a, b, n, "minGadget");
-        minGadget.generate_r1cs_constraints();
-
-        // min(0, 0)
+        auto requireLeqChecked = [n](const BigInt& _A, const BigInt& _B)
         {
-            pb.val(a) = 0;
-            pb.val(b) = 0;
+            protoboard<FieldT> pb;
+
+            pb_variable<FieldT> a = make_variable(pb, toFieldElement(_A), ".A");
+            pb_variable<FieldT> b = make_variable(pb, toFieldElement(_B), ".B");
+
+            MinGadget minGadget(pb, a, b, n, "minGadget");
+            minGadget.generate_r1cs_constraints();
             minGadget.generate_r1cs_witness();
 
+            BigInt expectedResult = (_A < _B) ? _A : _B;
             REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(minGadget.result()) == FieldT::zero()));
-        }
+            REQUIRE((pb.val(minGadget.result()) == toFieldElement(expectedResult)));
+        };
 
-        // min(max, max)
+        BigInt max = getMaxFieldElementAsBigInt(n);
+
+        SECTION("min(0, 0)")
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = getMaxFieldElement(n);
-            minGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(minGadget.result()) == getMaxFieldElement(n)));
+            requireLeqChecked(0, 0);
         }
 
-        // min(0, max)
+        SECTION("min(1, 0)")
         {
-            pb.val(a) = 0;
-            pb.val(b) = getMaxFieldElement(n);
-            minGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(minGadget.result()) == FieldT::zero()));
+            requireLeqChecked(1, 0);
         }
 
-        // min(max, 0)
+        SECTION("min(0, 1)")
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = 0;
-            minGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(minGadget.result()) == FieldT::zero()));
+            requireLeqChecked(0, 1);
         }
 
-        // Random
-        for (unsigned int j = 0; j < numIterations; j++)
+        SECTION("min(max, max)")
         {
-            BigInt bnA = getRandomFieldElementAsBigInt(n);
-            BigInt bnB = getRandomFieldElementAsBigInt(n);
-            pb.val(a) = toFieldElement(bnA);
-            pb.val(b) = toFieldElement(bnB);
-            minGadget.generate_r1cs_witness();
-            FieldT expectedValue = bnA < bnB ? pb.val(a) : pb.val(b);
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(minGadget.result()) == expectedValue));
+            requireLeqChecked(max, max);
         }
-    }
+
+        SECTION("min(max - 1, max)")
+        {
+            requireLeqChecked(max - 1, max);
+        }
+
+        SECTION("min(max, max - 1)")
+        {
+            requireLeqChecked(max, max - 1);
+        }
+
+        SECTION("min(0, max)")
+        {
+            requireLeqChecked(0, max);
+        }
+
+        SECTION("min(max, 0)")
+        {
+            requireLeqChecked(max, 0);
+        }
+
+        SECTION("Random")
+        {
+            requireLeqChecked(getRandomFieldElementAsBigInt(n), getRandomFieldElementAsBigInt(n));
+        }
+    }}
 }
 
 TEST_CASE("RequireLeq", "[RequireLeqGadget]")
 {
     unsigned int maxLength = 252;
     unsigned int numIterations = 8;
-    for (unsigned int n = 1; n <= maxLength; n++)
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit-length: " << n)
     {
-        protoboard<FieldT> pb;
-
-        pb_variable<FieldT> a = make_variable(pb, ".A");
-        pb_variable<FieldT> b = make_variable(pb, ".B");
-
-        RequireLeqGadget requireLeqGadget(pb, a, b, n, "requireLeqGadget");
-        requireLeqGadget.generate_r1cs_constraints();
-
-        // min(0, 0)
+        auto requireLeqChecked = [n](const BigInt& _A, const BigInt& _B)
         {
-            pb.val(a) = 0;
-            pb.val(b) = 0;
+            protoboard<FieldT> pb;
+
+            pb_variable<FieldT> a = make_variable(pb, toFieldElement(_A), ".A");
+            pb_variable<FieldT> b = make_variable(pb, toFieldElement(_B), ".B");
+
+            RequireLeqGadget requireLeqGadget(pb, a, b, n, "requireLeqGadget");
+            requireLeqGadget.generate_r1cs_constraints();
             requireLeqGadget.generate_r1cs_witness();
 
-            REQUIRE(pb.is_satisfied());
-        }
+            bool expectedSatisfied = _A <= _B;
+            REQUIRE(pb.is_satisfied() == expectedSatisfied);
+        };
 
-        // min(max, max)
+        BigInt max = getMaxFieldElementAsBigInt(n);
+
+        SECTION("0 <= 0")
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = getMaxFieldElement(n);
-            requireLeqGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
+            requireLeqChecked(0, 0);
         }
 
-        // min(0, max)
+        SECTION("0 <= 1")
         {
-            pb.val(a) = 0;
-            pb.val(b) = getMaxFieldElement(n);
-            requireLeqGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
+            requireLeqChecked(0, 1);
         }
 
-        // min(max, 0)
+        SECTION("max <= max")
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = 0;
-            requireLeqGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            requireLeqChecked(max, max);
         }
 
-        // Random
-        for (unsigned int j = 0; j < numIterations; j++)
+        SECTION("max - 1 <= max")
         {
-            BigInt bnA = getRandomFieldElementAsBigInt(n);
-            BigInt bnB = getRandomFieldElementAsBigInt(n);
-            pb.val(a) = toFieldElement(bnA);
-            pb.val(b) = toFieldElement(bnB);
-            requireLeqGadget.generate_r1cs_witness();
-            bool expectedValue = bnA <= bnB;
-
-            REQUIRE(pb.is_satisfied() == expectedValue);
+            requireLeqChecked(max - 1, max);
         }
-    }
+
+        SECTION("max <= max - 1")
+        {
+            requireLeqChecked(max, max - 1);
+        }
+
+        SECTION("0 <= max")
+        {
+            requireLeqChecked(0, max);
+        }
+
+        SECTION("max <= 0")
+        {
+            requireLeqChecked(max, 0);
+        }
+
+        SECTION("Random")
+        {
+            for (unsigned int j = 0; j < numIterations; j++)
+            {
+                requireLeqChecked(getRandomFieldElementAsBigInt(n), getRandomFieldElementAsBigInt(n));
+            }
+        }
+    }}
 }
 
 TEST_CASE("RequireLt", "[RequireLtGadget]")
 {
     unsigned int maxLength = 252;
     unsigned int numIterations = 8;
-    for (unsigned int n = 1; n <= maxLength; n++)
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit-length: " << n)
     {
-        protoboard<FieldT> pb;
-
-        pb_variable<FieldT> a = make_variable(pb, ".A");
-        pb_variable<FieldT> b = make_variable(pb, ".B");
-
-        RequireLtGadget requireLtGadget(pb, a, b, n, "requireLtGadget");
-        requireLtGadget.generate_r1cs_constraints();
-
-        // min(0, 0)
+        auto requireLtChecked = [n](const BigInt& _A, const BigInt& _B)
         {
-            pb.val(a) = 0;
-            pb.val(b) = 0;
+            protoboard<FieldT> pb;
+
+            pb_variable<FieldT> a = make_variable(pb, toFieldElement(_A), ".A");
+            pb_variable<FieldT> b = make_variable(pb, toFieldElement(_B), ".B");
+
+            RequireLtGadget requireLtGadget(pb, a, b, n, "requireLtGadget");
+            requireLtGadget.generate_r1cs_constraints();
             requireLtGadget.generate_r1cs_witness();
 
-            REQUIRE(!pb.is_satisfied());
-        }
+            bool expectedSatisfied = _A < _B;
+            REQUIRE(pb.is_satisfied() == expectedSatisfied);
+        };
 
-        // min(max, max)
+        BigInt max = getMaxFieldElementAsBigInt(n);
+
+        SECTION("0 < 0")
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = getMaxFieldElement(n);
-            requireLtGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            requireLtChecked(0, 0);
         }
 
-        // min(0, max)
+        SECTION("max < max")
         {
-            pb.val(a) = 0;
-            pb.val(b) = getMaxFieldElement(n);
-            requireLtGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
+            requireLtChecked(max, max);
         }
 
-        // min(max, 0)
+        SECTION("0 < max")
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = 0;
-            requireLtGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            requireLtChecked(0, max);
         }
 
-        // Random
-        for (unsigned int j = 0; j < numIterations; j++)
+        SECTION("max < 0")
         {
-            BigInt bnA = getRandomFieldElementAsBigInt(n);
-            BigInt bnB = getRandomFieldElementAsBigInt(n);
-            pb.val(a) = toFieldElement(bnA);
-            pb.val(b) = toFieldElement(bnB);
-            requireLtGadget.generate_r1cs_witness();
-            bool expectedValue = bnA < bnB;
-
-            REQUIRE(pb.is_satisfied() == expectedValue);
+            requireLtChecked(max, 0);
         }
-    }
+
+        SECTION("Random")
+        {
+            for (unsigned int j = 0; j < numIterations; j++)
+            {
+                requireLtChecked(getRandomFieldElementAsBigInt(n), getRandomFieldElementAsBigInt(n));
+            }
+        }
+    }}
 }
 
 TEST_CASE("MulDiv", "[MulDivGadget]")
 {
-    unsigned int maxLength = 126;
+    unsigned int maxLength = 253/2;
     unsigned int numIterations = 8;
-    for (unsigned int n = 1; n <= maxLength; n++)
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit-length: " << n)
     {
-        protoboard<FieldT> pb;
-
-        pb_variable<FieldT> a = make_variable(pb, ".A");
-        pb_variable<FieldT> b = make_variable(pb, ".B");
-        pb_variable<FieldT> c = make_variable(pb, ".C");
-
-        Constants constants(pb, "constants");
-        MulDivGadget mulDivGadget(pb, constants, a, b, c, n, "mulDivGadget");
-        mulDivGadget.generate_r1cs_constraints();
-
-        // Divide by zero
-        // rand * rand / 0 = invalid
-        for (unsigned int j = 0; j < numIterations; j++)
+        auto mulDivChecked = [n](const BigInt& _value, const BigInt& _numerator, const BigInt& _denominator,
+                                 bool expectedSatisfied, bool bModifyRemainder = false)
         {
-            pb.val(a) = getRandomFieldElement(n);
-            pb.val(b) = getRandomFieldElement(n);
-            pb.val(c) = 0;
+            protoboard<FieldT> pb;
+
+            pb_variable<FieldT> value = make_variable(pb, toFieldElement(_value), "value");
+            pb_variable<FieldT> numerator = make_variable(pb, toFieldElement(_numerator), "numerator");
+            pb_variable<FieldT> denominator = make_variable(pb, toFieldElement(_denominator), "denominator");
+
+            Constants constants(pb, "constants");
+            MulDivGadget mulDivGadget(pb, constants, value, numerator, denominator, n, n, n, "mulDivGadget");
+            mulDivGadget.generate_r1cs_constraints();
             mulDivGadget.generate_r1cs_witness();
 
-            REQUIRE(!pb.is_satisfied());
-        }
-
-        // 0 * 0 / 1 = 0
-        {
-            pb.val(a) = 0;
-            pb.val(b) = 0;
-            pb.val(c) = 1;
-            mulDivGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(mulDivGadget.result()) == FieldT::zero()));
-            REQUIRE((pb.val(mulDivGadget.getRemainder()) == FieldT::zero()));
-        }
-
-        // max * max / max
-        {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = getMaxFieldElement(n);
-            pb.val(c) = getMaxFieldElement(n);
-            mulDivGadget.generate_r1cs_witness();
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(mulDivGadget.result()) == getMaxFieldElement(n)));
-            REQUIRE((pb.val(mulDivGadget.getRemainder()) == FieldT::zero()));
-        }
-
-        // remainder >= C
-        {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = getMaxFieldElement(n);
-            pb.val(c) = getMaxFieldElement(n);
-            mulDivGadget.generate_r1cs_witness();
-            pb.val(mulDivGadget.remainder.packed) += pb.val(c);
-            mulDivGadget.remainder.generate_r1cs_witness_from_packed();
-            pb.val(mulDivGadget._result) -= FieldT::one();
-
-            REQUIRE(!pb.is_satisfied());
-        }
-
-        // Random
-        for (unsigned int j = 0; j < numIterations; j++)
-        {
-            BigInt bnA = getRandomFieldElementAsBigInt(n);
-            BigInt bnB = getRandomFieldElementAsBigInt(n);
-            BigInt bnC = getRandomFieldElementAsBigInt(n);
-            while (bnC == 0)
+            if (bModifyRemainder)
             {
-                bnC = getRandomFieldElementAsBigInt(n);
+                pb.val(mulDivGadget.remainder.packed) += pb.val(denominator);
+                mulDivGadget.remainder.generate_r1cs_witness_from_packed();
+                pb.val(mulDivGadget.quotient) -= FieldT::one();
             }
-            pb.val(a) = toFieldElement(bnA);
-            pb.val(b) = toFieldElement(bnB);
-            pb.val(c) = toFieldElement(bnC);
-            mulDivGadget.generate_r1cs_witness();
 
-            BigInt multiplied = bnA * bnB;
-            BigInt remainder = multiplied % bnC;
-            BigInt result = multiplied / bnC;
+            REQUIRE(pb.is_satisfied() == expectedSatisfied);
+            if (expectedSatisfied)
+            {
+                BigInt product = _value * _numerator;
+                BigInt remainder = product % _denominator;
+                BigInt result = product / _denominator;
 
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(mulDivGadget.result()) == toFieldElement(result)));
-            REQUIRE((pb.val(mulDivGadget.getRemainder()) == toFieldElement(remainder)));
-            REQUIRE((pb.val(mulDivGadget.multiplied()) == toFieldElement(multiplied)));
+                REQUIRE((pb.val(mulDivGadget.result()) == toFieldElement(result)));
+                REQUIRE((pb.val(mulDivGadget.getRemainder()) == toFieldElement(remainder)));
+                REQUIRE((pb.val(mulDivGadget.getProduct()) == toFieldElement(product)));
+            }
+        };
+
+        BigInt max = getMaxFieldElementAsBigInt(n);
+
+        SECTION("Divide by zero")
+        {
+            for (unsigned int j = 0; j < numIterations; j++)
+            {
+                mulDivChecked(getRandomFieldElementAsBigInt(n), getRandomFieldElementAsBigInt(n), 0, false);
+            }
         }
-    }
+
+        SECTION("0 * 0 / 1 = 0")
+        {
+             mulDivChecked(0, 0, 1, true);
+        }
+
+        SECTION("1 * 1 / 1 = 1")
+        {
+             mulDivChecked(1, 1, 1, true);
+        }
+
+        SECTION("max * max / max = max")
+        {
+             mulDivChecked(max, max, max, true);
+        }
+
+        SECTION("max * max / 1 = max * max")
+        {
+             mulDivChecked(max, max, 1, true);
+        }
+
+        SECTION("remainder >= C")
+        {
+             mulDivChecked(max, max, max, false, true);
+        }
+
+        SECTION("Random")
+        {
+            for (unsigned int j = 0; j < numIterations; j++)
+            {
+                BigInt denominator = getRandomFieldElementAsBigInt(n);
+                while (denominator == 0)
+                {
+                    denominator = getRandomFieldElementAsBigInt(n);
+                }
+                mulDivChecked(getRandomFieldElementAsBigInt(n), getRandomFieldElementAsBigInt(n), denominator, true);
+            }
+        }
+    }}
 }
 
 TEST_CASE("UnsafeAdd", "[UnsafeAddGadget]")
@@ -1027,131 +949,114 @@ TEST_CASE("RequireAccuracy", "[RequireAccuracyGadget]")
 {
     unsigned int maxLength = 126;
     unsigned int numIterations = 8;
-    for (unsigned int n = 1; n <= maxLength; n++)
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit-length: " << n)
     {
-        protoboard<FieldT> pb;
-
-        pb_variable<FieldT> a = make_variable(pb, ".A");
-        pb_variable<FieldT> b = make_variable(pb, ".B");
-
-        Accuracy accuracy = {100 - 1, 100};
-        RequireAccuracyGadget requireAccuracyGadget(pb, a, b, accuracy, n, "requireAccuracyGadget");
-        requireAccuracyGadget.generate_r1cs_constraints();
-
-        // 0, 0
+        auto requireAccuracyChecked = [n](const FieldT& _A, const FieldT& _B, bool expectedSatisfied)
         {
-            pb.val(a) = 0;
-            pb.val(b) = 0;
+            protoboard<FieldT> pb;
+
+            pb_variable<FieldT> a = make_variable(pb, _A, ".A");
+            pb_variable<FieldT> b = make_variable(pb, _B, ".B");
+
+            Accuracy accuracy = {100 - 1, 100};
+            RequireAccuracyGadget requireAccuracyGadget(pb, a, b, accuracy, n, "requireAccuracyGadget");
+            requireAccuracyGadget.generate_r1cs_constraints();
             requireAccuracyGadget.generate_r1cs_witness();
 
-            REQUIRE(pb.is_satisfied());
+            REQUIRE(pb.is_satisfied() == expectedSatisfied);
+        };
+
+        FieldT max = getMaxFieldElement(n);
+
+        SECTION("0, 0")
+        {
+            requireAccuracyChecked(0, 0, true);
         }
 
-        // 0, max
+        SECTION("0, max")
         {
-            pb.val(a) = 0;
-            pb.val(b) = getMaxFieldElement(n);
-            requireAccuracyGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            requireAccuracyChecked(0, max, false);
         }
 
-        // max, 0
+        SECTION("max, 0")
         {
-            pb.val(a) = getMaxFieldElement(n);
-            pb.val(b) = 0;
-            requireAccuracyGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            requireAccuracyChecked(max, 0, false);
         }
 
-        // value > original value
-        for (unsigned int j = 0; j < numIterations; j++)
+        SECTION("value > original value")
         {
-            pb.val(a) = getRandomFieldElement(n);
-            while (pb.val(a) == FieldT::zero())
+            FieldT A = getRandomFieldElement(n);
+            while (A == FieldT::zero())
             {
-                pb.val(a) = getRandomFieldElement(n);
+                A = getRandomFieldElement(n);
             }
-            pb.val(b) = pb.val(a) - 1;
-            requireAccuracyGadget.generate_r1cs_witness();
-
-            REQUIRE(!pb.is_satisfied());
+            FieldT B = A - 1;
+            requireAccuracyChecked(A, B, false);
         }
 
         // Do some specific tests
         if (n == 96)
         {
-            // 100, 100
+            SECTION("100, 100")
             {
-                pb.val(a) = 100;
-                pb.val(b) = 100;
-                requireAccuracyGadget.generate_r1cs_witness();
-
-                REQUIRE(pb.is_satisfied());
+                requireAccuracyChecked(100, 100, true);
             }
 
-            // 101, 100
+            SECTION("101, 100")
             {
-                pb.val(a) = 101;
-                pb.val(b) = 100;
-                requireAccuracyGadget.generate_r1cs_witness();
-
-                REQUIRE(!pb.is_satisfied());
+                requireAccuracyChecked(101, 100, false);
             }
 
-            // 99, 100
+            SECTION("99, 100")
             {
-                pb.val(a) = 99;
-                pb.val(b) = 100;
-                requireAccuracyGadget.generate_r1cs_witness();
-
-                REQUIRE(pb.is_satisfied());
+                requireAccuracyChecked(99, 100, true);
             }
 
-            // max + 1, max
+            SECTION("max + 1, max")
             {
-                pb.val(a) = getMaxFieldElement(n) + 1;
-                pb.val(b) = getMaxFieldElement(n);
-                requireAccuracyGadget.generate_r1cs_witness();
-
-                REQUIRE(!pb.is_satisfied());
+                requireAccuracyChecked(max + 1, max, false);
             }
 
-            // max, 3000
+            SECTION("max, 3000")
             {
-                pb.val(a) = getMaxFieldElement(n);
-                pb.val(b) = 3000;
-                requireAccuracyGadget.generate_r1cs_witness();
-
-                REQUIRE(!pb.is_satisfied());
+                requireAccuracyChecked(max, 3000, false);
             }
 
-            // Exhaustive checks against a single value
-            unsigned int originalValue = 3000;
-            for(unsigned int i = 0; i < originalValue * 3; i++)
+            SECTION("Exhaustive checks against a single value")
             {
-                pb.val(a) = i;
-                pb.val(b) = originalValue;
-                requireAccuracyGadget.generate_r1cs_witness();
-                bool expectedValue = (i >= 2970 && i <= 3000);
-
-                REQUIRE(pb.is_satisfied() == expectedValue);
+                unsigned int originalValue = 3000;
+                for(unsigned int i = 0; i < originalValue * 3; i++)
+                {
+                    bool expectedSatisfied = (i >= 2970 && i <= 3000);
+                    requireAccuracyChecked(i, 3000, expectedSatisfied);
+                }
             }
         }
-    }
+    }}
 }
 
 TEST_CASE("SignatureVerifier", "[SignatureVerifier]")
 {
-    protoboard<FieldT> pb;
+     auto signatureVerifierChecked = [](const FieldT& _pubKeyX, const FieldT& _pubKeyY, const FieldT& _msg,
+                                        const Loopring::Signature& signature, bool expectedSatisfied)
+    {
+        protoboard<FieldT> pb;
 
-    jubjub::Params params;
-    jubjub::VariablePointT publicKey(pb, "publicKey");
-    pb_variable<FieldT> message = make_variable(pb, "message");
-    SignatureVerifier signatureVerifier(pb, params, publicKey, message, "signatureVerifier");
-    signatureVerifier.generate_r1cs_constraints();
+        jubjub::Params params;
+        jubjub::VariablePointT publicKey(pb, "publicKey");
+        pb.val(publicKey.x) = _pubKeyX;
+        pb.val(publicKey.y) = _pubKeyY;
+        pb_variable<FieldT> message = make_variable(pb, _msg, "message");
 
+        SignatureVerifier signatureVerifier(pb, params, publicKey, message, "signatureVerifier");
+        signatureVerifier.generate_r1cs_constraints();
+        signatureVerifier.generate_r1cs_witness(signature);
+
+        REQUIRE(pb.is_satisfied() == expectedSatisfied);
+    };
+
+    // Correct publicKey + message + signature
     FieldT pubKeyX = FieldT("21607074953141243618425427250695537464636088817373528162920186615872448542319");
     FieldT pubKeyY = FieldT("3328786100751313619819855397819808730287075038642729822829479432223775713775");
     FieldT msg = FieldT("18996832849579325290301086811580112302791300834635590497072390271656077158490");
@@ -1159,127 +1064,73 @@ TEST_CASE("SignatureVerifier", "[SignatureVerifier]")
     FieldT Ry = FieldT("3339178343289311394427480868578479091766919601142009911922211138735585687725");
     FieldT s = FieldT("219593190015660463654216479865253652653333952251250676996482368461290160677");
 
-    // All data valid
-    {
-        pb.val(publicKey.x) = pubKeyX;
-        pb.val(publicKey.y) = pubKeyY;
-        pb.val(message) = msg;
-        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
-        signatureVerifier.generate_r1cs_witness(signature);
+    // Different valid public key
+    FieldT pubKeyX_2 = FieldT("19818098172422229289422284899436629503222263750727977198150374245991932884258");
+    FieldT pubKeyY_2 = FieldT("5951877988471485350710444403782724110196846988892201970720985561004735218817");
 
-        REQUIRE(pb.is_satisfied());
+    // Signature of message signed by different keypair
+    FieldT Rx_2 = FieldT("11724635741659369482608508002194555510423986519388485904857477054244428273528");
+    FieldT Ry_2 = FieldT("1141584024686665974825800506178016776173372699473828623261155117285910293572");
+    FieldT s_2 = FieldT("48808226556453260593782345205957224790810379817643725430561166968302957481");
+
+    SECTION("All data valid")
+    {
+        signatureVerifierChecked(pubKeyX, pubKeyY, msg, Loopring::Signature(EdwardsPoint(Rx, Ry), s), true);
     }
 
-    // All zeros
+    SECTION("All zeros")
     {
-        pb.val(publicKey.x) = 0;
-        pb.val(publicKey.y) = 0;
-        pb.val(message) = 0;
-        Loopring::Signature signature(EdwardsPoint(0, 0), 0);
-        signatureVerifier.generate_r1cs_witness(signature);
-
-        REQUIRE(!pb.is_satisfied());
+        signatureVerifierChecked(0, 0, 0, Loopring::Signature(EdwardsPoint(0, 0), 0), false);
     }
 
-    // Different publicKey
+    SECTION("Wrong publicKey.x")
     {
-        pb.val(publicKey.x) = pubKeyX + 1;
-        pb.val(publicKey.y) = pubKeyY;
-        pb.val(message) = msg;
-        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
-        signatureVerifier.generate_r1cs_witness(signature);
-
-        REQUIRE(!pb.is_satisfied());
-    }
-    {
-        pb.val(publicKey.x) = pubKeyX;
-        pb.val(publicKey.y) = pubKeyY + 1;
-        pb.val(message) = msg;
-        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
-        signatureVerifier.generate_r1cs_witness(signature);
-
-        REQUIRE(!pb.is_satisfied());
-    }
-    {
-        // Different, valid public key
-        pb.val(publicKey.x) = FieldT("19818098172422229289422284899436629503222263750727977198150374245991932884258");
-        pb.val(publicKey.y) = FieldT("5951877988471485350710444403782724110196846988892201970720985561004735218817");
-        pb.val(message) = msg;
-        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
-        signatureVerifier.generate_r1cs_witness(signature);
-
-        REQUIRE(!pb.is_satisfied());
+        signatureVerifierChecked(pubKeyX + 1, pubKeyY, msg, Loopring::Signature(EdwardsPoint(Rx, Ry), s), false);
     }
 
-    // Different message
+    SECTION("Wrong publicKey.y")
     {
-        pb.val(publicKey.x) = pubKeyX;
-        pb.val(publicKey.y) = pubKeyY;
-        pb.val(message) = msg + 1;
-        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
-        signatureVerifier.generate_r1cs_witness(signature);
-
-        REQUIRE(!pb.is_satisfied());
-    }
-    {
-        pb.val(publicKey.x) = pubKeyX;
-        pb.val(publicKey.y) = pubKeyY;
-        pb.val(message) = FieldT::zero();
-        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
-        signatureVerifier.generate_r1cs_witness(signature);
-
-        REQUIRE(!pb.is_satisfied());
-    }
-    {
-        pb.val(publicKey.x) = pubKeyX;
-        pb.val(publicKey.y) = pubKeyY;
-        pb.val(message) = getMaxFieldElement();
-        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s);
-        signatureVerifier.generate_r1cs_witness(signature);
-
-        REQUIRE(!pb.is_satisfied());
+        signatureVerifierChecked(pubKeyX, pubKeyY + 1, msg, Loopring::Signature(EdwardsPoint(Rx, Ry), s), false);
     }
 
-    // Different signature
+    SECTION("Different (but valid) public key")
     {
-        pb.val(publicKey.x) = pubKeyX;
-        pb.val(publicKey.y) = pubKeyY;
-        pb.val(message) = msg;
-        Loopring::Signature signature(EdwardsPoint(Rx + 1, Ry), s);
-        signatureVerifier.generate_r1cs_witness(signature);
-
-        REQUIRE(!pb.is_satisfied());
+        signatureVerifierChecked(pubKeyX_2, pubKeyY_2, msg, Loopring::Signature(EdwardsPoint(Rx, Ry), s), false);
     }
-    {
-        pb.val(publicKey.x) = pubKeyX;
-        pb.val(publicKey.y) = pubKeyY;
-        pb.val(message) = msg;
-        Loopring::Signature signature(EdwardsPoint(Rx, Ry + 1), s);
-        signatureVerifier.generate_r1cs_witness(signature);
 
-        REQUIRE(!pb.is_satisfied());
+    SECTION("Different message")
+    {
+        signatureVerifierChecked(pubKeyX, pubKeyY, msg + 1, Loopring::Signature(EdwardsPoint(Rx, Ry), s), false);
     }
-    {
-        pb.val(publicKey.x) = pubKeyX;
-        pb.val(publicKey.y) = pubKeyY;
-        pb.val(message) = msg;
-        Loopring::Signature signature(EdwardsPoint(Rx, Ry), s + 1);
-        signatureVerifier.generate_r1cs_witness(signature);
 
-        REQUIRE(!pb.is_satisfied());
+    SECTION("Zero message value")
+    {
+        signatureVerifierChecked(pubKeyX, pubKeyY, 0, Loopring::Signature(EdwardsPoint(Rx, Ry), s), false);
     }
-    {
-        // Valid signature for a different public key (same message)
-        FieldT Rx2 = FieldT("11724635741659369482608508002194555510423986519388485904857477054244428273528");
-        FieldT Ry2 = FieldT("1141584024686665974825800506178016776173372699473828623261155117285910293572");
-        FieldT s2 = FieldT("48808226556453260593782345205957224790810379817643725430561166968302957481");
-        pb.val(publicKey.x) = pubKeyX;
-        pb.val(publicKey.y) = pubKeyY;
-        pb.val(message) = msg;
-        Loopring::Signature signature(EdwardsPoint(Rx2, Ry2), s2);
-        signatureVerifier.generate_r1cs_witness(signature);
 
-        REQUIRE(!pb.is_satisfied());
+    SECTION("Max message value")
+    {
+        signatureVerifierChecked(pubKeyX, pubKeyY, getMaxFieldElement(), Loopring::Signature(EdwardsPoint(Rx, Ry), s), false);
+    }
+
+    SECTION("Different Rx")
+    {
+        signatureVerifierChecked(pubKeyX, pubKeyY, msg, Loopring::Signature(EdwardsPoint(Rx + 1, Ry), s), false);
+    }
+
+    SECTION("Different Ry")
+    {
+        signatureVerifierChecked(pubKeyX, pubKeyY, msg, Loopring::Signature(EdwardsPoint(Rx, Ry + 1), s), false);
+    }
+
+    SECTION("Different s")
+    {
+        signatureVerifierChecked(pubKeyX, pubKeyY, msg, Loopring::Signature(EdwardsPoint(Rx, Ry), s + 1), false);
+    }
+
+    SECTION("Signature of message of different public key")
+    {
+        signatureVerifierChecked(pubKeyX, pubKeyY, msg, Loopring::Signature(EdwardsPoint(Rx_2, Ry_2), s_2), false);
     }
 }
 
@@ -1288,49 +1139,47 @@ TEST_CASE("Float", "[FloatGadget]")
     FloatEncoding encoding = Float24Encoding;
     unsigned int numBitsFloat = encoding.numBitsExponent + encoding.numBitsMantissa;
 
-    unsigned int maxLength = 127;
+    unsigned int maxLength = 96;
     unsigned int numIterations = 8;
     for (unsigned int n = 1; n <= maxLength; n++) {
-        DYNAMIC_SECTION("Bit length: " << n)
+        DYNAMIC_SECTION("Bit-length: " << n)
     {
-        protoboard<FieldT> pb;
+        auto floatChecked = [n, encoding, numBitsFloat](const FieldT& _value)
+        {
+            protoboard<FieldT> pb;
 
-        Constants constants(pb, "constants");
-        FloatGadget floatGadget(pb, constants, encoding, "floatGadget");
-        floatGadget.generate_r1cs_constraints();
+            Constants constants(pb, "constants");
+            FloatGadget floatGadget(pb, constants, encoding, "floatGadget");
+            floatGadget.generate_r1cs_constraints();
+            unsigned int f = toFloat(_value, encoding);
+            floatGadget.generate_r1cs_witness(f);
+
+            FieldT rValue = toFieldElement(fromFloat(f, encoding));
+            REQUIRE(pb.is_satisfied());
+            REQUIRE((pb.val(floatGadget.value()) == rValue));
+            REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(f, numBitsFloat)));
+        };
 
         SECTION("0")
         {
-            FieldT value = FieldT::zero();
-            floatGadget.generate_r1cs_witness(toFloat(value, encoding));
-
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(floatGadget.value()) == value));
-            REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(value, numBitsFloat)));
+            floatChecked(0);
         }
 
         SECTION("1")
         {
-            FieldT value = FieldT::one();
-            floatGadget.generate_r1cs_witness(toFloat(value, encoding));
+            floatChecked(1);
+        }
 
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(floatGadget.value()) == value));
-            REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(value, numBitsFloat)));
+        SECTION("max")
+        {
+            floatChecked(getMaxFieldElement(n));
         }
 
         SECTION("Random")
         {
             for (unsigned int j = 0; j < numIterations; j++)
             {
-                FieldT value = getRandomFieldElement(n);
-                unsigned int f = toFloat(value, encoding);
-                floatGadget.generate_r1cs_witness(FieldT(f));
-                FieldT rValue = toFieldElement(fromFloat(f, encoding));
-
-                REQUIRE(pb.is_satisfied());
-                REQUIRE((pb.val(floatGadget.value()) == rValue));
-                REQUIRE(compareBits(floatGadget.bits().get_bits(pb), toBits(FieldT(f), numBitsFloat)));
+                floatChecked(getRandomFieldElement(n));
             }
         }
     }}
@@ -1400,7 +1249,7 @@ TEST_CASE("subadd", "[subadd_gadget]")
 {
     unsigned int maxLength = 252;
     for (unsigned int n = 1; n <= maxLength; n++) {
-        DYNAMIC_SECTION("Bit length: " << n)
+        DYNAMIC_SECTION("Bit-length: " << n)
     {
         auto subaddChecked = [n](const FieldT& _from, const FieldT& _to, const FieldT& _amount,
                                  bool expectedSatisfied, const FieldT& expectedFromAfter = 0, const FieldT& expectedToAfter = 0)
@@ -1493,7 +1342,7 @@ TEST_CASE("Range limit", "[dual_variable_gadget]")
     unsigned int maxLength = 254;
     unsigned int numIterations = 16;
     for (unsigned int n = 1; n <= maxLength; n++) {
-        DYNAMIC_SECTION("Bit length: " << n)
+        DYNAMIC_SECTION("Bit-length: " << n)
     {
         auto rangeLimitChecked = [n](const FieldT& v, bool expectedSatisfied)
         {

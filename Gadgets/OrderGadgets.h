@@ -35,7 +35,7 @@ public:
     libsnark::dual_variable_gadget<FieldT> rebateBips;
 
     libsnark::dual_variable_gadget<FieldT> feeOrRebateBips;
-    LeqGadget bRebateNonZero;
+    IsNonZero bRebateNonZero;
     UnsafeAddGadget feeAddRebate;
     RequireEqualGadget validateFeeOrRebateBips;
 
@@ -86,7 +86,7 @@ public:
         rebateBips(pb, NUM_BITS_BIPS, FMT(prefix, ".rebateBips")),
 
         feeOrRebateBips(pb, NUM_BITS_BIPS, FMT(prefix, ".feeOrRebateBips")),
-        bRebateNonZero(pb, constants.zero, rebateBips.packed, NUM_BITS_BIPS, FMT(prefix, ".bRebateNonZero")),
+        bRebateNonZero(pb, rebateBips.packed, FMT(prefix, ".bRebateNonZero")),
         feeAddRebate(pb, feeBips.packed, rebateBips.packed, FMT(prefix, ".feeAddRebate")),
         validateFeeOrRebateBips(pb, feeAddRebate.result(), feeOrRebateBips.packed, FMT(prefix, ".validateFeeOrRebateBips")),
 

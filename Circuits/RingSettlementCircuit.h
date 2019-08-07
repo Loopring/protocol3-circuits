@@ -347,11 +347,11 @@ public:
 
             orderA.tokenS.bits,
             fillS_A.bits(),
-            orderA.buy.bits, VariableArrayT(1, orderA.bRebateNonZero.lt()), orderA.feeOrRebateBips.bits,
+            orderA.buy.bits, VariableArrayT(1, orderA.bRebateNonZero.result()), orderA.feeOrRebateBips.bits,
 
             orderB.tokenS.bits,
             fillS_B.bits(),
-            orderB.buy.bits, VariableArrayT(1, orderB.bRebateNonZero.lt()), orderB.feeOrRebateBips.bits,
+            orderB.buy.bits, VariableArrayT(1, orderB.bRebateNonZero.result()), orderB.feeOrRebateBips.bits,
         };
     }
 
@@ -554,12 +554,12 @@ public:
 
         transformData(pb, FMT(prefix, ".transformData")),
 
-        exchangeID(pb, 32, FMT(prefix, ".exchangeID")),
+        exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
         merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
         merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
         timestamp(pb, NUM_BITS_TIMESTAMP, FMT(prefix, ".timestamp")),
-        protocolTakerFeeBips(pb, 8, FMT(prefix, ".protocolTakerFeeBips")),
-        protocolMakerFeeBips(pb, 8, FMT(prefix, ".protocolMakerFeeBips")),
+        protocolTakerFeeBips(pb, NUM_BITS_PROTOCOL_FEE_BIPS, FMT(prefix, ".protocolTakerFeeBips")),
+        protocolMakerFeeBips(pb, NUM_BITS_PROTOCOL_FEE_BIPS, FMT(prefix, ".protocolMakerFeeBips")),
 
         balancesRootP_before(make_variable(pb, FMT(prefix, ".balancesRootP_before"))),
 

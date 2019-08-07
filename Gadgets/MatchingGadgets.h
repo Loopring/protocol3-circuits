@@ -16,7 +16,8 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
-// Checks if the rounding error of (A * B / C) is <= 1%
+// Checks if the rounding error of a MulDiv is 1% or worse
+// (only when it means the user gets less than expected, a better rate is allowed with higher rounding errors)
 class RoundingErrorGadget : public GadgetT
 {
 public:
@@ -37,12 +38,12 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        mulDiv(pb, constants, _value, _numerator, _denominator, numBitsDenominator, FMT(prefix, ".multiplied")),
+        mulDiv(pb, constants, _value, _numerator, _denominator, numBitsValue, numBitsNumerator, numBitsDenominator, FMT(prefix, ".multiplied")),
         remainderx100(pb, mulDiv.getRemainder(), constants._100, FMT(prefix, ".remainderx100")),
-        remainderx100_leq_multiplied(pb, remainderx100.result(), mulDiv.multiplied(), numBitsValue + numBitsNumerator, FMT(prefix, ".remainderx100_leq_multiplied"))
+        remainderx100_leq_multiplied(pb, remainderx100.result(), mulDiv.getProduct(), numBitsValue + numBitsNumerator, FMT(prefix, ".remainderx100_leq_multiplied"))
     {
-        assert(numBitsValue + numBitsNumerator <= NUM_BITS_FIELD_CAPACITY);
         assert(numBitsDenominator <= NUM_BITS_FIELD_CAPACITY - 7 /*=ceil(log2(100))*/);
+        assert(numBitsValue + numBitsNumerator <= NUM_BITS_FIELD_CAPACITY);
     }
 
     const VariableT& isValid()
@@ -65,6 +66,7 @@ public:
     }
 };
 
+// Calculates the fees for an order
 class FeeCalculatorGadget : public GadgetT
 {
 public:
@@ -84,11 +86,25 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        protocolFee(pb, constants, amountB, protocolFeeBips, constants._100000, 17 /*=ceil(log2(100000))*/, FMT(prefix, ".protocolFee")),
-        fee(pb, constants, amountB, feeBips, constants._10000, 14 /*=ceil(log2(10000))*/, FMT(prefix, ".fee")),
-        rebate(pb, constants, amountB, rebateBips, constants._10000, 14 /*=ceil(log2(10000))*/, FMT(prefix, ".rebate"))
+        protocolFee(pb, constants, amountB, protocolFeeBips, constants._100000, NUM_BITS_AMOUNT, NUM_BITS_PROTOCOL_FEE_BIPS, 17 /*=ceil(log2(100000))*/, FMT(prefix, ".protocolFee")),
+        fee(pb, constants, amountB, feeBips, constants._10000, NUM_BITS_AMOUNT, NUM_BITS_BIPS, 14 /*=ceil(log2(10000))*/, FMT(prefix, ".fee")),
+        rebate(pb, constants, amountB, rebateBips, constants._10000, NUM_BITS_AMOUNT, NUM_BITS_BIPS, 14 /*=ceil(log2(10000))*/, FMT(prefix, ".rebate"))
     {
 
+    }
+
+    void generate_r1cs_witness()
+    {
+        protocolFee.generate_r1cs_witness();
+        fee.generate_r1cs_witness();
+        rebate.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        protocolFee.generate_r1cs_constraints();
+        fee.generate_r1cs_constraints();
+        rebate.generate_r1cs_constraints();
     }
 
     const VariableT getProtocolFee() const
@@ -105,22 +121,9 @@ public:
     {
         return rebate.result();
     }
-
-    void generate_r1cs_witness()
-    {
-        protocolFee.generate_r1cs_witness();
-        fee.generate_r1cs_witness();
-        rebate.generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        protocolFee.generate_r1cs_constraints();
-        fee.generate_r1cs_constraints();
-        rebate.generate_r1cs_constraints();
-    }
 };
 
+// Check if an order is filled correctly
 class CheckValidGadget : public GadgetT
 {
 public:
@@ -189,11 +192,6 @@ public:
 
     }
 
-    const VariableT& isValid()
-    {
-        return valid.result();
-    }
-
     void generate_r1cs_witness ()
     {
         fillAmountS_lt_amountS.generate_r1cs_witness();
@@ -237,6 +235,11 @@ public:
 
         valid.generate_r1cs_constraints();
     }
+
+    const VariableT& isValid()
+    {
+        return valid.result();
+    }
 };
 
 class MaxFillAmountsGadget : public GadgetT
@@ -260,26 +263,22 @@ public:
     ) :
         GadgetT(pb, prefix),
 
+        // All results here are guaranteed to fit in NUM_BITS_AMOUNT bits
+        // `remainingS_buy = remaining * order.amountS // order.amountB`
+        // `remainingS_buy` has a maximumm value of order.amountB, so needs NUM_BITS_AMOUNT max.
+        // `fillAmountB = fillAmountS * order.amountB // order.amountS`
+        // `fillAmountS` has a maximumm value of order.amountS, so needs NUM_BITS_AMOUNT max.
+
         limit(pb, order.buy.packed, order.amountB.packed, order.amountS.packed, FMT(prefix, ".limit")),
         filledLimited(pb, limit.result(), order.tradeHistory.getFilled(), NUM_BITS_AMOUNT, FMT(prefix, ".filledLimited")),
         remainingBeforeCancelled(pb, limit.result(), filledLimited.result(), FMT(prefix, ".remainingBeforeCancelled")),
         remaining(pb, order.tradeHistory.getCancelled(), constants.zero, remainingBeforeCancelled.result(), FMT(prefix, ".remaining")),
-        remainingS_buy(pb, constants, remaining.result(), order.amountS.packed, order.amountB.packed, NUM_BITS_AMOUNT, FMT(prefix, ".remainingS_buy")),
+        remainingS_buy(pb, constants, remaining.result(), order.amountS.packed, order.amountB.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".remainingS_buy")),
         remainingS(pb, order.buy.packed, remainingS_buy.result(), remaining.result(), FMT(prefix, ".remainingS")),
         fillAmountS(pb, order.balanceS, remainingS.result(), NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountS")),
-        fillAmountB(pb, constants, fillAmountS.result(), order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB"))
+        fillAmountB(pb, constants, fillAmountS.result(), order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB"))
     {
 
-    }
-
-    const VariableT& getAmountS()
-    {
-        return fillAmountS.result();
-    }
-
-    const VariableT& getAmountB()
-    {
-        return fillAmountB.result();
     }
 
     void generate_r1cs_witness()
@@ -304,6 +303,18 @@ public:
         remainingS.generate_r1cs_constraints();
         fillAmountS.generate_r1cs_constraints();
         fillAmountB.generate_r1cs_constraints();
+    }
+
+    // fillAmountS uses NUM_BITS_AMOUNT bits max
+    const VariableT& getFillAmountS()
+    {
+        return fillAmountS.result();
+    }
+
+    // fillAmountB uses NUM_BITS_AMOUNT bits max
+    const VariableT& getFillAmountB()
+    {
+        return fillAmountB.result();
     }
 };
 
@@ -346,10 +357,10 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        takerFillB_lt_makerFillS(pb, takerFill.B, makerFill.S, NUM_BITS_AMOUNT * 2, FMT(prefix, ".takerFill.B < makerFill.B")),
+        takerFillB_lt_makerFillS(pb, takerFill.B, makerFill.S, NUM_BITS_AMOUNT, FMT(prefix, ".takerFill.B < makerFill.B")),
 
-        makerFillB_T(pb, constants, takerFill.B, makerOrder.amountB, makerOrder.amountS, NUM_BITS_AMOUNT, FMT(prefix, ".makerFillB_T")),
-        takerFillS_F(pb, constants, makerFill.S, takerOrder.amountS, takerOrder.amountB, NUM_BITS_AMOUNT, FMT(prefix, ".takerFillS_F")),
+        makerFillB_T(pb, constants, takerFill.B, makerOrder.amountB, makerOrder.amountS, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".makerFillB_T")),
+        takerFillS_F(pb, constants, makerFill.S, takerOrder.amountS, takerOrder.amountB, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".takerFillS_F")),
 
         makerFillS(pb, takerFillB_lt_makerFillS.lt(), takerFill.B, makerFill.S, FMT(prefix, ".makerFillS")),
         makerFillB(pb, takerFillB_lt_makerFillS.lt(), makerFillB_T.result(), makerFill.B, FMT(prefix, ".makerFillB")),
@@ -359,31 +370,6 @@ public:
         bMatchable(pb, makerFillB.result(), takerFillS.result(), NUM_BITS_AMOUNT, FMT(prefix, ".bMatchable"))
     {
 
-    }
-
-    const VariableT& getTakerFillS() const
-    {
-        return takerFillS.result();
-    }
-
-    const VariableT& getTakerFillB() const
-    {
-        return takerFillB.result();
-    }
-
-    const VariableT& getMakerFillS() const
-    {
-        return makerFillS.result();
-    }
-
-    const VariableT& getMakerFillB() const
-    {
-        return makerFillB.result();
-    }
-
-    const VariableT& isMatchable() const
-    {
-        return bMatchable.leq();
     }
 
     void generate_r1cs_witness()
@@ -414,6 +400,31 @@ public:
         takerFillB.generate_r1cs_constraints();
 
         bMatchable.generate_r1cs_constraints();
+    }
+
+    const VariableT& getTakerFillS() const
+    {
+        return takerFillS.result();
+    }
+
+    const VariableT& getTakerFillB() const
+    {
+        return takerFillB.result();
+    }
+
+    const VariableT& getMakerFillS() const
+    {
+        return makerFillS.result();
+    }
+
+    const VariableT& getMakerFillB() const
+    {
+        return makerFillB.result();
+    }
+
+    const VariableT& isMatchable() const
+    {
+        return bMatchable.leq();
     }
 };
 
@@ -472,31 +483,6 @@ public:
 
     }
 
-    const VariableT& getFillA_S() const
-    {
-        return fillA_S.result();
-    }
-
-    const VariableT& getFillA_B() const
-    {
-        return fillA_B.result();
-    }
-
-    const VariableT& getFillB_S() const
-    {
-        return fillB_S.result();
-    }
-
-    const VariableT& getFillB_B() const
-    {
-        return fillB_B.result();
-    }
-
-    const VariableT& isMatchable() const
-    {
-        return matchingGadget.isMatchable();
-    }
-
     void generate_r1cs_witness()
     {
         takerAmountS.generate_r1cs_witness();
@@ -536,6 +522,31 @@ public:
         fillB_S.generate_r1cs_constraints();
         fillB_B.generate_r1cs_constraints();
     }
+
+    const VariableT& getFillA_S() const
+    {
+        return fillA_S.result();
+    }
+
+    const VariableT& getFillA_B() const
+    {
+        return fillA_B.result();
+    }
+
+    const VariableT& getFillB_S() const
+    {
+        return fillB_S.result();
+    }
+
+    const VariableT& getFillB_B() const
+    {
+        return fillB_B.result();
+    }
+
+    const VariableT& isMatchable() const
+    {
+        return matchingGadget.isMatchable();
+    }
 };
 
 
@@ -565,23 +576,64 @@ public:
     ) :
         GadgetT(pb, prefix),
 
+        // Get the max amount the orders can be filled
         maxFillAmountA(pb, constants, orderA, FMT(prefix, ".maxFillAmountA")),
         maxFillAmountB(pb, constants, orderB, FMT(prefix, ".maxFillAmountB")),
 
+        // Match the orders
         matchingGadget(pb, constants,
-                       orderA, {maxFillAmountA.getAmountS(), maxFillAmountA.getAmountB()},
-                       orderB, {maxFillAmountB.getAmountS(), maxFillAmountB.getAmountB()},
+                       orderA, {maxFillAmountA.getFillAmountS(), maxFillAmountA.getFillAmountB()},
+                       orderB, {maxFillAmountB.getFillAmountS(), maxFillAmountB.getFillAmountB()},
                        FMT(prefix, ".matchingGadget")),
 
         // Check if tokenS/tokenB match
         orderA_tokenS_eq_orderB_tokenB(pb, orderA.tokenS.packed, orderB.tokenB.packed, FMT(prefix, ".orderA_tokenS_eq_orderB_tokenB")),
         orderA_tokenB_eq_orderB_tokenS(pb, orderA.tokenB.packed, orderB.tokenS.packed, FMT(prefix, ".orderA_tokenB_eq_orderB_tokenS")),
 
+        // Check if the orders in the settlement are correctly filled
         checkValidA(pb, constants, timestamp, orderA, matchingGadget.getFillA_S(), matchingGadget.getFillA_B(), FMT(prefix, ".checkValidA")),
         checkValidB(pb, constants, timestamp, orderB, matchingGadget.getFillB_S(), matchingGadget.getFillB_B(), FMT(prefix, ".checkValidB")),
         valid(pb, {matchingGadget.isMatchable(), checkValidA.isValid(), checkValidB.isValid()}, FMT(prefix, ".valid"))
     {
 
+    }
+
+    void generate_r1cs_witness()
+    {
+        // Get the max amount the orders can be filled
+        maxFillAmountA.generate_r1cs_witness();
+        maxFillAmountB.generate_r1cs_witness();
+
+        // Match the orders
+        matchingGadget.generate_r1cs_witness();
+
+        // Check if tokenS/tokenB match
+        orderA_tokenS_eq_orderB_tokenB.generate_r1cs_witness();
+        orderA_tokenB_eq_orderB_tokenS.generate_r1cs_witness();
+
+        // Check if the orders in the settlement are correctly filled
+        checkValidA.generate_r1cs_witness();
+        checkValidB.generate_r1cs_witness();
+        valid.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        // Get the max amount the orders can be filled
+        maxFillAmountA.generate_r1cs_constraints();
+        maxFillAmountB.generate_r1cs_constraints();
+
+        // Match the orders
+        matchingGadget.generate_r1cs_constraints();
+
+        // Check if tokenS/tokenB match
+        orderA_tokenS_eq_orderB_tokenB.generate_r1cs_constraints();
+        orderA_tokenB_eq_orderB_tokenS.generate_r1cs_constraints();
+
+        // Check if the orders in the settlement are correctly filled
+        checkValidA.generate_r1cs_constraints();
+        checkValidB.generate_r1cs_constraints();
+        valid.generate_r1cs_constraints();
     }
 
     const VariableT& getFillA_S() const
@@ -607,36 +659,6 @@ public:
     const VariableT& isValid() const
     {
         return valid.result();
-    }
-
-    void generate_r1cs_witness()
-    {
-        maxFillAmountA.generate_r1cs_witness();
-        maxFillAmountB.generate_r1cs_witness();
-
-        matchingGadget.generate_r1cs_witness();
-
-        orderA_tokenS_eq_orderB_tokenB.generate_r1cs_witness();
-        orderA_tokenB_eq_orderB_tokenS.generate_r1cs_witness();
-
-        checkValidA.generate_r1cs_witness();
-        checkValidB.generate_r1cs_witness();
-        valid.generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        maxFillAmountA.generate_r1cs_constraints();
-        maxFillAmountB.generate_r1cs_constraints();
-
-        matchingGadget.generate_r1cs_constraints();
-
-        orderA_tokenS_eq_orderB_tokenB.generate_r1cs_constraints();
-        orderA_tokenB_eq_orderB_tokenS.generate_r1cs_constraints();
-
-        checkValidA.generate_r1cs_constraints();
-        checkValidB.generate_r1cs_constraints();
-        valid.generate_r1cs_constraints();
     }
 };
 

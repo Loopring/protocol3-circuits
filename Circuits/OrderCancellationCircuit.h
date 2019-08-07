@@ -304,7 +304,7 @@ public:
 
         constants(pb, FMT(prefix, ".constants")),
 
-        exchangeID(pb, 32, FMT(prefix, ".exchangeID")),
+        exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
         merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
         merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
 

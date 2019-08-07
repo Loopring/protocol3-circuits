@@ -17,11 +17,13 @@ using namespace jubjub;
 namespace Loopring
 {
 
+// Forced A == B
 void forceEqual(ProtoboardT& pb, const VariableT& A, const VariableT& B, const std::string& annotation_prefix)
 {
     pb.add_r1cs_constraint(ConstraintT(A, FieldT::one(), B), FMT(annotation_prefix, ".forceEqual"));
 }
 
+// Constants stored in a VariableT for ease of use
 class Constants : public GadgetT
 {
 public:
@@ -64,7 +66,7 @@ public:
 
     void generate_r1cs_constraints()
     {
-        pb.add_r1cs_constraint(ConstraintT(FieldT::one() + zero, FieldT::one(), FieldT::one()), ".zero");
+        pb.add_r1cs_constraint(ConstraintT(zero, FieldT::one(), FieldT::zero()), ".zero");
         pb.add_r1cs_constraint(ConstraintT(one, FieldT::one(), FieldT::one()), ".one");
         pb.add_r1cs_constraint(ConstraintT(_100, FieldT::one(), ethsnarks::FieldT(100)), "._100");
         pb.add_r1cs_constraint(ConstraintT(_10000, FieldT::one(), ethsnarks::FieldT(10000)), "._10000");
@@ -74,6 +76,7 @@ public:
     }
 };
 
+// Helper function that contains the history of all the values of a variable
 class DynamicVariableGadget : public GadgetT
 {
 public:
@@ -110,7 +113,7 @@ public:
     }
 };
 
-
+// Helper function for subadd to do transfers
 class TransferGadget : public GadgetT
 {
 public:
@@ -142,6 +145,7 @@ public:
     }
 };
 
+// A - B
 class UnsafeSubGadget : public GadgetT
 {
 public:
@@ -180,6 +184,7 @@ public:
     }
 };
 
+// A + B
 class UnsafeAddGadget : public GadgetT
 {
 public:
@@ -218,6 +223,7 @@ public:
     }
 };
 
+// A * B
 class UnsafeMulGadget : public GadgetT
 {
 public:
@@ -256,6 +262,7 @@ public:
     }
 };
 
+// b ? A : B
 class TernaryGadget : public GadgetT
 {
 public:
@@ -263,7 +270,7 @@ public:
     VariableT x;
     VariableT y;
 
-    VariableT z;
+    VariableT selected;
 
     TernaryGadget(
         ProtoboardT& pb,
@@ -278,19 +285,19 @@ public:
         x(_x),
         y(_y),
 
-        z(make_variable(pb, FMT(prefix, ".z")))
+        selected(make_variable(pb, FMT(prefix, ".selected")))
     {
 
     }
 
     const VariableT& result() const
     {
-        return z;
+        return selected;
     }
 
     void generate_r1cs_witness()
     {
-        pb.val(z) = (pb.val(b) == FieldT::one()) ? pb.val(x) : pb.val(y);
+        pb.val(selected) = (pb.val(b) == FieldT::one()) ? pb.val(x) : pb.val(y);
     }
 
     void generate_r1cs_constraints(bool enforceBitness = true)
@@ -299,10 +306,11 @@ public:
         {
             libsnark::generate_boolean_r1cs_constraint<ethsnarks::FieldT>(pb, b, FMT(annotation_prefix, ".bitness"));
         }
-        pb.add_r1cs_constraint(ConstraintT(b, y - x, y - z), FMT(annotation_prefix, ".b * (y - x) == (y - z)"));
+        pb.add_r1cs_constraint(ConstraintT(b, y - x, y - selected), FMT(annotation_prefix, ".b * (y - x) == (y - selected)"));
     }
 };
 
+// (A <(=) B)
 class LeqGadget : public GadgetT
 {
 public:
@@ -348,7 +356,7 @@ public:
     }
 };
 
-
+// (input[0] && input[1] && ...) (all inputs need to be boolean)
 class AndGadget : public GadgetT
 {
 public:
@@ -395,6 +403,7 @@ public:
     }
 };
 
+// (input[0] || input[1] || ...) (all inputs need to be boolean)
 class OrGadget : public GadgetT
 {
 public:
@@ -440,6 +449,7 @@ public:
     }
 };
 
+// !A (A needs to be boolean)
 class NotGadget : public GadgetT
 {
 public:
@@ -475,6 +485,7 @@ public:
     }
 };
 
+// A[i] ^ B[i]
 class XorArrayGadget : public GadgetT
 {
 public:
@@ -520,49 +531,50 @@ public:
     }
 };
 
+// (A == B)
 class EqualGadget : public GadgetT
 {
 public:
-    LeqGadget leq;
-    NotGadget NOTLt;
-    AndGadget NOTltANDleq;
+    UnsafeSubGadget difference;
+    IsNonZero isNonZeroDifference;
+    NotGadget isZeroDifference;
 
     EqualGadget(
         ProtoboardT& pb,
         const VariableT& A,
         const VariableT& B,
-        const size_t n,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
-        leq(pb, A, B, n, FMT(prefix, ".A <(=) B")),
-        NOTLt(pb, leq.lt(), FMT(prefix, ".!(A<B)")),
-        NOTltANDleq(pb, {NOTLt.result(), leq.leq()}, FMT(prefix, ".!(A<B) && (A<=B)"))
+        difference(pb, A, B, FMT(prefix, ".difference")),
+        isNonZeroDifference(pb, difference.result(), FMT(prefix, ".isNonZeroDifference")),
+        isZeroDifference(pb, isNonZeroDifference.result(), FMT(prefix, ".isZeroDifference"))
     {
 
     }
 
     const VariableT& result() const
     {
-        return NOTltANDleq.result();
+        return isZeroDifference.result();
     }
 
     void generate_r1cs_witness()
     {
-        leq.generate_r1cs_witness();
-        NOTLt.generate_r1cs_witness();
-        NOTltANDleq.generate_r1cs_witness();
+        difference.generate_r1cs_witness();
+        isNonZeroDifference.generate_r1cs_witness();
+        isZeroDifference.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
-        leq.generate_r1cs_constraints();
-        NOTLt.generate_r1cs_constraints();
-        NOTltANDleq.generate_r1cs_constraints();
+        difference.generate_r1cs_constraints();
+        isNonZeroDifference.generate_r1cs_constraints();
+        isZeroDifference.generate_r1cs_constraints();
     }
 };
 
+// require(A == B)
 class RequireEqualGadget : public GadgetT
 {
 public:
@@ -593,6 +605,7 @@ public:
     }
 };
 
+// require(A == 0 || B == 0)
 class RequireZeroAorBGadget : public GadgetT
 {
 public:
@@ -623,6 +636,7 @@ public:
     }
 };
 
+// require(A != 0)
 class RequireNotZeroGadget : public GadgetT
 {
 public:
@@ -652,13 +666,14 @@ public:
     }
 };
 
+// require(A != B)
 class RequireNotEqualGadget : public GadgetT
 {
 public:
     VariableT A;
     VariableT B;
 
-    VariableT diff;
+    VariableT difference;
     RequireNotZeroGadget notZero;
 
     RequireNotEqualGadget(
@@ -670,25 +685,26 @@ public:
         GadgetT(pb, prefix),
         A(_A),
         B(_B),
-        diff(make_variable(pb, FMT(prefix, ".diff"))),
-        notZero(pb, diff, FMT(prefix, ".diff != 0"))
+        difference(make_variable(pb, FMT(prefix, ".difference"))),
+        notZero(pb, difference, FMT(prefix, ".difference != 0"))
     {
 
     }
 
     void generate_r1cs_witness()
     {
-        pb.val(diff) = pb.val(A) - pb.val(B);
+        pb.val(difference) = pb.val(A) - pb.val(B);
         notZero.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
-        pb.add_r1cs_constraint(ConstraintT(A - B, FieldT::one(), diff), FMT(annotation_prefix, ".A - B == diff"));
+        pb.add_r1cs_constraint(ConstraintT(A - B, FieldT::one(), difference), FMT(annotation_prefix, ".A - B == difference"));
         notZero.generate_r1cs_constraints();
     }
 };
 
+// min(A, B)
 class MinGadget : public GadgetT
 {
 public:
@@ -728,6 +744,7 @@ public:
     }
 };
 
+// require(A <= B)
 class RequireLeqGadget : public GadgetT
 {
 public:
@@ -759,6 +776,7 @@ public:
     }
 };
 
+// require(A < B)
 class RequireLtGadget : public GadgetT
 {
 public:
@@ -790,53 +808,79 @@ public:
     }
 };
 
+// (value * numerator) = product
+// product / denominator = quotient
+// product % denominator = remainder
 class MulDivGadget : public GadgetT
 {
 public:
-    const VariableT A;
-    const VariableT B;
-    const VariableT C;
-    const VariableT _result;
+    const VariableT value;
+    const VariableT numerator;
+    const VariableT denominator;
 
-    RequireNotZeroGadget C_notZero;
+    const VariableT quotient;
 
-    const VariableT X;
+    RequireNotZeroGadget denominator_notZero;
+    UnsafeMulGadget product;
     libsnark::dual_variable_gadget<FieldT> remainder;
+    RequireLtGadget remainder_lt_denominator;
 
-    RequireLtGadget remainder_lt_C;
-
-    // (A * B) / C = D
-    // A and B need to be less than <= 126bits
     MulDivGadget(
         ProtoboardT& pb,
         const Constants& constants,
-        const VariableT& _A,
-        const VariableT& _B,
-        const VariableT& _C,
+        const VariableT& _value,
+        const VariableT& _numerator,
+        const VariableT& _denominator,
+        unsigned int numBitsValue,
+        unsigned int numBitsNumerator,
         unsigned int numBitsDenominator,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
-        A(_A),
-        B(_B),
-        C(_C),
+        value(_value),
+        numerator(_numerator),
+        denominator(_denominator),
 
-        C_notZero(pb, C, FMT(prefix, ".C_notZero")),
+        quotient(make_variable(pb, FMT(prefix, ".quotient"))),
 
-        _result(make_variable(pb, FMT(prefix, "._result"))),
-
-        X(make_variable(pb, FMT(prefix, ".X"))),
+        denominator_notZero(pb, denominator, FMT(prefix, ".denominator_notZero")),
+        product(pb, value, numerator, FMT(prefix, ".product")),
         remainder(pb, numBitsDenominator, FMT(prefix, ".remainder")),
-
-        remainder_lt_C(pb, remainder.packed, C, numBitsDenominator, FMT(prefix, ".remainder < C"))
+        remainder_lt_denominator(pb, remainder.packed, denominator, numBitsDenominator, FMT(prefix, ".remainder < denominator"))
     {
+        assert(numBitsValue + numBitsNumerator <= NUM_BITS_FIELD_CAPACITY);
+    }
 
+    void generate_r1cs_witness()
+    {
+        denominator_notZero.generate_r1cs_witness();
+        product.generate_r1cs_witness();
+        if (pb.val(denominator) != FieldT::zero())
+        {
+            pb.val(quotient) = ethsnarks::FieldT((toBigInt(pb.val(product.result())) / toBigInt(pb.val(denominator))).to_string().c_str());
+        }
+        else
+        {
+            pb.val(quotient) = FieldT::zero();
+        }
+        pb.val(remainder.packed) = pb.val(product.result()) - (pb.val(denominator) * pb.val(quotient));
+        remainder.generate_r1cs_witness_from_packed();
+        remainder_lt_denominator.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        denominator_notZero.generate_r1cs_constraints();
+        product.generate_r1cs_constraints();
+        pb.add_r1cs_constraint(ConstraintT(denominator, quotient, product.result() - remainder.packed), FMT(annotation_prefix, ".quotient * denominator == product - remainder"));
+        remainder.generate_r1cs_constraints(true);
+        remainder_lt_denominator.generate_r1cs_constraints();
     }
 
     const VariableT& result() const
     {
-        return _result;
+        return quotient;
     }
 
     const VariableT& getRemainder() const
@@ -844,42 +888,17 @@ public:
         return remainder.packed;
     }
 
-    const VariableT& multiplied() const
+    const VariableT& getProduct() const
     {
-        return X;
-    }
-
-    void generate_r1cs_witness()
-    {
-        C_notZero.generate_r1cs_witness();
-
-        pb.val(X) = pb.val(A) * pb.val(B);
-        if (pb.val(C) != FieldT::zero())
-        {
-            pb.val(_result) = ethsnarks::FieldT((toBigInt(pb.val(X)) / toBigInt(pb.val(C))).to_string().c_str());
-        }
-        else
-        {
-            pb.val(_result) = FieldT::zero();
-        }
-        pb.val(remainder.packed) = pb.val(X) - (pb.val(C) * pb.val(_result));
-        remainder.generate_r1cs_witness_from_packed();
-
-        remainder_lt_C.generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        C_notZero.generate_r1cs_constraints();
-
-        pb.add_r1cs_constraint(ConstraintT(A, B, X), FMT(annotation_prefix, ".A * B == X"));
-        pb.add_r1cs_constraint(ConstraintT(C, _result, X - remainder.packed), FMT(annotation_prefix, "._result * C == X - remainder"));
-
-        remainder.generate_r1cs_constraints(true);
-        remainder_lt_C.generate_r1cs_constraints();
+        return product.result();
     }
 };
 
+// _accuracy.numerator / _accuracy.denominator <=  value / original
+// original * _accuracy.numerator <= value * _accuracy.denominator
+// We have to make sure there are no overflows and the value is <= the original value (so a user never spends more) so we also check:
+// - value <= original
+// - value < 2^maxNumBits
 class RequireAccuracyGadget : public GadgetT
 {
 public:
@@ -889,16 +908,11 @@ public:
 
     RequireLeqGadget value_leq_original;
 
-    VariableT originalXaccuracyN;
-    VariableT valueXaccuracyD;
+    VariableT original_mul_accuracyN;
+    VariableT value_mul_accuracyD;
 
-    RequireLeqGadget originalXaccuracyN_leq_valueXaccuracyD;
+    RequireLeqGadget original_mul_accuracyN_LEQ_value_mul_accuracyD;
 
-    // _accuracy.numerator / _accuracy.denominator <=  value / original
-    // original * _accuracy.numerator <= value * _accuracy.denominator
-    // We have to make sure there are no overflows and the value is <= the original value (so a user never spends more) so we also check:
-    // - value <= original
-    // - value < 2^maxNumBits
     RequireAccuracyGadget(
         ProtoboardT& pb,
         const VariableT& _value,
@@ -915,10 +929,10 @@ public:
 
         value_leq_original(pb, value.packed, original, maxNumBits, FMT(prefix, ".value_lt_original")),
 
-        originalXaccuracyN(make_variable(pb, FMT(prefix, ".originalXaccuracyN"))),
-        valueXaccuracyD(make_variable(pb, FMT(prefix, ".valueXaccuracyD"))),
+        original_mul_accuracyN(make_variable(pb, FMT(prefix, ".original_mul_accuracyN"))),
+        value_mul_accuracyD(make_variable(pb, FMT(prefix, ".value_mul_accuracyD"))),
 
-        originalXaccuracyN_leq_valueXaccuracyD(pb, originalXaccuracyN, valueXaccuracyD, maxNumBits + 32, FMT(prefix, ".originalXaccuracyN_leq_valueXaccuracyD"))
+        original_mul_accuracyN_LEQ_value_mul_accuracyD(pb, original_mul_accuracyN, value_mul_accuracyD, maxNumBits + 32, FMT(prefix, ".original_mul_accuracyN_LEQ_value_mul_accuracyD"))
     {
 
     }
@@ -929,9 +943,9 @@ public:
 
         value_leq_original.generate_r1cs_witness();
 
-        pb.val(originalXaccuracyN) = pb.val(original) * accuracy.numerator;
-        pb.val(valueXaccuracyD) = pb.val(value.packed) * accuracy.denominator;
-        originalXaccuracyN_leq_valueXaccuracyD.generate_r1cs_witness();
+        pb.val(original_mul_accuracyN) = pb.val(original) * accuracy.numerator;
+        pb.val(value_mul_accuracyD) = pb.val(value.packed) * accuracy.denominator;
+        original_mul_accuracyN_LEQ_value_mul_accuracyD.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
@@ -940,9 +954,9 @@ public:
 
         value_leq_original.generate_r1cs_constraints();
 
-        pb.add_r1cs_constraint(ConstraintT(original, accuracy.numerator, originalXaccuracyN), FMT(annotation_prefix, ".original * accuracy.numerator == originalXaccuracyN"));
-        pb.add_r1cs_constraint(ConstraintT(value.packed, accuracy.denominator, valueXaccuracyD), FMT(annotation_prefix, ".value * accuracy.denominator == valueXaccuracyD"));
-        originalXaccuracyN_leq_valueXaccuracyD.generate_r1cs_constraints();
+        pb.add_r1cs_constraint(ConstraintT(original, accuracy.numerator, original_mul_accuracyN), FMT(annotation_prefix, ".original * accuracy.numerator == original_mul_accuracyN"));
+        pb.add_r1cs_constraint(ConstraintT(value.packed, accuracy.denominator, value_mul_accuracyD), FMT(annotation_prefix, ".value * accuracy.denominator == value_mul_accuracyD"));
+        original_mul_accuracyN_LEQ_value_mul_accuracyD.generate_r1cs_constraints();
     }
 };
 
@@ -1053,6 +1067,7 @@ public:
     }
 };
 
+// Verifies a signature hashed with Poseidon
 class SignatureVerifier : public GadgetT
 {
 public:
@@ -1098,6 +1113,7 @@ public:
     }
 };
 
+// Helper class to collect bits
 class Bitstream
 {
 public:
@@ -1115,6 +1131,8 @@ public:
     }
 };
 
+// Public data helper class.
+// Will hash all public data with sha256 to a single public input of NUM_BITS_FIELD_CAPACITY bits
 class PublicDataGadget : public GadgetT
 {
 public:
@@ -1167,7 +1185,7 @@ public:
 
         // Check that the hash matches the public input
         calculatedHash.reset(new libsnark::dual_variable_gadget<FieldT>(
-            pb, reverse(subArray(hasher->result().bits, 0, FieldT::capacity())), ".packCalculatedHash")
+            pb, reverse(subArray(hasher->result().bits, 0, NUM_BITS_FIELD_CAPACITY)), ".packCalculatedHash")
         );
         calculatedHash->generate_r1cs_constraints(false);
         forceEqual(pb, calculatedHash->packed, publicInput, ".publicDataCheck");
@@ -1187,8 +1205,6 @@ public:
     std::vector<VariableT> values;
     std::vector<VariableT> baseMultipliers;
     std::vector<TernaryGadget> multipliers;
-
-    VariableT _or;
 
     FloatGadget(
         ProtoboardT& pb,
@@ -1257,7 +1273,7 @@ public:
             libsnark::generate_boolean_r1cs_constraint<ethsnarks::FieldT>(pb, f[i], FMT(annotation_prefix, ".bitness"));
         }
 
-         // Decodes the mantissa
+        // Decodes the mantissa
         for (unsigned int i = 0; i < floatEncoding.numBitsMantissa; i++)
         {
             unsigned j = floatEncoding.numBitsMantissa - 1 - i;

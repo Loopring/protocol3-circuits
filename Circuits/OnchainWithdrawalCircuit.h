@@ -226,7 +226,7 @@ public:
 
         constants(pb, FMT(prefix, ".constants")),
 
-        exchangeID(pb, 32, FMT(prefix, ".exchangeID")),
+        exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
         merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
         merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
 
@@ -234,7 +234,7 @@ public:
         startIndex(pb, 32, FMT(prefix, ".startIndex")),
         count(pb, 32, FMT(prefix, ".count")),
 
-        bShutdownMode(pb, count.packed, constants.zero, 32, FMT(prefix, ".bShutdownMode"))
+        bShutdownMode(pb, count.packed, constants.zero, FMT(prefix, ".bShutdownMode"))
     {
 
     }
