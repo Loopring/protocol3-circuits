@@ -36,7 +36,7 @@ public:
 
     UpdateAccountGadget(
         ProtoboardT& pb,
-        const VariableT& root,
+        const VariableT& merkleRoot,
         const VariableArrayT& address,
         const AccountState& before,
         const AccountState& after,
@@ -48,15 +48,10 @@ public:
         leafAfter(pb, var_array({after.publicKeyX, after.publicKeyY, after.nonce, after.balancesRoot}), FMT(prefix, ".leafAfter")),
 
         proof(make_var_array(pb, TREE_DEPTH_ACCOUNTS * 3, FMT(prefix, ".proof"))),
-        proofVerifierBefore(pb, TREE_DEPTH_ACCOUNTS, address, leafBefore.result(), root, proof, FMT(prefix, ".pathBefore")),
+        proofVerifierBefore(pb, TREE_DEPTH_ACCOUNTS, address, leafBefore.result(), merkleRoot, proof, FMT(prefix, ".pathBefore")),
         rootCalculatorAfter(pb, TREE_DEPTH_ACCOUNTS, address, leafAfter.result(), proof, FMT(prefix, ".pathAfter"))
     {
 
-    }
-
-    const VariableT result() const
-    {
-        return rootCalculatorAfter.result();
     }
 
     void generate_r1cs_witness(const Proof& _proof)
@@ -76,6 +71,11 @@ public:
 
         proofVerifierBefore.generate_r1cs_constraints();
         rootCalculatorAfter.generate_r1cs_constraints();
+    }
+
+    const VariableT& result() const
+    {
+        return rootCalculatorAfter.result();
     }
 };
 
@@ -97,7 +97,7 @@ public:
 
     UpdateBalanceGadget(
         ProtoboardT& pb,
-        const VariableT& root,
+        const VariableT& merkleRoot,
         const VariableArrayT& tokenID,
         const BalanceState before,
         const BalanceState after,
@@ -109,15 +109,10 @@ public:
         leafAfter(pb, var_array({after.balance, after.tradingHistory}), FMT(prefix, ".leafAfter")),
 
         proof(make_var_array(pb, TREE_DEPTH_TOKENS * 3, FMT(prefix, ".proof"))),
-        proofVerifierBefore(pb, TREE_DEPTH_TOKENS, tokenID, leafBefore.result(), root, proof, FMT(prefix, ".pathBefore")),
+        proofVerifierBefore(pb, TREE_DEPTH_TOKENS, tokenID, leafBefore.result(), merkleRoot, proof, FMT(prefix, ".pathBefore")),
         rootCalculatorAfter(pb, TREE_DEPTH_TOKENS, tokenID, leafAfter.result(), proof, FMT(prefix, ".pathAfter"))
     {
 
-    }
-
-    const VariableT result() const
-    {
-        return rootCalculatorAfter.result();
     }
 
     void generate_r1cs_witness(const Proof& _proof)
@@ -137,6 +132,11 @@ public:
 
         proofVerifierBefore.generate_r1cs_constraints();
         rootCalculatorAfter.generate_r1cs_constraints();
+    }
+
+    const VariableT& result() const
+    {
+        return rootCalculatorAfter.result();
     }
 };
 

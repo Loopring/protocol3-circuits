@@ -135,7 +135,7 @@ public:
         }
     }
 
-    const VariableT result() const
+    const VariableT& result() const
     {
         assert( m_hashers.size() > 0 );
         return m_hashers.back().result();

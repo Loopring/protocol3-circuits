@@ -336,8 +336,10 @@ public:
 
     LeqGadget takerFillB_lt_makerFillS;
 
-    MulDivGadget makerFillB_T;
-    MulDivGadget takerFillS_F;
+    TernaryGadget value;
+    TernaryGadget numerator;
+    TernaryGadget denominator;
+    MulDivGadget newFill;
 
     TernaryGadget makerFillS;
     TernaryGadget makerFillB;
@@ -359,12 +361,14 @@ public:
 
         takerFillB_lt_makerFillS(pb, takerFill.B, makerFill.S, NUM_BITS_AMOUNT, FMT(prefix, ".takerFill.B < makerFill.B")),
 
-        makerFillB_T(pb, constants, takerFill.B, makerOrder.amountB, makerOrder.amountS, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".makerFillB_T")),
-        takerFillS_F(pb, constants, makerFill.S, takerOrder.amountS, takerOrder.amountB, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".takerFillS_F")),
+        value(pb, takerFillB_lt_makerFillS.lt(), takerFill.B, makerFill.S, FMT(prefix, ".value")),
+        numerator(pb, takerFillB_lt_makerFillS.lt(), makerOrder.amountB, takerOrder.amountS, FMT(prefix, ".numerator")),
+        denominator(pb, takerFillB_lt_makerFillS.lt(), makerOrder.amountS, takerOrder.amountB, FMT(prefix, ".denominator")),
+        newFill(pb, constants, value.result(), numerator.result(), denominator.result(), NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".newFill")),
 
         makerFillS(pb, takerFillB_lt_makerFillS.lt(), takerFill.B, makerFill.S, FMT(prefix, ".makerFillS")),
-        makerFillB(pb, takerFillB_lt_makerFillS.lt(), makerFillB_T.result(), makerFill.B, FMT(prefix, ".makerFillB")),
-        takerFillS(pb, takerFillB_lt_makerFillS.lt(), takerFill.S, takerFillS_F.result(), FMT(prefix, ".takerFillS")),
+        makerFillB(pb, takerFillB_lt_makerFillS.lt(), newFill.result(), makerFill.B, FMT(prefix, ".makerFillB")),
+        takerFillS(pb, takerFillB_lt_makerFillS.lt(), takerFill.S, newFill.result(), FMT(prefix, ".takerFillS")),
         takerFillB(pb, takerFillB_lt_makerFillS.lt(), takerFill.B, makerFill.S, FMT(prefix, ".takerFillB")),
 
         bMatchable(pb, makerFillB.result(), takerFillS.result(), NUM_BITS_AMOUNT, FMT(prefix, ".bMatchable"))
@@ -376,8 +380,10 @@ public:
     {
         takerFillB_lt_makerFillS.generate_r1cs_witness();
 
-        makerFillB_T.generate_r1cs_witness();
-        takerFillS_F.generate_r1cs_witness();
+        value.generate_r1cs_witness();
+        numerator.generate_r1cs_witness();
+        denominator.generate_r1cs_witness();
+        newFill.generate_r1cs_witness();
 
         makerFillS.generate_r1cs_witness();
         makerFillB.generate_r1cs_witness();
@@ -391,8 +397,10 @@ public:
     {
         takerFillB_lt_makerFillS.generate_r1cs_constraints();
 
-        makerFillB_T.generate_r1cs_constraints();
-        takerFillS_F.generate_r1cs_constraints();
+        value.generate_r1cs_constraints();
+        numerator.generate_r1cs_constraints();
+        denominator.generate_r1cs_constraints();
+        newFill.generate_r1cs_constraints();
 
         makerFillS.generate_r1cs_constraints();
         makerFillB.generate_r1cs_constraints();

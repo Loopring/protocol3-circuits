@@ -945,6 +945,73 @@ TEST_CASE("UnsafeMul", "[UnsafeMulGadget]")
     }
 }
 
+TEST_CASE("Add", "[AddGadget]")
+{
+    unsigned int maxLength = 252;
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit-length: " << n)
+    {
+        auto addChecked = [n](const BigInt& _A, const BigInt& _B)
+        {
+            protoboard<FieldT> pb;
+
+            pb_variable<FieldT> A = make_variable(pb, toFieldElement(_A), "A");
+            pb_variable<FieldT> B = make_variable(pb, toFieldElement(_B), "B");
+
+            AddGadget addGadget(pb, A, B, n, "addGadget");
+            addGadget.generate_r1cs_constraints();
+            addGadget.generate_r1cs_witness();
+
+            BigInt sum = _A + _B;
+            bool expectedSatisfied = (sum <= getMaxFieldElementAsBigInt(n));
+
+            REQUIRE(pb.is_satisfied() == expectedSatisfied);
+            if (expectedSatisfied)
+            {
+                REQUIRE(((pb.val(addGadget.result())) == toFieldElement(sum)));
+            }
+        };
+
+        BigInt max = getMaxFieldElementAsBigInt(n);
+        BigInt halfMax = getMaxFieldElementAsBigInt(n - 1);
+
+        SECTION("0 + 0")
+        {
+            addChecked(0, 0);
+        }
+
+        SECTION("0 + 1")
+        {
+            addChecked(0, 1);
+        }
+
+        SECTION("max + 0")
+        {
+            addChecked(max, 0);
+        }
+
+        SECTION("halfMax + halfMax + 1")
+        {
+            addChecked(halfMax, halfMax + 1);
+        }
+
+        SECTION("max + 1 (overflow)")
+        {
+            addChecked(max, 1);
+        }
+
+        SECTION("max + max (overflow)")
+        {
+            addChecked(max, max);
+        }
+
+        SECTION("halfMax + halfMax + 2 (overflow)")
+        {
+            addChecked(halfMax, halfMax + 2);
+        }
+    }}
+}
+
 TEST_CASE("RequireAccuracy", "[RequireAccuracyGadget]")
 {
     unsigned int maxLength = 126;

@@ -17,11 +17,9 @@ namespace Loopring
 class DepositGadget : public GadgetT
 {
 public:
-    const Constants& constants;
 
-    VariableArrayT accountID;
-    VariableArrayT tokenID;
-
+    libsnark::dual_variable_gadget<FieldT> accountID;
+    libsnark::dual_variable_gadget<FieldT> tokenID;
     libsnark::dual_variable_gadget<FieldT> amount;
     libsnark::dual_variable_gadget<FieldT> publicKeyX;
     libsnark::dual_variable_gadget<FieldT> publicKeyY;
@@ -37,17 +35,14 @@ public:
 
     DepositGadget(
         ProtoboardT& pb,
-        const Constants& _constants,
+        const Constants& constants,
         const VariableT& root,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
-        constants(_constants),
-
-        accountID(make_var_array(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID"))),
-        tokenID(make_var_array(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID"))),
-
+        accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
+        tokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID")),
         amount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amount")),
         publicKeyX(pb, 256, FMT(prefix, ".publicKeyX")),
         publicKeyY(pb, 256, FMT(prefix, ".publicKeyY")),
@@ -71,7 +66,7 @@ public:
             make_variable(pb, FMT(prefix, ".balancesRoot_before"))
         }),
         // Update balance
-        updateBalance(pb, accountBefore.balancesRoot, tokenID, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance")),
+        updateBalance(pb, accountBefore.balancesRoot, tokenID.bits, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance")),
         accountAfter({
             publicKeyX.packed,
             publicKeyY.packed,
@@ -79,29 +74,25 @@ public:
             updateBalance.result()
         }),
         // Update account
-        updateAccount(pb, root, accountID, accountBefore, accountAfter, FMT(prefix, ".updateAccount"))
+        updateAccount(pb, root, accountID.bits, accountBefore, accountAfter, FMT(prefix, ".updateAccount"))
     {
 
-    }
-
-    const VariableT getNewAccountsRoot() const
-    {
-        return updateAccount.result();
-    }
-
-    const std::vector<VariableArrayT> getOnchainData() const
-    {
-        return {constants.padding_0000, accountID,
-                publicKeyX.bits, publicKeyY.bits,
-                tokenID,
-                amount.bits};
     }
 
     void generate_r1cs_witness(const Deposit& deposit)
     {
-        accountID.fill_with_bits_of_field_element(pb, deposit.accountUpdate.accountID);
-        tokenID.fill_with_bits_of_field_element(pb, deposit.balanceUpdate.tokenID);
+        pb.val(accountBefore.publicKeyX) = deposit.accountUpdate.before.publicKey.x;
+        pb.val(accountBefore.publicKeyY) = deposit.accountUpdate.before.publicKey.y;
+        pb.val(accountBefore.nonce) = deposit.accountUpdate.before.nonce;
+        pb.val(accountBefore.balancesRoot) = deposit.accountUpdate.before.balancesRoot;
 
+        pb.val(balanceBefore.balance) = deposit.balanceUpdate.before.balance;
+        pb.val(balanceBefore.tradingHistory) = deposit.balanceUpdate.before.tradingHistoryRoot;
+
+        accountID.bits.fill_with_bits_of_field_element(pb, deposit.accountUpdate.accountID);
+        accountID.generate_r1cs_witness_from_bits();
+        tokenID.bits.fill_with_bits_of_field_element(pb, deposit.balanceUpdate.tokenID);
+        tokenID.generate_r1cs_witness_from_bits();
         amount.bits.fill_with_bits_of_field_element(pb, deposit.amount);
         amount.generate_r1cs_witness_from_bits();
         publicKeyX.bits.fill_with_bits_of_field_element(pb, deposit.accountUpdate.after.publicKey.x);
@@ -109,16 +100,8 @@ public:
         publicKeyY.bits.fill_with_bits_of_field_element(pb, deposit.accountUpdate.after.publicKey.y);
         publicKeyY.generate_r1cs_witness_from_bits();
 
-        pb.val(balanceBefore.balance) = deposit.balanceUpdate.before.balance;
-        pb.val(balanceBefore.tradingHistory) = deposit.balanceUpdate.before.tradingHistoryRoot;
-
         uncappedBalanceAfter.generate_r1cs_witness();
         cappedBalanceAfter.generate_r1cs_witness();
-
-        pb.val(accountBefore.publicKeyX) = deposit.accountUpdate.before.publicKey.x;
-        pb.val(accountBefore.publicKeyY) = deposit.accountUpdate.before.publicKey.y;
-        pb.val(accountBefore.nonce) = deposit.accountUpdate.before.nonce;
-        pb.val(accountBefore.balancesRoot) = deposit.accountUpdate.before.balancesRoot;
 
         updateBalance.generate_r1cs_witness(deposit.balanceUpdate.proof);
         updateAccount.generate_r1cs_witness(deposit.accountUpdate.proof);
@@ -126,6 +109,8 @@ public:
 
     void generate_r1cs_constraints()
     {
+        accountID.generate_r1cs_constraints(true);
+        tokenID.generate_r1cs_constraints(true);
         amount.generate_r1cs_constraints(true);
         publicKeyX.generate_r1cs_constraints(true);
         publicKeyY.generate_r1cs_constraints(true);
@@ -135,6 +120,19 @@ public:
 
         updateBalance.generate_r1cs_constraints();
         updateAccount.generate_r1cs_constraints();
+    }
+
+    const std::vector<VariableArrayT> getOnchainData(const Constants& constants) const
+    {
+        return {constants.padding_0000, accountID.bits,
+                publicKeyX.bits, publicKeyY.bits,
+                tokenID.bits,
+                amount.bits};
+    }
+
+    const VariableT getNewAccountsRoot() const
+    {
+        return updateAccount.result();
     }
 };
 
@@ -205,7 +203,7 @@ public:
             VariableArrayT depositBlockHash = (j == 0) ? depositBlockHashStart : hashers.back().result().bits;
 
             // Hash data from deposit
-            std::vector<VariableArrayT> depositData = deposits.back().getOnchainData();
+            std::vector<VariableArrayT> depositData = deposits.back().getOnchainData(constants);
             std::vector<VariableArrayT> hashBits;
             hashBits.push_back(reverse(depositBlockHash));
             hashBits.insert(hashBits.end(), depositData.begin(), depositData.end());
@@ -223,11 +221,6 @@ public:
 
         // Check the new merkle root
         forceEqual(pb, deposits.back().getNewAccountsRoot(), merkleRootAfter.packed, "newMerkleRoot");
-    }
-
-    void printInfo()
-    {
-        std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numAccounts) << "/deposit)" << std::endl;
     }
 
     bool generateWitness(const DepositBlock& block)
@@ -268,6 +261,11 @@ public:
         publicData.generate_r1cs_witness();
 
         return true;
+    }
+
+    void printInfo()
+    {
+        std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numAccounts) << "/deposit)" << std::endl;
     }
 };
 

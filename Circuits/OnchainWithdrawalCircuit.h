@@ -18,7 +18,6 @@ namespace Loopring
 class OnchainWithdrawalGadget : public GadgetT
 {
 public:
-    const Constants& constants;
 
     VariableArrayT accountID;
     VariableArrayT tokenID;
@@ -52,14 +51,12 @@ public:
     OnchainWithdrawalGadget(
         ProtoboardT& pb,
         const jubjub::Params& params,
-        const Constants& _constants,
-        const VariableT& _accountsMerkleRoot,
-        const VariableT& _bShutdownMode,
+        const Constants& constants,
+        const VariableT& accountsMerkleRoot,
+        const VariableT& bShutdownMode,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
-
-        constants(_constants),
 
         accountID(make_var_array(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID"))),
         tokenID(make_var_array(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID"))),
@@ -79,16 +76,16 @@ public:
 
         // Calculate how much can be withdrawn
         amountToWithdrawMin(pb, amountRequested.packed, balanceBefore.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
-        amountToWithdraw(pb, _bShutdownMode, balanceBefore.balance, amountToWithdrawMin.result(), FMT(prefix, ".amountToWithdraw")),
+        amountToWithdraw(pb, bShutdownMode, balanceBefore.balance, amountToWithdrawMin.result(), FMT(prefix, ".amountToWithdraw")),
         amountWithdrawn(pb, constants, Float28Encoding, FMT(prefix, ".amountWithdrawn")),
         requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
 
         // Shutdown mode
-        amountToSubtract(pb, _bShutdownMode, amountToWithdraw.result(), amountWithdrawn.value(), FMT(prefix, ".amountToSubtract")),
-        tradingHistoryAfter(pb, _bShutdownMode, constants.emptyTradeHistory, balanceBefore.tradingHistory, FMT(prefix, ".tradingHistoryAfter")),
-        publicKeyXAfter(pb, _bShutdownMode, constants.zero, accountBefore.publicKeyX, FMT(prefix, ".publicKeyXAfter")),
-        publicKeyYAfter(pb, _bShutdownMode, constants.zero, accountBefore.publicKeyY, FMT(prefix, ".publicKeyYAfter")),
-        nonceAfter(pb, _bShutdownMode, constants.zero, accountBefore.nonce, FMT(prefix, ".tradingHistoryAfter")),
+        amountToSubtract(pb, bShutdownMode, amountToWithdraw.result(), amountWithdrawn.value(), FMT(prefix, ".amountToSubtract")),
+        tradingHistoryAfter(pb, bShutdownMode, constants.emptyTradeHistory, balanceBefore.tradingHistory, FMT(prefix, ".tradingHistoryAfter")),
+        publicKeyXAfter(pb, bShutdownMode, constants.zero, accountBefore.publicKeyX, FMT(prefix, ".publicKeyXAfter")),
+        publicKeyYAfter(pb, bShutdownMode, constants.zero, accountBefore.publicKeyY, FMT(prefix, ".publicKeyYAfter")),
+        nonceAfter(pb, bShutdownMode, constants.zero, accountBefore.nonce, FMT(prefix, ".tradingHistoryAfter")),
 
         // Calculate the new balance
         balance_after(pb, balanceBefore.balance, amountToSubtract.result(), FMT(prefix, ".balance_after")),
@@ -105,28 +102,9 @@ public:
             nonceAfter.result(),
             updateBalance_A.result()
         }),
-        updateAccount_A(pb, _accountsMerkleRoot, accountID, accountBefore, accountAfter, FMT(prefix, ".updateAccount_A"))
+        updateAccount_A(pb, accountsMerkleRoot, accountID, accountBefore, accountAfter, FMT(prefix, ".updateAccount_A"))
     {
 
-    }
-
-    const VariableT getNewAccountsRoot() const
-    {
-        return updateAccount_A.result();
-    }
-
-    const std::vector<VariableArrayT> getOnchainData() const
-    {
-        return {constants.padding_0000, accountID,
-                tokenID,
-                amountRequested.bits};
-    }
-
-    const std::vector<VariableArrayT> getApprovedWithdrawalData() const
-    {
-        return {tokenID,
-                accountID,
-                amountWithdrawn.bits()};
     }
 
     void generate_r1cs_witness(const OnchainWithdrawal& withdrawal)
@@ -150,7 +128,7 @@ public:
         // Withdrawal calculations
         amountToWithdrawMin.generate_r1cs_witness();
         amountToWithdraw.generate_r1cs_witness();
-        amountWithdrawn.generate_r1cs_witness(withdrawal.fAmountWithdrawn);
+        amountWithdrawn.generate_r1cs_witness(toFloat(pb.val(amountToWithdraw.result()), Float28Encoding));
         requireAccuracyAmountWithdrawn.generate_r1cs_witness();
 
         // Shutdown mode
@@ -191,6 +169,25 @@ public:
         // Update the state of the account
         updateBalance_A.generate_r1cs_constraints();
         updateAccount_A.generate_r1cs_constraints();
+    }
+
+    const std::vector<VariableArrayT> getOnchainData(const Constants& constants) const
+    {
+        return {constants.padding_0000, accountID,
+                tokenID,
+                amountRequested.bits};
+    }
+
+    const std::vector<VariableArrayT> getApprovedWithdrawalData() const
+    {
+        return {tokenID,
+                accountID,
+                amountWithdrawn.bits()};
+    }
+
+    const VariableT& getNewAccountsRoot() const
+    {
+        return updateAccount_A.result();
     }
 };
 
@@ -274,7 +271,7 @@ public:
             VariableArrayT withdrawalBlockHash = (j == 0) ? withdrawalBlockHashStart : hashers.back().result().bits;
 
             // Hash data from withdrawal request
-            std::vector<VariableArrayT> withdrawalRequestData = withdrawals.back().getOnchainData();
+            std::vector<VariableArrayT> withdrawalRequestData = withdrawals.back().getOnchainData(constants);
             std::vector<VariableArrayT> hash;
             hash.push_back(reverse(withdrawalBlockHash));
             hash.insert(hash.end(), withdrawalRequestData.begin(), withdrawalRequestData.end());
@@ -299,11 +296,6 @@ public:
 
         // Check the new merkle root
         forceEqual(pb, withdrawals.back().getNewAccountsRoot(), merkleRootAfter.packed, "newMerkleRoot");
-    }
-
-    void printInfo()
-    {
-        std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numWithdrawals) << "/onchain withdrawal)" << std::endl;
     }
 
     bool generateWitness(const OnchainWithdrawalBlock& block)
@@ -348,6 +340,11 @@ public:
         publicData.generate_r1cs_witness();
 
         return true;
+    }
+
+    void printInfo()
+    {
+        std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numWithdrawals) << "/onchain withdrawal)" << std::endl;
     }
 };
 

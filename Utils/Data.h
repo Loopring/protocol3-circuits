@@ -373,7 +373,6 @@ class OnchainWithdrawal
 {
 public:
     ethsnarks::FieldT amountRequested;
-    ethsnarks::FieldT fAmountWithdrawn;
     BalanceUpdate balanceUpdate;
     AccountUpdate accountUpdate;
 };
@@ -381,7 +380,6 @@ public:
 void from_json(const json& j, OnchainWithdrawal& withdrawal)
 {
     withdrawal.amountRequested = ethsnarks::FieldT(j.at("amountRequested").get<std::string>().c_str());
-    withdrawal.fAmountWithdrawn = ethsnarks::FieldT(j.at("fAmountWithdrawn"));
     withdrawal.balanceUpdate = j.at("balanceUpdate").get<BalanceUpdate>();
     withdrawal.accountUpdate = j.at("accountUpdate").get<AccountUpdate>();
 }

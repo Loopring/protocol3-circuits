@@ -106,9 +106,17 @@ class RingSettlementGadget : public GadgetT
 {
 public:
 
-    const Constants& constants;
+    DynamicVariableGadget balanceS_A;
+    DynamicVariableGadget balanceB_A;
+    DynamicVariableGadget balanceS_B;
+    DynamicVariableGadget balanceB_B;
+    DynamicVariableGadget balanceA_P;
+    DynamicVariableGadget balanceB_P;
+    DynamicVariableGadget balanceA_O;
+    DynamicVariableGadget balanceB_O;
 
-    const VariableT accountsRoot;
+    const VariableT balancesRootA;
+    const VariableT balancesRootB;
 
     const VariableT tradingHistoryRootS_A;
     const VariableT tradingHistoryRootB_A;
@@ -116,11 +124,6 @@ public:
     const VariableT tradingHistoryRootB_B;
     const VariableT tradingHistoryRootA_O;
     const VariableT tradingHistoryRootB_O;
-
-    const VariableT balancesRootA;
-    const VariableT balancesRootB;
-
-    VariableT blockexchangeID;
 
     OrderGadget orderA;
     OrderGadget orderB;
@@ -138,20 +141,11 @@ public:
 
     TernaryGadget filledA;
     TernaryGadget filledB;
-    UnsafeAddGadget filledAfterA;
-    UnsafeAddGadget filledAfterB;
+    AddGadget filledAfterA;
+    AddGadget filledAfterB;
 
     FeeCalculatorGadget feeCalculatorA;
     FeeCalculatorGadget feeCalculatorB;
-
-    DynamicVariableGadget balanceS_A;
-    DynamicVariableGadget balanceB_A;
-    DynamicVariableGadget balanceS_B;
-    DynamicVariableGadget balanceB_B;
-    DynamicVariableGadget balanceA_P;
-    DynamicVariableGadget balanceB_P;
-    DynamicVariableGadget balanceA_O;
-    DynamicVariableGadget balanceB_O;
 
     TransferGadget fillBB_from_balanceSA_to_balanceBB;
     TransferGadget fillSB_from_balanceSB_to_balanceBA;
@@ -184,26 +178,47 @@ public:
     RingSettlementGadget(
         ProtoboardT& pb,
         const jubjub::Params& params,
-        const Constants& _constants,
-        const VariableT& _exchangeID,
-        const VariableT& _accountsRoot,
-        const VariableT& _timestamp,
-        const VariableT& _protocolTakerFeeBips,
-        const VariableT& _protocolMakerFeeBips,
-        const VariableT& _protocolBalancesRoot,
-        const VariableT& _operatorBalancesRoot,
+        const Constants& constants,
+        const VariableT& exchangeID,
+        const VariableT& accountsRoot,
+        const VariableT& timestamp,
+        const VariableT& protocolTakerFeeBips,
+        const VariableT& protocolMakerFeeBips,
+        const VariableT& protocolBalancesRoot,
+        const VariableT& operatorBalancesRoot,
 
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
-        constants(_constants),
+        // Balances
+        balanceS_A(pb, FMT(prefix, ".balanceS_A")),
+        balanceB_A(pb, FMT(prefix, ".balanceB_A")),
+        balanceS_B(pb, FMT(prefix, ".balanceS_B")),
+        balanceB_B(pb, FMT(prefix, ".balanceB_B")),
+        balanceA_P(pb, FMT(prefix, ".balanceA_P")),
+        balanceB_P(pb, FMT(prefix, ".balanceB_P")),
+        balanceA_O(pb, FMT(prefix, ".balanceA_O")),
+        balanceB_O(pb, FMT(prefix, ".balanceA_O")),
 
-        orderA(pb, params, constants, _exchangeID, FMT(prefix, ".orderA")),
-        orderB(pb, params, constants, _exchangeID, FMT(prefix, ".orderB")),
+        // Initial balances roots
+        balancesRootA(make_variable(pb, FMT(prefix, ".balancesRootA"))),
+        balancesRootB(make_variable(pb, FMT(prefix, ".balancesRootB"))),
+
+        // Initial trading history roots
+        tradingHistoryRootS_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootS_A"))),
+        tradingHistoryRootB_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_A"))),
+        tradingHistoryRootS_B(make_variable(pb, FMT(prefix, ".tradingHistoryRootS_B"))),
+        tradingHistoryRootB_B(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_B"))),
+        tradingHistoryRootA_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootA_O"))),
+        tradingHistoryRootB_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_O"))),
+
+        // Orders
+        orderA(pb, params, constants, exchangeID, FMT(prefix, ".orderA")),
+        orderB(pb, params, constants, exchangeID, FMT(prefix, ".orderB")),
 
         // Match orders
-        orderMatching(pb, constants, _timestamp, orderA, orderB, FMT(prefix, ".orderMatching")),
+        orderMatching(pb, constants, timestamp, orderA, orderB, FMT(prefix, ".orderMatching")),
 
         // Fill amounts
         uFillS_A(pb, orderMatching.isValid(), orderMatching.getFillA_S(), constants.zero, FMT(prefix, ".uFillS_A")),
@@ -216,22 +231,12 @@ public:
         // Filled amounts
         filledA(pb, orderA.buy.packed, fillS_B.value(), fillS_A.value(), FMT(prefix, ".filledA")),
         filledB(pb, orderB.buy.packed, fillS_A.value(), fillS_B.value(), FMT(prefix, ".filledB")),
-        filledAfterA(pb, orderA.tradeHistory.getFilled(), filledA.result(), FMT(prefix, ".filledAfterA")),
-        filledAfterB(pb, orderB.tradeHistory.getFilled(), filledB.result(), FMT(prefix, ".filledAfterB")),
+        filledAfterA(pb, orderA.tradeHistory.getFilled(), filledA.result(), NUM_BITS_AMOUNT, FMT(prefix, ".filledAfterA")),
+        filledAfterB(pb, orderB.tradeHistory.getFilled(), filledB.result(), NUM_BITS_AMOUNT, FMT(prefix, ".filledAfterB")),
 
         // Calculate fees
-        feeCalculatorA(pb, constants, fillS_B.value(), _protocolTakerFeeBips, orderA.feeBips.packed, orderA.rebateBips.packed, FMT(prefix, ".feeCalculatorA")),
-        feeCalculatorB(pb, constants, fillS_A.value(), _protocolMakerFeeBips, orderB.feeBips.packed, orderB.rebateBips.packed, FMT(prefix, ".feeCalculatorB")),
-
-        // Balances
-        balanceS_A(pb, FMT(prefix, ".balanceS_A")),
-        balanceB_A(pb, FMT(prefix, ".balanceB_A")),
-        balanceS_B(pb, FMT(prefix, ".balanceS_B")),
-        balanceB_B(pb, FMT(prefix, ".balanceB_B")),
-        balanceA_P(pb, FMT(prefix, ".balanceA_P")),
-        balanceB_P(pb, FMT(prefix, ".balanceB_P")),
-        balanceA_O(pb, FMT(prefix, ".balanceA_O")),
-        balanceB_O(pb, FMT(prefix, ".balanceA_O")),
+        feeCalculatorA(pb, constants, fillS_B.value(), protocolTakerFeeBips, orderA.feeBips.packed, orderA.rebateBips.packed, FMT(prefix, ".feeCalculatorA")),
+        feeCalculatorB(pb, constants, fillS_A.value(), protocolMakerFeeBips, orderB.feeBips.packed, orderB.rebateBips.packed, FMT(prefix, ".feeCalculatorB")),
 
         // Actual trade
         fillBB_from_balanceSA_to_balanceBB(pb, balanceS_A, balanceB_B, fillS_A.value(), FMT(prefix, ".fillBB_from_balanceSA_to_balanceBB")),
@@ -246,18 +251,6 @@ public:
         protocolFeeA_from_balanceAO_to_balanceAP(pb, balanceA_O, balanceA_P, feeCalculatorA.getProtocolFee(), FMT(prefix, ".protocolFeeA_from_balanceAO_to_balanceAP")),
         protocolFeeB_from_balanceBO_to_balanceBP(pb, balanceB_O, balanceB_P, feeCalculatorB.getProtocolFee(), FMT(prefix, ".protocolFeeB_from_balanceBO_to_balanceBP")),
 
-        // Initial trading history roots
-        tradingHistoryRootS_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootS_A"))),
-        tradingHistoryRootB_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_A"))),
-        tradingHistoryRootS_B(make_variable(pb, FMT(prefix, ".tradingHistoryRootS_B"))),
-        tradingHistoryRootB_B(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_B"))),
-        tradingHistoryRootA_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootA_O"))),
-        tradingHistoryRootB_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_O"))),
-
-        // Initial balances roots
-        balancesRootA(make_variable(pb, FMT(prefix, ".balancesRootA"))),
-        balancesRootB(make_variable(pb, FMT(prefix, ".balancesRootB"))),
-
         // Update trading history
         updateTradeHistoryA(pb, tradingHistoryRootS_A, subArray(orderA.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
                             {orderA.tradeHistoryFilled, orderA.tradeHistoryCancelled, orderA.tradeHistoryOrderID},
@@ -267,8 +260,6 @@ public:
                             {orderB.tradeHistoryFilled, orderB.tradeHistoryCancelled, orderB.tradeHistoryOrderID},
                             {filledAfterB.result(), orderB.tradeHistory.getCancelledToStore(), orderB.tradeHistory.getOrderIDToStore()},
                             FMT(prefix, ".updateTradeHistoryB")),
-
-        accountsRoot(_accountsRoot),
 
         // Update OwnerA
         updateBalanceS_A(pb, balancesRootA, orderA.tokenS.bits,
@@ -280,7 +271,7 @@ public:
                          {balanceB_A.back(), tradingHistoryRootB_A},
                          FMT(prefix, ".updateBalanceB_A")),
         nonce_A(make_variable(pb, FMT(prefix, ".nonce_A"))),
-        updateAccount_A(pb, _accountsRoot, orderA.accountID.bits,
+        updateAccount_A(pb, accountsRoot, orderA.accountID.bits,
                         {orderA.publicKey.x, orderA.publicKey.y, nonce_A, balancesRootA},
                         {orderA.publicKey.x, orderA.publicKey.y, nonce_A, updateBalanceB_A.result()},
                         FMT(prefix, ".updateAccount_A")),
@@ -301,7 +292,7 @@ public:
                         FMT(prefix, ".updateAccount_B")),
 
         // Update Protocol pool
-        updateBalanceA_P(pb, _protocolBalancesRoot, orderA.tokenB.bits,
+        updateBalanceA_P(pb, protocolBalancesRoot, orderA.tokenB.bits,
                          {balanceA_P.front(), constants.emptyTradeHistory},
                          {balanceA_P.back(), constants.emptyTradeHistory},
                          FMT(prefix, ".updateBalanceA_P")),
@@ -311,7 +302,7 @@ public:
                          FMT(prefix, ".updateBalanceB_P")),
 
         // Update Operator
-        updateBalanceA_O(pb, _operatorBalancesRoot, orderA.tokenB.bits,
+        updateBalanceA_O(pb, operatorBalancesRoot, orderA.tokenB.bits,
                          {balanceA_O.front(), tradingHistoryRootA_O},
                          {balanceA_O.back(), tradingHistoryRootA_O},
                          FMT(prefix, ".updateBalanceA_O")),
@@ -323,40 +314,31 @@ public:
 
     }
 
-    const VariableT getNewAccountsRoot() const
-    {
-        return updateAccount_B.result();
-    }
-
-    const VariableT getNewProtocolBalancesRoot() const
-    {
-        return updateBalanceB_P.result();
-    }
-
-    const VariableT getNewOperatorBalancesRoot() const
-    {
-        return updateBalanceB_O.result();
-    }
-
-    const std::vector<VariableArrayT> getPublicData() const
-    {
-        return
-        {
-            orderA.orderID.bits, orderB.orderID.bits,
-            orderA.accountID.bits, orderB.accountID.bits,
-
-            orderA.tokenS.bits,
-            fillS_A.bits(),
-            orderA.buy.bits, VariableArrayT(1, orderA.bRebateNonZero.result()), orderA.feeOrRebateBips.bits,
-
-            orderB.tokenS.bits,
-            fillS_B.bits(),
-            orderB.buy.bits, VariableArrayT(1, orderB.bRebateNonZero.result()), orderB.feeOrRebateBips.bits,
-        };
-    }
-
     void generate_r1cs_witness(const RingSettlement& ringSettlement)
     {
+        // Balances before
+        balanceS_A.generate_r1cs_witness(ringSettlement.balanceUpdateS_A.before.balance);
+        balanceB_A.generate_r1cs_witness(ringSettlement.balanceUpdateB_A.before.balance);
+        balanceS_B.generate_r1cs_witness(ringSettlement.balanceUpdateS_B.before.balance);
+        balanceB_B.generate_r1cs_witness(ringSettlement.balanceUpdateB_B.before.balance);
+        balanceA_P.generate_r1cs_witness(ringSettlement.balanceUpdateA_P.before.balance);
+        balanceB_P.generate_r1cs_witness(ringSettlement.balanceUpdateB_P.before.balance);
+        balanceA_O.generate_r1cs_witness(ringSettlement.balanceUpdateA_O.before.balance);
+        balanceB_O.generate_r1cs_witness(ringSettlement.balanceUpdateB_O.before.balance);
+
+        // Initial balances roots
+        pb.val(balancesRootA) = ringSettlement.balanceUpdateS_A.rootBefore;
+        pb.val(balancesRootB) = ringSettlement.balanceUpdateS_B.rootBefore;
+
+        // Trading history roots before
+        pb.val(tradingHistoryRootS_A) = ringSettlement.balanceUpdateS_A.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRootB_A) = ringSettlement.balanceUpdateB_A.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRootS_B) = ringSettlement.balanceUpdateS_B.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRootB_B) = ringSettlement.balanceUpdateB_B.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRootA_O) = ringSettlement.balanceUpdateA_O.before.tradingHistoryRoot;
+        pb.val(tradingHistoryRootB_O) = ringSettlement.balanceUpdateB_O.before.tradingHistoryRoot;
+
+        // Orders
         orderA.generate_r1cs_witness(ringSettlement.ring.orderA,
                                      ringSettlement.accountUpdate_A.before,
                                      ringSettlement.balanceUpdateS_A.before,
@@ -378,8 +360,6 @@ public:
         fillS_B.generate_r1cs_witness(toFloat(pb.val(uFillS_B.result()), Float24Encoding));
         requireAccuracyFillS_A.generate_r1cs_witness();
         requireAccuracyFillS_B.generate_r1cs_witness();
-        // print(pb, "fillS_A", fillS_A.value());
-        // print(pb, "fillS_B", fillS_B.value());
 
         // Filled amounts
         filledA.generate_r1cs_witness();
@@ -391,16 +371,6 @@ public:
         feeCalculatorA.generate_r1cs_witness();
         feeCalculatorB.generate_r1cs_witness();
 
-        // Balances before
-        balanceS_A.generate_r1cs_witness(ringSettlement.balanceUpdateS_A.before.balance);
-        balanceB_A.generate_r1cs_witness(ringSettlement.balanceUpdateB_A.before.balance);
-        balanceS_B.generate_r1cs_witness(ringSettlement.balanceUpdateS_B.before.balance);
-        balanceB_B.generate_r1cs_witness(ringSettlement.balanceUpdateB_B.before.balance);
-        balanceA_P.generate_r1cs_witness(ringSettlement.balanceUpdateA_P.before.balance);
-        balanceB_P.generate_r1cs_witness(ringSettlement.balanceUpdateB_P.before.balance);
-        balanceA_O.generate_r1cs_witness(ringSettlement.balanceUpdateA_O.before.balance);
-        balanceB_O.generate_r1cs_witness(ringSettlement.balanceUpdateB_O.before.balance);
-
         // Calculate new balances
         fillBB_from_balanceSA_to_balanceBB.generate_r1cs_witness();
         fillSB_from_balanceSB_to_balanceBA.generate_r1cs_witness();
@@ -410,18 +380,6 @@ public:
         rebateB_from_balanceBO_to_balanceBB.generate_r1cs_witness();
         protocolFeeA_from_balanceAO_to_balanceAP.generate_r1cs_witness();
         protocolFeeB_from_balanceBO_to_balanceBP.generate_r1cs_witness();
-
-        // Initial trading history roots
-        pb.val(tradingHistoryRootS_A) = ringSettlement.balanceUpdateS_A.before.tradingHistoryRoot;
-        pb.val(tradingHistoryRootB_A) = ringSettlement.balanceUpdateB_A.before.tradingHistoryRoot;
-        pb.val(tradingHistoryRootS_B) = ringSettlement.balanceUpdateS_B.before.tradingHistoryRoot;
-        pb.val(tradingHistoryRootB_B) = ringSettlement.balanceUpdateB_B.before.tradingHistoryRoot;
-        pb.val(tradingHistoryRootA_O) = ringSettlement.balanceUpdateA_O.before.tradingHistoryRoot;
-        pb.val(tradingHistoryRootB_O) = ringSettlement.balanceUpdateB_O.before.tradingHistoryRoot;
-
-        // Initial balances roots
-        pb.val(balancesRootA) = ringSettlement.balanceUpdateS_A.rootBefore;
-        pb.val(balancesRootB) = ringSettlement.balanceUpdateS_B.rootBefore;
 
         // Update trading history
         updateTradeHistoryA.generate_r1cs_witness(ringSettlement.tradeHistoryUpdate_A.proof);
@@ -448,6 +406,7 @@ public:
 
     void generate_r1cs_constraints()
     {
+        // Orders
         orderA.generate_r1cs_constraints();
         orderB.generate_r1cs_constraints();
 
@@ -500,6 +459,38 @@ public:
         // Update Operator
         updateBalanceA_O.generate_r1cs_constraints();
         updateBalanceB_O.generate_r1cs_constraints();
+    }
+
+    const std::vector<VariableArrayT> getPublicData() const
+    {
+        return
+        {
+            orderA.orderID.bits, orderB.orderID.bits,
+            orderA.accountID.bits, orderB.accountID.bits,
+
+            orderA.tokenS.bits,
+            fillS_A.bits(),
+            orderA.buy.bits, VariableArrayT(1, orderA.bRebateNonZero.result()), orderA.feeOrRebateBips.bits,
+
+            orderB.tokenS.bits,
+            fillS_B.bits(),
+            orderB.buy.bits, VariableArrayT(1, orderB.bRebateNonZero.result()), orderB.feeOrRebateBips.bits,
+        };
+    }
+
+    const VariableT getNewAccountsRoot() const
+    {
+        return updateAccount_B.result();
+    }
+
+    const VariableT getNewProtocolBalancesRoot() const
+    {
+        return updateBalanceB_P.result();
+    }
+
+    const VariableT getNewOperatorBalancesRoot() const
+    {
+        return updateBalanceB_O.result();
     }
 };
 
@@ -668,11 +659,6 @@ public:
         signatureVerifier.generate_r1cs_constraints();
     }
 
-    void printInfo()
-    {
-        std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numRings) << "/ring)" << std::endl;
-    }
-
     bool generateWitness(const RingSettlementBlock& block)
     {
         if (block.ringSettlements.size() != numRings)
@@ -728,6 +714,11 @@ public:
         signatureVerifier.generate_r1cs_witness(block.signature);
 
         return true;
+    }
+
+    void printInfo()
+    {
+        std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numRings) << "/ring)" << std::endl;
     }
 };
 

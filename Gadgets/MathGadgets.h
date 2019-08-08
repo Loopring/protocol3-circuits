@@ -262,6 +262,47 @@ public:
     }
 };
 
+// A + B = sum with A, B and sum < 2^n
+class AddGadget : public GadgetT
+{
+public:
+
+    UnsafeAddGadget unsafeAdd;
+    libsnark::dual_variable_gadget<FieldT> rangeCheck;
+
+    AddGadget(
+        ProtoboardT& pb,
+        const VariableT& A,
+        const VariableT& B,
+        unsigned int n,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        unsafeAdd(pb, A, B, FMT(prefix, ".unsafeAdd")),
+        rangeCheck(pb, unsafeAdd.result(), n, FMT(prefix, ".rangeCheck"))
+    {
+        assert(n + 1 <= NUM_BITS_FIELD_CAPACITY);
+    }
+
+    void generate_r1cs_witness()
+    {
+        unsafeAdd.generate_r1cs_witness();
+        rangeCheck.generate_r1cs_witness_from_packed();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        unsafeAdd.generate_r1cs_constraints();
+        rangeCheck.generate_r1cs_constraints(true);
+    }
+
+    const VariableT& result() const
+    {
+        return unsafeAdd.result();
+    }
+};
+
 // b ? A : B
 class TernaryGadget : public GadgetT
 {
