@@ -16,53 +16,186 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
-// Checks if the rounding error of a MulDiv is 1% or worse
-// (only when it means the user gets less than expected, a better rate is allowed with higher rounding errors)
-class RoundingErrorGadget : public GadgetT
+// Checks if the fill rate < 1% worse than the target rate
+// (fillAmountS/fillAmountB) * 100 < (amountS/amountB) * 101
+// (fillAmountS * amountB * 100) < (fillAmountB * amountS * 101)
+class CheckFillRateGadget : public GadgetT
 {
 public:
-    MulDivGadget mulDiv;
-    UnsafeMulGadget remainderx100;
-    LeqGadget remainderx100_leq_multiplied;
+    UnsafeMulGadget fillAmountS_mul_amountB;
+    UnsafeMulGadget fillAmountS_mul_amountB_mul_100;
 
-    RoundingErrorGadget(
+    UnsafeMulGadget fillAmountB_mul_amountS;
+    UnsafeMulGadget fillAmountB_mul_amountS_mul_101;
+
+    LeqGadget valid;
+
+    CheckFillRateGadget(
         ProtoboardT& pb,
         const Constants& constants,
-        const VariableT& _value,
-        const VariableT& _numerator,
-        const VariableT& _denominator,
-        unsigned int numBitsValue,
-        unsigned int numBitsNumerator,
-        unsigned int numBitsDenominator,
+        const VariableT& amountS,
+        const VariableT& amountB,
+        const VariableT& fillAmountS,
+        const VariableT& fillAmountB,
+        unsigned int n,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
-        mulDiv(pb, constants, _value, _numerator, _denominator, numBitsValue, numBitsNumerator, numBitsDenominator, FMT(prefix, ".multiplied")),
-        remainderx100(pb, mulDiv.getRemainder(), constants._100, FMT(prefix, ".remainderx100")),
-        remainderx100_leq_multiplied(pb, remainderx100.result(), mulDiv.getProduct(), numBitsValue + numBitsNumerator, FMT(prefix, ".remainderx100_leq_multiplied"))
+        fillAmountS_mul_amountB(pb, fillAmountS, amountB, FMT(prefix, ".fillAmountS_mul_amountB")),
+        fillAmountS_mul_amountB_mul_100(pb, fillAmountS_mul_amountB.result(), constants._100, FMT(prefix, ".fillAmountS_mul_amountB_mul_100")),
+
+        fillAmountB_mul_amountS(pb, fillAmountB, amountS, FMT(prefix, ".fillAmountB_mul_amountS")),
+        fillAmountB_mul_amountS_mul_101(pb, fillAmountB_mul_amountS.result(), constants._101, FMT(prefix, ".fillAmountB_mul_amountS_mul_101")),
+
+        valid(pb, fillAmountS_mul_amountB_mul_100.result(), fillAmountB_mul_amountS_mul_101.result(), n * 2 + 7 /*=ceil(log2(100))*/, FMT(prefix, ".valid"))
     {
-        assert(numBitsDenominator <= NUM_BITS_FIELD_CAPACITY - 7 /*=ceil(log2(100))*/);
-        assert(numBitsValue + numBitsNumerator <= NUM_BITS_FIELD_CAPACITY);
+
     }
 
     const VariableT& isValid()
     {
-        return remainderx100_leq_multiplied.leq();
+        return valid.lt();
     }
 
     void generate_r1cs_witness()
     {
-        mulDiv.generate_r1cs_witness();
-        remainderx100.generate_r1cs_witness();
-        remainderx100_leq_multiplied.generate_r1cs_witness();
+        fillAmountS_mul_amountB.generate_r1cs_witness();
+        fillAmountS_mul_amountB_mul_100.generate_r1cs_witness();
+
+        fillAmountB_mul_amountS.generate_r1cs_witness();
+        fillAmountB_mul_amountS_mul_101.generate_r1cs_witness();
+
+        valid.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
-        mulDiv.generate_r1cs_constraints();
-        remainderx100.generate_r1cs_constraints();
-        remainderx100_leq_multiplied.generate_r1cs_constraints();
+        fillAmountS_mul_amountB.generate_r1cs_constraints();
+        fillAmountS_mul_amountB_mul_100.generate_r1cs_constraints();
+
+        fillAmountB_mul_amountS.generate_r1cs_constraints();
+        fillAmountB_mul_amountS_mul_101.generate_r1cs_constraints();
+
+        valid.generate_r1cs_constraints();
+    }
+};
+
+// Check if an order is filled correctly
+class CheckValidGadget : public GadgetT
+{
+public:
+
+    LeqGadget fillAmountS_lt_amountS;
+    LeqGadget fillAmountB_lt_amountB;
+    NotGadget order_sell;
+    AndGadget notValidAllOrNoneSell;
+    AndGadget notValidAllOrNoneBuy;
+
+    LeqGadget validSince_leq_timestamp;
+    LeqGadget timestamp_leq_validUntil;
+
+    CheckFillRateGadget checkFillRate;
+
+    NotGadget validAllOrNoneSell;
+    NotGadget validAllOrNoneBuy;
+
+    IsNonZero isNonZeroFillAmountS;
+    IsNonZero isNonZeroFillAmountB;
+
+    AndGadget valid;
+
+    CheckValidGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const VariableT& timestamp,
+        const OrderGadget& order,
+        const VariableT& fillAmountS,
+        const VariableT& fillAmountB,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        fillAmountS_lt_amountS(pb, fillAmountS, order.amountS.packed, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountS_lt_amountS")),
+        fillAmountB_lt_amountB(pb, fillAmountB, order.amountB.packed, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB_lt_amountB")),
+        order_sell(pb, order.buy.packed, FMT(prefix, ".order_sell")),
+        notValidAllOrNoneSell(pb, { order.allOrNone.packed, order_sell.result(), fillAmountS_lt_amountS.lt() }, FMT(prefix, ".notValidAllOrNoneSell")),
+        notValidAllOrNoneBuy(pb, { order.allOrNone.packed, order.buy.packed, fillAmountB_lt_amountB.lt() }, FMT(prefix, ".notValidAllOrNoneBuy")),
+
+        validSince_leq_timestamp(pb, order.validSince.packed, timestamp, NUM_BITS_TIMESTAMP, FMT(prefix, "validSince <= timestamp")),
+        timestamp_leq_validUntil(pb, timestamp, order.validUntil.packed, NUM_BITS_TIMESTAMP, FMT(prefix, "timestamp <= validUntil")),
+
+        validAllOrNoneSell(pb, notValidAllOrNoneSell.result(), FMT(prefix, "validAllOrNoneSell")),
+        validAllOrNoneBuy(pb, notValidAllOrNoneBuy.result(), FMT(prefix, "validAllOrNoneBuy")),
+
+        checkFillRate(pb, constants, order.amountS.packed, order.amountB.packed, fillAmountS, fillAmountB, NUM_BITS_AMOUNT, FMT(prefix, ".checkFillRate")),
+
+        isNonZeroFillAmountS(pb, fillAmountS, FMT(prefix, "isNonZeroFillAmountS")),
+        isNonZeroFillAmountB(pb, fillAmountB, FMT(prefix, "isNonZeroFillAmountB")),
+
+        valid(pb,
+                {
+                    validSince_leq_timestamp.leq(),
+                    timestamp_leq_validUntil.leq(),
+                    checkFillRate.isValid(),
+                    validAllOrNoneSell.result(),
+                    validAllOrNoneBuy.result(),
+                    isNonZeroFillAmountS.result(),
+                    isNonZeroFillAmountB.result()
+                },
+                FMT(prefix, ".valid")
+            )
+    {
+
+    }
+
+    void generate_r1cs_witness ()
+    {
+        fillAmountS_lt_amountS.generate_r1cs_witness();
+        fillAmountB_lt_amountB.generate_r1cs_witness();
+        order_sell.generate_r1cs_witness();
+        notValidAllOrNoneSell.generate_r1cs_witness();
+        notValidAllOrNoneBuy.generate_r1cs_witness();
+
+        validSince_leq_timestamp.generate_r1cs_witness();
+        timestamp_leq_validUntil.generate_r1cs_witness();
+
+        validAllOrNoneSell.generate_r1cs_witness();
+        validAllOrNoneBuy.generate_r1cs_witness();
+
+        checkFillRate.generate_r1cs_witness();
+
+        isNonZeroFillAmountS.generate_r1cs_witness();
+        isNonZeroFillAmountB.generate_r1cs_witness();
+
+        valid.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        fillAmountS_lt_amountS.generate_r1cs_constraints();
+        fillAmountB_lt_amountB.generate_r1cs_constraints();
+        order_sell.generate_r1cs_constraints();
+        notValidAllOrNoneSell.generate_r1cs_constraints();
+        notValidAllOrNoneBuy.generate_r1cs_constraints();
+
+        validSince_leq_timestamp.generate_r1cs_constraints();
+        timestamp_leq_validUntil.generate_r1cs_constraints();
+
+        validAllOrNoneSell.generate_r1cs_constraints();
+        validAllOrNoneBuy.generate_r1cs_constraints();
+
+        checkFillRate.generate_r1cs_constraints();
+
+        isNonZeroFillAmountS.generate_r1cs_constraints();
+        isNonZeroFillAmountB.generate_r1cs_constraints();
+
+        valid.generate_r1cs_constraints();
+    }
+
+    const VariableT& isValid()
+    {
+        return valid.result();
     }
 };
 
@@ -120,125 +253,6 @@ public:
     const VariableT getRebate() const
     {
         return rebate.result();
-    }
-};
-
-// Check if an order is filled correctly
-class CheckValidGadget : public GadgetT
-{
-public:
-
-    LeqGadget fillAmountS_lt_amountS;
-    LeqGadget fillAmountB_lt_amountB;
-    NotGadget order_sell;
-    AndGadget notValidAllOrNoneSell;
-    AndGadget notValidAllOrNoneBuy;
-
-    LeqGadget validSince_leq_timestamp;
-    LeqGadget timestamp_leq_validUntil;
-
-    RoundingErrorGadget checkRoundingError;
-
-    NotGadget validAllOrNoneSell;
-    NotGadget validAllOrNoneBuy;
-
-    IsNonZero isNonZeroFillAmountS;
-    IsNonZero isNonZeroFillAmountB;
-
-    AndGadget valid;
-
-    CheckValidGadget(
-        ProtoboardT& pb,
-        const Constants& constants,
-        const VariableT& timestamp,
-        const OrderGadget& order,
-        const VariableT& fillAmountS,
-        const VariableT& fillAmountB,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix),
-
-        fillAmountS_lt_amountS(pb, fillAmountS, order.amountS.packed, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountS_lt_amountS")),
-        fillAmountB_lt_amountB(pb, fillAmountB, order.amountB.packed, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB_lt_amountB")),
-        order_sell(pb, order.buy.packed, FMT(prefix, ".order_sell")),
-        notValidAllOrNoneSell(pb, { order.allOrNone.packed, order_sell.result(), fillAmountS_lt_amountS.lt() }, FMT(prefix, ".notValidAllOrNoneSell")),
-        notValidAllOrNoneBuy(pb, { order.allOrNone.packed, order.buy.packed, fillAmountB_lt_amountB.lt() }, FMT(prefix, ".notValidAllOrNoneBuy")),
-
-        validSince_leq_timestamp(pb, order.validSince.packed, timestamp, NUM_BITS_TIMESTAMP, FMT(prefix, "validSince <= timestamp")),
-        timestamp_leq_validUntil(pb, timestamp, order.validUntil.packed, NUM_BITS_TIMESTAMP, FMT(prefix, "timestamp <= validUntil")),
-
-        validAllOrNoneSell(pb, notValidAllOrNoneSell.result(), FMT(prefix, "validAllOrNoneSell")),
-        validAllOrNoneBuy(pb, notValidAllOrNoneBuy.result(), FMT(prefix, "validAllOrNoneBuy")),
-
-        checkRoundingError(pb, constants, fillAmountS, order.amountB.packed, order.amountS.packed,
-                           NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".checkRoundingError")),
-
-        isNonZeroFillAmountS(pb, fillAmountS, FMT(prefix, "isNonZeroFillAmountS")),
-        isNonZeroFillAmountB(pb, fillAmountB, FMT(prefix, "isNonZeroFillAmountB")),
-
-        valid(pb,
-                {
-                    validSince_leq_timestamp.leq(),
-                    timestamp_leq_validUntil.leq(),
-                    checkRoundingError.isValid(),
-                    validAllOrNoneSell.result(),
-                    validAllOrNoneBuy.result(),
-                    isNonZeroFillAmountS.result(),
-                    isNonZeroFillAmountB.result()
-                },
-                FMT(prefix, ".valid")
-            )
-    {
-
-    }
-
-    void generate_r1cs_witness ()
-    {
-        fillAmountS_lt_amountS.generate_r1cs_witness();
-        fillAmountB_lt_amountB.generate_r1cs_witness();
-        order_sell.generate_r1cs_witness();
-        notValidAllOrNoneSell.generate_r1cs_witness();
-        notValidAllOrNoneBuy.generate_r1cs_witness();
-
-        validSince_leq_timestamp.generate_r1cs_witness();
-        timestamp_leq_validUntil.generate_r1cs_witness();
-
-        validAllOrNoneSell.generate_r1cs_witness();
-        validAllOrNoneBuy.generate_r1cs_witness();
-
-        checkRoundingError.generate_r1cs_witness();
-
-        isNonZeroFillAmountS.generate_r1cs_witness();
-        isNonZeroFillAmountB.generate_r1cs_witness();
-
-        valid.generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        fillAmountS_lt_amountS.generate_r1cs_constraints();
-        fillAmountB_lt_amountB.generate_r1cs_constraints();
-        order_sell.generate_r1cs_constraints();
-        notValidAllOrNoneSell.generate_r1cs_constraints();
-        notValidAllOrNoneBuy.generate_r1cs_constraints();
-
-        validSince_leq_timestamp.generate_r1cs_constraints();
-        timestamp_leq_validUntil.generate_r1cs_constraints();
-
-        validAllOrNoneSell.generate_r1cs_constraints();
-        validAllOrNoneBuy.generate_r1cs_constraints();
-
-        checkRoundingError.generate_r1cs_constraints();
-
-        isNonZeroFillAmountS.generate_r1cs_constraints();
-        isNonZeroFillAmountB.generate_r1cs_constraints();
-
-        valid.generate_r1cs_constraints();
-    }
-
-    const VariableT& isValid()
-    {
-        return valid.result();
     }
 };
 
