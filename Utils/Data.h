@@ -547,6 +547,77 @@ static void from_json(const json& j, OrderCancellationBlock& block)
     }
 }
 
+/*
+ * New internal transfer protocal
+ */
+class InternalTransfer
+{
+public:
+    ethsnarks::FieldT fee;
+    ethsnarks::FieldT amount;
+    ethsnarks::FieldT label;
+    Signature signature;
+
+    BalanceUpdate balanceUpdateF_A; // pay fee step
+    BalanceUpdate balanceUpdateT_A; // trans step
+    AccountUpdate accountUpdate_A;
+
+    BalanceUpdate balanceUpdateT_B;	// recieve trans
+    AccountUpdate accountUpdate_B;
+        
+    BalanceUpdate balanceUpdateF_O;	// recieve fee
+};
+
+void from_json(const json& j, InternalTransfer& interTrans)
+{
+    interTrans.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
+    interTrans.amount = ethsnarks::FieldT(j["amount"].get<std::string>().c_str());
+    interTrans.label = ethsnarks::FieldT(j.at("label"));
+    interTrans.signature = j.at("signature").get<Signature>();
+
+    interTrans.balanceUpdateF_A = j.at("balanceUpdateF_A").get<BalanceUpdate>();
+    interTrans.balanceUpdateT_A = j.at("balanceUpdateT_A").get<BalanceUpdate>();
+    interTrans.accountUpdate_A = j.at("accountUpdate_A").get<AccountUpdate>();
+
+    interTrans.balanceUpdateT_B = j.at("balanceUpdateT_B").get<BalanceUpdate>();
+    interTrans.accountUpdate_B = j.at("accountUpdate_B").get<AccountUpdate>();
+
+    interTrans.balanceUpdateF_O = j.at("balanceUpdateF_O").get<BalanceUpdate>();
+}
+
+class InternalTransferBlock
+{
+public:
+    ethsnarks::FieldT exchangeID;
+
+    ethsnarks::FieldT merkleRootBefore;
+    ethsnarks::FieldT merkleRootAfter;
+
+    ethsnarks::FieldT operatorAccountID;
+    AccountUpdate accountUpdate_O;
+
+    std::vector<Loopring::InternalTransfer> interTransferres;
+};
+
+void from_json(const json& j, InternalTransferBlock& block)
+{
+    block.exchangeID = ethsnarks::FieldT(j["exchangeID"].get<unsigned int>());
+
+    block.merkleRootBefore = ethsnarks::FieldT(j["merkleRootBefore"].get<std::string>().c_str());
+    block.merkleRootAfter = ethsnarks::FieldT(j["merkleRootAfter"].get<std::string>().c_str());
+
+    block.operatorAccountID = ethsnarks::FieldT(j.at("operatorAccountID"));
+    block.accountUpdate_O = j.at("accountUpdate_O").get<AccountUpdate>();
+
+    // Read internal transferres
+    json jInterTranferres = j["interTransferres"];
+    for(unsigned int i = 0; i < jInterTranferres.size(); i++)
+    {
+        block.interTransferres.emplace_back(jInterTranferres[i].get<Loopring::InternalTransfer>());
+    }
+}
+
+
 }
 
 #endif
