@@ -19,12 +19,14 @@ class OnchainWithdrawalGadget : public GadgetT
 {
 public:
 
-    VariableArrayT accountID;
-    VariableArrayT tokenID;
-    libsnark::dual_variable_gadget<FieldT> amountRequested;
-
+    // User state
     BalanceState balanceBefore;
     AccountState accountBefore;
+
+    // Inputs
+    libsnark::dual_variable_gadget<FieldT> accountID;
+    libsnark::dual_variable_gadget<FieldT> tokenID;
+    libsnark::dual_variable_gadget<FieldT> amountRequested;
 
     // Calculate how much can be withdrawn
     MinGadget amountToWithdrawMin;
@@ -58,11 +60,7 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        accountID(make_var_array(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID"))),
-        tokenID(make_var_array(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID"))),
-        amountRequested(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amountRequested")),
-
-        // User
+        // User state
         balanceBefore({
             make_variable(pb, FMT(prefix, ".before.balance")),
             make_variable(pb, FMT(prefix, ".before.tradingHistory"))
@@ -73,6 +71,11 @@ public:
             make_variable(pb, FMT(prefix, ".nonce")),
             make_variable(pb, FMT(prefix, ".before.balancesRoot"))
         }),
+
+        // Inputs
+        accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
+        tokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID")),
+        amountRequested(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amountRequested")),
 
         // Calculate how much can be withdrawn
         amountToWithdrawMin(pb, amountRequested.packed, balanceBefore.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
@@ -95,35 +98,36 @@ public:
             balance_after.result(),
             tradingHistoryAfter.result()
         }),
-        updateBalance_A(pb, accountBefore.balancesRoot, tokenID, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance_A")),
+        updateBalance_A(pb, accountBefore.balancesRoot, tokenID.bits, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance_A")),
         accountAfter({
             publicKeyXAfter.result(),
             publicKeyYAfter.result(),
             nonceAfter.result(),
             updateBalance_A.result()
         }),
-        updateAccount_A(pb, accountsMerkleRoot, accountID, accountBefore, accountAfter, FMT(prefix, ".updateAccount_A"))
+        updateAccount_A(pb, accountsMerkleRoot, accountID.bits, accountBefore, accountAfter, FMT(prefix, ".updateAccount_A"))
     {
 
     }
 
     void generate_r1cs_witness(const OnchainWithdrawal& withdrawal)
     {
-        accountID.fill_with_bits_of_field_element(pb, withdrawal.accountUpdate.accountID);
-        tokenID.fill_with_bits_of_field_element(pb, withdrawal.balanceUpdate.tokenID);
-        amountRequested.bits.fill_with_bits_of_field_element(pb, withdrawal.amountRequested);
-        amountRequested.generate_r1cs_witness_from_bits();
-
-        // Balance
+        // User state
         pb.val(balanceBefore.tradingHistory) = withdrawal.balanceUpdate.before.tradingHistoryRoot;
         pb.val(balanceBefore.balance) = withdrawal.balanceUpdate.before.balance;
         pb.val(balanceAfter.balance) = withdrawal.balanceUpdate.after.balance;
-
-        // Account
         pb.val(accountBefore.publicKeyX) = withdrawal.accountUpdate.before.publicKey.x;
         pb.val(accountBefore.publicKeyY) = withdrawal.accountUpdate.before.publicKey.y;
         pb.val(accountBefore.nonce) = withdrawal.accountUpdate.before.nonce;
         pb.val(accountBefore.balancesRoot) = withdrawal.accountUpdate.before.balancesRoot;
+
+        // Inputs
+        accountID.bits.fill_with_bits_of_field_element(pb, withdrawal.accountUpdate.accountID);
+        accountID.generate_r1cs_witness_from_bits();
+        tokenID.bits.fill_with_bits_of_field_element(pb, withdrawal.balanceUpdate.tokenID);
+        tokenID.generate_r1cs_witness_from_bits();
+        amountRequested.bits.fill_with_bits_of_field_element(pb, withdrawal.amountRequested);
+        amountRequested.generate_r1cs_witness_from_bits();
 
         // Withdrawal calculations
         amountToWithdrawMin.generate_r1cs_witness();
@@ -148,6 +152,9 @@ public:
 
     void generate_r1cs_constraints()
     {
+        // Inputs
+        accountID.generate_r1cs_constraints(true);
+        tokenID.generate_r1cs_constraints(true);
         amountRequested.generate_r1cs_constraints(true);
 
         // Withdrawal calculations
@@ -173,15 +180,15 @@ public:
 
     const std::vector<VariableArrayT> getOnchainData(const Constants& constants) const
     {
-        return {constants.padding_0000, accountID,
-                tokenID,
+        return {constants.padding_0000, accountID.bits,
+                tokenID.bits,
                 amountRequested.bits};
     }
 
     const std::vector<VariableArrayT> getApprovedWithdrawalData() const
     {
-        return {tokenID,
-                accountID,
+        return {tokenID.bits,
+                accountID.bits,
                 amountWithdrawn.bits()};
     }
 
