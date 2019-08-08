@@ -1,3 +1,5 @@
+
+#include "ThirdParty/BigInt.hpp"
 #include "Utils/Data.h"
 #include "Circuits/RingSettlementCircuit.h"
 #include "Circuits/DepositCircuit.h"

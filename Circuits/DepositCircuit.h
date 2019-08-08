@@ -4,7 +4,7 @@
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
 
-#include "../ThirdParty/BigInt.hpp"
+#include "../ThirdParty/BigIntHeader.hpp"
 #include "ethsnarks.hpp"
 #include "utils.hpp"
 #include "gadgets/sha256_many.hpp"
