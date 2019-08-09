@@ -20,20 +20,19 @@ class OffchainWithdrawalGadget : public GadgetT
 public:
 
     // User state
-    BalanceState balanceFBefore;
-    BalanceState balanceBefore;
-    AccountState accountBefore;
+    BalanceGadget balanceFBefore;
+    BalanceGadget balanceBefore;
+    AccountGadget accountBefore;
     // Operator state
-    VariableT balanceF_O_before;
-    VariableT tradingHistoryRootF_O;
+    BalanceGadget balanceBefore_O;
 
     // Inputs
-    libsnark::dual_variable_gadget<FieldT> accountID;
-    libsnark::dual_variable_gadget<FieldT> tokenID;
-    libsnark::dual_variable_gadget<FieldT> amountRequested;
-    libsnark::dual_variable_gadget<FieldT> feeTokenID;
-    libsnark::dual_variable_gadget<FieldT> fee;
-    libsnark::dual_variable_gadget<FieldT> label;
+    DualVariableGadget accountID;
+    DualVariableGadget tokenID;
+    DualVariableGadget amountRequested;
+    DualVariableGadget feeTokenID;
+    DualVariableGadget fee;
+    DualVariableGadget label;
 
     // Fee as float
     FloatGadget fFee;
@@ -77,23 +76,11 @@ public:
         GadgetT(pb, prefix),
 
         // User state
-        balanceFBefore({
-            make_variable(pb, FMT(prefix, ".beforeF.balance")),
-            make_variable(pb, FMT(prefix, ".beforeF.tradingHistory"))
-        }),
-        balanceBefore({
-            make_variable(pb, FMT(prefix, ".before.balance")),
-            make_variable(pb, FMT(prefix, ".before.tradingHistory"))
-        }),
-        accountBefore({
-            make_variable(pb, FMT(prefix, ".publicKeyX")),
-            make_variable(pb, FMT(prefix, ".publicKeyY")),
-            make_variable(pb, FMT(prefix, ".nonce")),
-            make_variable(pb, FMT(prefix, ".before.balancesRoot"))
-        }),
+        balanceFBefore(pb, FMT(prefix, ".balanceFBefore")),
+        balanceBefore(pb, FMT(prefix, ".balanceBefore")),
+        accountBefore(pb, FMT(prefix, ".accountBefore")),
         // Operator state
-        balanceF_O_before(make_variable(pb, FMT(prefix, ".balanceF_O_before"))),
-        tradingHistoryRootF_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_O"))),
+        balanceBefore_O(pb, FMT(prefix, ".accountBefore_O")),
 
         // Inputs
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
@@ -108,7 +95,7 @@ public:
         requireAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFee")),
 
         // Fee payment from the user to the operator
-        feePayment(pb, NUM_BITS_AMOUNT, balanceFBefore.balance, balanceF_O_before, fFee.value(), FMT(prefix, ".feePayment")),
+        feePayment(pb, NUM_BITS_AMOUNT, balanceFBefore.balance, balanceBefore_O.balance, fFee.value(), FMT(prefix, ".feePayment")),
 
         // Calculate how much can be withdrawn
         amountToWithdraw(pb, amountRequested.packed, balanceBefore.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
@@ -137,8 +124,8 @@ public:
 
         // Update Operator
         updateBalanceF_O(pb, operatorBalancesRoot, feeTokenID.bits,
-                         {balanceF_O_before, tradingHistoryRootF_O},
-                         {feePayment.Y, tradingHistoryRootF_O},
+                         {balanceBefore_O.balance, balanceBefore_O.tradingHistory},
+                         {feePayment.Y, balanceBefore_O.tradingHistory},
                          FMT(prefix, ".updateBalanceF_O")),
 
         // Signature
@@ -161,31 +148,19 @@ public:
     void generate_r1cs_witness(const OffchainWithdrawal& withdrawal)
     {
         // User state
-        pb.val(balanceFBefore.tradingHistory) = withdrawal.balanceUpdateF_A.before.tradingHistoryRoot;
-        pb.val(balanceFBefore.balance) = withdrawal.balanceUpdateF_A.before.balance;
-        pb.val(balanceBefore.tradingHistory) = withdrawal.balanceUpdateW_A.before.tradingHistoryRoot;
-        pb.val(balanceBefore.balance) = withdrawal.balanceUpdateW_A.before.balance;
-        pb.val(accountBefore.publicKeyX) = withdrawal.accountUpdate_A.before.publicKey.x;
-        pb.val(accountBefore.publicKeyY) = withdrawal.accountUpdate_A.before.publicKey.y;
-        pb.val(accountBefore.nonce) = withdrawal.accountUpdate_A.before.nonce;
-        pb.val(accountBefore.balancesRoot) = withdrawal.accountUpdate_A.before.balancesRoot;
+        balanceFBefore.generate_r1cs_witness(withdrawal.balanceUpdateF_A.before);
+        balanceBefore.generate_r1cs_witness(withdrawal.balanceUpdateW_A.before);
+        accountBefore.generate_r1cs_witness(withdrawal.accountUpdate_A.before);
         // Operator state
-        pb.val(balanceF_O_before) = withdrawal.balanceUpdateF_O.before.balance;
-        pb.val(tradingHistoryRootF_O) = withdrawal.balanceUpdateF_O.before.tradingHistoryRoot;
+        balanceBefore_O.generate_r1cs_witness(withdrawal.balanceUpdateF_O.before);
 
         // Inputs
-        accountID.bits.fill_with_bits_of_field_element(pb, withdrawal.accountUpdate_A.accountID);
-        accountID.generate_r1cs_witness_from_bits();
-        tokenID.bits.fill_with_bits_of_field_element(pb, withdrawal.balanceUpdateW_A.tokenID);
-        tokenID.generate_r1cs_witness_from_bits();
-        amountRequested.bits.fill_with_bits_of_field_element(pb, withdrawal.amountRequested);
-        amountRequested.generate_r1cs_witness_from_bits();
-        feeTokenID.bits.fill_with_bits_of_field_element(pb, withdrawal.balanceUpdateF_A.tokenID);
-        feeTokenID.generate_r1cs_witness_from_bits();
-        fee.bits.fill_with_bits_of_field_element(pb, withdrawal.fee);
-        fee.generate_r1cs_witness_from_bits();
-        label.bits.fill_with_bits_of_field_element(pb, withdrawal.label);
-        label.generate_r1cs_witness_from_bits();
+        accountID.generate_r1cs_witness(pb, withdrawal.accountUpdate_A.accountID);
+        tokenID.generate_r1cs_witness(pb, withdrawal.balanceUpdateW_A.tokenID);
+        amountRequested.generate_r1cs_witness(pb, withdrawal.amountRequested);
+        feeTokenID.generate_r1cs_witness(pb, withdrawal.balanceUpdateF_A.tokenID);
+        fee.generate_r1cs_witness(pb, withdrawal.fee);
+        label.generate_r1cs_witness(pb, withdrawal.label);
 
         // Fee as float
         fFee.generate_r1cs_witness(toFloat(withdrawal.fee, Float16Encoding));
@@ -220,6 +195,13 @@ public:
 
     void generate_r1cs_constraints()
     {
+         // User state
+        balanceFBefore.generate_r1cs_constraints();
+        balanceBefore.generate_r1cs_constraints();
+        accountBefore.generate_r1cs_constraints();
+        // Operator state
+        balanceBefore_O.generate_r1cs_constraints();
+
         // Inputs
         accountID.generate_r1cs_constraints(true);
         tokenID.generate_r1cs_constraints(true);
@@ -259,16 +241,6 @@ public:
         signatureVerifier.generate_r1cs_constraints();
     }
 
-    const VariableT getNewAccountsRoot() const
-    {
-        return updateAccount_A.result();
-    }
-
-    const VariableT getNewOperatorBalancesRoot() const
-    {
-        return updateBalanceF_O.result();
-    }
-
     const std::vector<VariableArrayT> getApprovedWithdrawalData() const
     {
         return {tokenID.bits,
@@ -281,6 +253,16 @@ public:
         return {feeTokenID.bits,
                 fFee.bits()};
     }
+
+    const VariableT getNewAccountsRoot() const
+    {
+        return updateAccount_A.result();
+    }
+
+    const VariableT getNewOperatorBalancesRoot() const
+    {
+        return updateBalanceF_O.result();
+    }
 };
 
 class OffchainWithdrawalCircuit : public GadgetT
@@ -292,15 +274,13 @@ public:
     jubjub::Params params;
 
     // State
-    const jubjub::VariablePointT publicKey;
-    VariableT nonce;
-    VariableT balancesRoot_before;
+    AccountGadget accountBefore_O;
 
     // Inputs
-    libsnark::dual_variable_gadget<FieldT> exchangeID;
-    libsnark::dual_variable_gadget<FieldT> merkleRootBefore;
-    libsnark::dual_variable_gadget<FieldT> merkleRootAfter;
-    libsnark::dual_variable_gadget<FieldT> operatorAccountID;
+    DualVariableGadget exchangeID;
+    DualVariableGadget merkleRootBefore;
+    DualVariableGadget merkleRootAfter;
+    DualVariableGadget operatorAccountID;
 
     // Operator account check
     RequireNotZeroGadget publicKeyX_notZero;
@@ -324,9 +304,7 @@ public:
         constants(pb, FMT(prefix, ".constants")),
 
         // State
-        publicKey(pb, FMT(prefix, ".publicKey")),
-        nonce(make_variable(pb, 0, FMT(prefix, ".nonce"))),
-        balancesRoot_before(make_variable(pb, 0, FMT(prefix, ".balancesRoot_before"))),
+        accountBefore_O(pb, FMT(prefix, ".accountBefore_O")),
 
         // Inputs
         exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
@@ -335,7 +313,7 @@ public:
         operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
 
         // Operator account check
-        publicKeyX_notZero(pb, publicKey.x, FMT(prefix, ".publicKeyX_notZero"))
+        publicKeyX_notZero(pb, accountBefore_O.publicKeyX, FMT(prefix, ".publicKeyX_notZero"))
     {
 
     }
@@ -346,6 +324,9 @@ public:
         this->numWithdrawals = numWithdrawals;
 
         constants.generate_r1cs_constraints();
+
+        // State
+        accountBefore_O.generate_r1cs_constraints();
 
         // Inputs
         exchangeID.generate_r1cs_constraints(true);
@@ -360,7 +341,7 @@ public:
         for (size_t j = 0; j < numWithdrawals; j++)
         {
             VariableT withdrawalAccountsRoot = (j == 0) ? merkleRootBefore.packed : withdrawals.back().getNewAccountsRoot();
-            VariableT withdrawalOperatorBalancesRoot = (j == 0) ? balancesRoot_before : withdrawals.back().getNewOperatorBalancesRoot();
+            VariableT withdrawalOperatorBalancesRoot = (j == 0) ? accountBefore_O.balancesRoot : withdrawals.back().getNewOperatorBalancesRoot();
             withdrawals.emplace_back(
                 pb,
                 params,
@@ -376,8 +357,8 @@ public:
 
         // Update Operator
         updateAccount_O.reset(new UpdateAccountGadget(pb, withdrawals.back().getNewAccountsRoot(), operatorAccountID.bits,
-            {publicKey.x, publicKey.y, nonce, balancesRoot_before},
-            {publicKey.x, publicKey.y, nonce, withdrawals.back().getNewOperatorBalancesRoot()},
+            {accountBefore_O.publicKeyX, accountBefore_O.publicKeyY, accountBefore_O.nonce, accountBefore_O.balancesRoot},
+            {accountBefore_O.publicKeyX, accountBefore_O.publicKeyY, accountBefore_O.nonce, withdrawals.back().getNewOperatorBalancesRoot()},
             FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
@@ -416,20 +397,13 @@ public:
         constants.generate_r1cs_witness();
 
         // State
-        pb.val(publicKey.x) = block.accountUpdate_O.before.publicKey.x;
-        pb.val(publicKey.y) = block.accountUpdate_O.before.publicKey.y;
-        pb.val(nonce) = block.accountUpdate_O.before.nonce;
-        pb.val(balancesRoot_before) = block.accountUpdate_O.before.balancesRoot;
+        accountBefore_O.generate_r1cs_witness(block.accountUpdate_O.before);
 
         // Inputs
-        exchangeID.bits.fill_with_bits_of_field_element(pb, block.exchangeID);
-        exchangeID.generate_r1cs_witness_from_bits();
-        merkleRootBefore.bits.fill_with_bits_of_field_element(pb, block.merkleRootBefore);
-        merkleRootBefore.generate_r1cs_witness_from_bits();
-        merkleRootAfter.bits.fill_with_bits_of_field_element(pb, block.merkleRootAfter);
-        merkleRootAfter.generate_r1cs_witness_from_bits();
-        operatorAccountID.bits.fill_with_bits_of_field_element(pb, block.operatorAccountID);
-        operatorAccountID.generate_r1cs_witness_from_bits();
+        exchangeID.generate_r1cs_witness(pb, block.exchangeID);
+        merkleRootBefore.generate_r1cs_witness(pb, block.merkleRootBefore);
+        merkleRootAfter.generate_r1cs_witness(pb, block.merkleRootAfter);
+        operatorAccountID.generate_r1cs_witness(pb, block.operatorAccountID);
 
         // Operator account check
         publicKeyX_notZero.generate_r1cs_witness();

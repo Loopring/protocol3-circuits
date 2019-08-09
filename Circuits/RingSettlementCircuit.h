@@ -338,11 +338,9 @@ public:
         balanceB_P.generate_r1cs_witness(ringSettlement.balanceUpdateB_P.before.balance);
         balanceA_O.generate_r1cs_witness(ringSettlement.balanceUpdateA_O.before.balance);
         balanceB_O.generate_r1cs_witness(ringSettlement.balanceUpdateB_O.before.balance);
-
         // Initial balances roots
         pb.val(balancesRootA) = ringSettlement.balanceUpdateS_A.rootBefore;
         pb.val(balancesRootB) = ringSettlement.balanceUpdateS_B.rootBefore;
-
         // Trading history roots before
         pb.val(tradingHistoryRootS_A) = ringSettlement.balanceUpdateS_A.before.tradingHistoryRoot;
         pb.val(tradingHistoryRootB_A) = ringSettlement.balanceUpdateB_A.before.tradingHistoryRoot;
@@ -530,21 +528,17 @@ public:
     jubjub::Params params;
 
     // State
-    // Operator
-    const jubjub::VariablePointT publicKey;
-    const VariableT balancesRootO_before;
-    const VariableT nonce_before;
-    // Protocol pool
-    const VariableT balancesRootP_before;
+    AccountGadget accountBefore_O;
+    AccountGadget accountBefore_P;
 
     // Inputs
-    libsnark::dual_variable_gadget<FieldT> exchangeID;
-    libsnark::dual_variable_gadget<FieldT> merkleRootBefore;
-    libsnark::dual_variable_gadget<FieldT> merkleRootAfter;
-    libsnark::dual_variable_gadget<FieldT> timestamp;
-    libsnark::dual_variable_gadget<FieldT> protocolTakerFeeBips;
-    libsnark::dual_variable_gadget<FieldT> protocolMakerFeeBips;
-    libsnark::dual_variable_gadget<FieldT> operatorAccountID;
+    DualVariableGadget exchangeID;
+    DualVariableGadget merkleRootBefore;
+    DualVariableGadget merkleRootAfter;
+    DualVariableGadget timestamp;
+    DualVariableGadget protocolTakerFeeBips;
+    DualVariableGadget protocolMakerFeeBips;
+    DualVariableGadget operatorAccountID;
 
     // Increment the nonce of the Operator
     AddGadget nonce_after;
@@ -579,12 +573,8 @@ public:
         constants(pb, FMT(prefix, ".constants")),
 
         // State
-        // Operator
-        publicKey(pb, FMT(prefix, ".publicKey")),
-        balancesRootO_before(make_variable(pb, FMT(prefix, ".balancesRootO_before"))),
-        nonce_before(make_variable(pb, FMT(prefix, ".nonce_before"))),
-        // Protocol pool
-        balancesRootP_before(make_variable(pb, FMT(prefix, ".balancesRootP_before"))),
+        accountBefore_O(pb, FMT(prefix, ".accountBefore_O")),
+        accountBefore_P(pb, FMT(prefix, ".accountBefore_P")),
 
         // Inputs
         exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
@@ -596,7 +586,7 @@ public:
         operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
 
         // Increment the nonce of the Operator
-        nonce_after(pb, nonce_before, constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_after")),
+        nonce_after(pb, accountBefore_O.nonce, constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_after")),
 
         // Transform the ring data
         transformData(pb, FMT(prefix, ".transformData")),
@@ -604,9 +594,10 @@ public:
         // Signature
         hash(pb, var_array({
             publicData.publicInput,
-            nonce_before
+            accountBefore_O.nonce
         }), FMT(this->annotation_prefix, ".hash")),
-        signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
+        signatureVerifier(pb, params, jubjub::VariablePointT(accountBefore_O.publicKeyX, accountBefore_O.publicKeyY),
+                          hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }
@@ -617,6 +608,10 @@ public:
         this->numRings = numRings;
 
         constants.generate_r1cs_constraints();
+
+        // State
+        accountBefore_O.generate_r1cs_constraints();
+        accountBefore_P.generate_r1cs_constraints();
 
         // Inputs
         exchangeID.generate_r1cs_constraints(true);
@@ -634,8 +629,8 @@ public:
         for (size_t j = 0; j < numRings; j++)
         {
             const VariableT ringAccountsRoot = (j == 0) ? merkleRootBefore.packed : ringSettlements.back().getNewAccountsRoot();
-            const VariableT& ringProtocolBalancesRoot = (j == 0) ? balancesRootP_before : ringSettlements.back().getNewProtocolBalancesRoot();
-            const VariableT& ringOperatorBalancesRoot = (j == 0) ? balancesRootO_before : ringSettlements.back().getNewOperatorBalancesRoot();
+            const VariableT& ringProtocolBalancesRoot = (j == 0) ? accountBefore_P.balancesRoot : ringSettlements.back().getNewProtocolBalancesRoot();
+            const VariableT& ringOperatorBalancesRoot = (j == 0) ? accountBefore_O.balancesRoot : ringSettlements.back().getNewOperatorBalancesRoot();
             ringSettlements.emplace_back(
                 pb,
                 params,
@@ -663,15 +658,15 @@ public:
 
         // Update Protocol pool
         updateAccount_P.reset(new UpdateAccountGadget(pb, ringSettlements.back().getNewAccountsRoot(), constants.zeroAccount,
-                      {constants.zero, constants.zero, constants.zero, balancesRootP_before},
-                      {constants.zero, constants.zero, constants.zero, ringSettlements.back().getNewProtocolBalancesRoot()},
+                      {accountBefore_P.publicKeyX, accountBefore_P.publicKeyY, accountBefore_P.nonce, accountBefore_P.balancesRoot},
+                      {accountBefore_P.publicKeyX, accountBefore_P.publicKeyY, accountBefore_P.nonce, ringSettlements.back().getNewProtocolBalancesRoot()},
                       FMT(annotation_prefix, ".updateAccount_P")));
         updateAccount_P->generate_r1cs_constraints();
 
         // Update Operator
         updateAccount_O.reset(new UpdateAccountGadget(pb, updateAccount_P->result(), operatorAccountID.bits,
-                      {publicKey.x, publicKey.y, nonce_before, balancesRootO_before},
-                      {publicKey.x, publicKey.y, nonce_after.result(), ringSettlements.back().getNewOperatorBalancesRoot()},
+                      {accountBefore_O.publicKeyX, accountBefore_O.publicKeyY, accountBefore_O.nonce, accountBefore_O.balancesRoot},
+                      {accountBefore_O.publicKeyX, accountBefore_O.publicKeyY, nonce_after.result(), ringSettlements.back().getNewOperatorBalancesRoot()},
                       FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
@@ -716,29 +711,17 @@ public:
         constants.generate_r1cs_witness();
 
         // State
-        // Operator
-        pb.val(publicKey.x) = block.accountUpdate_O.before.publicKey.x;
-        pb.val(publicKey.y) = block.accountUpdate_O.before.publicKey.y;
-        pb.val(balancesRootO_before) = block.accountUpdate_O.before.balancesRoot;
-        pb.val(nonce_before) = block.accountUpdate_O.before.nonce;
-        // Operator pool
-        pb.val(balancesRootP_before) = block.accountUpdate_P.before.balancesRoot;
+        accountBefore_O.generate_r1cs_witness(block.accountUpdate_O.before);
+        accountBefore_P.generate_r1cs_witness(block.accountUpdate_P.before);
 
         // Inputs
-        exchangeID.bits.fill_with_bits_of_field_element(pb, block.exchangeID);
-        exchangeID.generate_r1cs_witness_from_bits();
-        merkleRootBefore.bits.fill_with_bits_of_field_element(pb, block.merkleRootBefore);
-        merkleRootBefore.generate_r1cs_witness_from_bits();
-        merkleRootAfter.bits.fill_with_bits_of_field_element(pb, block.merkleRootAfter);
-        merkleRootAfter.generate_r1cs_witness_from_bits();
-        timestamp.bits.fill_with_bits_of_field_element(pb, block.timestamp);
-        timestamp.generate_r1cs_witness_from_bits();
-        protocolTakerFeeBips.bits.fill_with_bits_of_field_element(pb, block.protocolTakerFeeBips);
-        protocolTakerFeeBips.generate_r1cs_witness_from_bits();
-        protocolMakerFeeBips.bits.fill_with_bits_of_field_element(pb, block.protocolMakerFeeBips);
-        protocolMakerFeeBips.generate_r1cs_witness_from_bits();
-        operatorAccountID.bits.fill_with_bits_of_field_element(pb, block.operatorAccountID);
-        operatorAccountID.generate_r1cs_witness_from_bits();
+        exchangeID.generate_r1cs_witness(pb, block.exchangeID);
+        merkleRootBefore.generate_r1cs_witness(pb, block.merkleRootBefore);
+        merkleRootAfter.generate_r1cs_witness(pb, block.merkleRootAfter);
+        timestamp.generate_r1cs_witness(pb, block.timestamp);
+        protocolTakerFeeBips.generate_r1cs_witness(pb, block.protocolTakerFeeBips);
+        protocolMakerFeeBips.generate_r1cs_witness(pb, block.protocolMakerFeeBips);
+        operatorAccountID.generate_r1cs_witness(pb, block.operatorAccountID);
 
         // Increment the nonce of the Operator
         nonce_after.generate_r1cs_witness();

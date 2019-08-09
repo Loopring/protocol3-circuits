@@ -1417,6 +1417,37 @@ public:
     }
 };
 
+class DualVariableGadget : public libsnark::dual_variable_gadget<FieldT>
+{
+public:
+    DualVariableGadget(
+        ProtoboardT& pb,
+        const size_t width,
+        const std::string& prefix
+    ) :
+        libsnark::dual_variable_gadget<FieldT>(pb, width, prefix)
+    {
+
+    }
+
+    void generate_r1cs_witness(ProtoboardT& pb, const FieldT& value)
+    {
+        bits.fill_with_bits_of_field_element(pb, value);
+        generate_r1cs_witness_from_bits();
+    }
+
+    void generate_r1cs_witness(ProtoboardT& pb, const libff::bigint<libff::alt_bn128_r_limbs>& value)
+    {
+        assert(value.size() == 256);
+        for (unsigned int i = 0; i < 256; i++)
+        {
+            pb.val(bits[255 - i]) = value.test_bit(i);
+        }
+        generate_r1cs_witness_from_bits();
+    }
+
+
+};
 
 }
 

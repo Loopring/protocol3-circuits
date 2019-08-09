@@ -20,13 +20,13 @@ class OnchainWithdrawalGadget : public GadgetT
 public:
 
     // User state
-    BalanceState balanceBefore;
-    AccountState accountBefore;
+    BalanceGadget balanceBefore;
+    AccountGadget accountBefore;
 
     // Inputs
-    libsnark::dual_variable_gadget<FieldT> accountID;
-    libsnark::dual_variable_gadget<FieldT> tokenID;
-    libsnark::dual_variable_gadget<FieldT> amountRequested;
+    DualVariableGadget accountID;
+    DualVariableGadget tokenID;
+    DualVariableGadget amountRequested;
 
     // Calculate how much can be withdrawn
     MinGadget amountToWithdrawMin;
@@ -58,16 +58,8 @@ public:
         GadgetT(pb, prefix),
 
         // User state
-        balanceBefore({
-            make_variable(pb, FMT(prefix, ".before.balance")),
-            make_variable(pb, FMT(prefix, ".before.tradingHistory"))
-        }),
-        accountBefore({
-            make_variable(pb, FMT(prefix, ".publicKeyX")),
-            make_variable(pb, FMT(prefix, ".publicKeyY")),
-            make_variable(pb, FMT(prefix, ".nonce")),
-            make_variable(pb, FMT(prefix, ".before.balancesRoot"))
-        }),
+        balanceBefore(pb, FMT(prefix, ".balanceBefore")),
+        accountBefore(pb, FMT(prefix, ".accountBefore")),
 
         // Inputs
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
@@ -106,20 +98,13 @@ public:
     void generate_r1cs_witness(const OnchainWithdrawal& withdrawal)
     {
         // User state
-        pb.val(balanceBefore.tradingHistory) = withdrawal.balanceUpdate.before.tradingHistoryRoot;
-        pb.val(balanceBefore.balance) = withdrawal.balanceUpdate.before.balance;
-        pb.val(accountBefore.publicKeyX) = withdrawal.accountUpdate.before.publicKey.x;
-        pb.val(accountBefore.publicKeyY) = withdrawal.accountUpdate.before.publicKey.y;
-        pb.val(accountBefore.nonce) = withdrawal.accountUpdate.before.nonce;
-        pb.val(accountBefore.balancesRoot) = withdrawal.accountUpdate.before.balancesRoot;
+        balanceBefore.generate_r1cs_witness(withdrawal.balanceUpdate.before);
+        accountBefore.generate_r1cs_witness(withdrawal.accountUpdate.before);
 
         // Inputs
-        accountID.bits.fill_with_bits_of_field_element(pb, withdrawal.accountUpdate.accountID);
-        accountID.generate_r1cs_witness_from_bits();
-        tokenID.bits.fill_with_bits_of_field_element(pb, withdrawal.balanceUpdate.tokenID);
-        tokenID.generate_r1cs_witness_from_bits();
-        amountRequested.bits.fill_with_bits_of_field_element(pb, withdrawal.amountRequested);
-        amountRequested.generate_r1cs_witness_from_bits();
+        accountID.generate_r1cs_witness(pb, withdrawal.accountUpdate.accountID);
+        tokenID.generate_r1cs_witness(pb, withdrawal.balanceUpdate.tokenID);
+        amountRequested.generate_r1cs_witness(pb, withdrawal.amountRequested);
 
         // Withdrawal calculations
         amountToWithdrawMin.generate_r1cs_witness();
@@ -144,6 +129,10 @@ public:
 
     void generate_r1cs_constraints()
     {
+        // User state
+        balanceBefore.generate_r1cs_constraints();
+        accountBefore.generate_r1cs_constraints();
+
         // Inputs
         accountID.generate_r1cs_constraints(true);
         tokenID.generate_r1cs_constraints(true);
@@ -198,12 +187,12 @@ public:
     Constants constants;
 
     // Inputs
-    libsnark::dual_variable_gadget<FieldT> exchangeID;
-    libsnark::dual_variable_gadget<FieldT> merkleRootBefore;
-    libsnark::dual_variable_gadget<FieldT> merkleRootAfter;
-    libsnark::dual_variable_gadget<FieldT> withdrawalBlockHashStart;
-    libsnark::dual_variable_gadget<FieldT> startIndex;
-    libsnark::dual_variable_gadget<FieldT> count;
+    DualVariableGadget exchangeID;
+    DualVariableGadget merkleRootBefore;
+    DualVariableGadget merkleRootAfter;
+    DualVariableGadget withdrawalBlockHashStart;
+    DualVariableGadget startIndex;
+    DualVariableGadget count;
 
     // Shutdown
     EqualGadget bShutdownMode;
@@ -298,21 +287,12 @@ public:
         constants.generate_r1cs_witness();
 
         // Inputs
-        exchangeID.bits.fill_with_bits_of_field_element(pb, block.exchangeID);
-        exchangeID.generate_r1cs_witness_from_bits();
-        merkleRootBefore.bits.fill_with_bits_of_field_element(pb, block.merkleRootBefore);
-        merkleRootBefore.generate_r1cs_witness_from_bits();
-        merkleRootAfter.bits.fill_with_bits_of_field_element(pb, block.merkleRootAfter);
-        merkleRootAfter.generate_r1cs_witness_from_bits();
-        for (unsigned int i = 0; i < 256; i++)
-        {
-            pb.val(withdrawalBlockHashStart.bits[255 - i]) = block.startHash.test_bit(i);
-        }
-        withdrawalBlockHashStart.generate_r1cs_witness_from_bits();
-        startIndex.bits.fill_with_bits_of_field_element(pb, block.startIndex);
-        startIndex.generate_r1cs_witness_from_bits();
-        count.bits.fill_with_bits_of_field_element(pb, block.count);
-        count.generate_r1cs_witness_from_bits();
+        exchangeID.generate_r1cs_witness(pb, block.exchangeID);
+        merkleRootBefore.generate_r1cs_witness(pb, block.merkleRootBefore);
+        merkleRootAfter.generate_r1cs_witness(pb, block.merkleRootAfter);
+        withdrawalBlockHashStart.generate_r1cs_witness(pb, block.startHash);
+        startIndex.generate_r1cs_witness(pb, block.startIndex);
+        count.generate_r1cs_witness(pb, block.count);
         // printBits("start hash input: 0x", depositBlockHashStart.get_bits(pb), true);
 
         // Shutdown

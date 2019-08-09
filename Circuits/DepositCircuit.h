@@ -19,19 +19,19 @@ class DepositGadget : public GadgetT
 public:
 
     // User state
-    BalanceState balanceBefore;
-    AccountState accountBefore;
+    BalanceGadget balanceBefore;
+    AccountGadget accountBefore;
 
     // Inputs
-    libsnark::dual_variable_gadget<FieldT> accountID;
-    libsnark::dual_variable_gadget<FieldT> tokenID;
-    libsnark::dual_variable_gadget<FieldT> amount;
-    libsnark::dual_variable_gadget<FieldT> publicKeyX;
-    libsnark::dual_variable_gadget<FieldT> publicKeyY;
+    DualVariableGadget accountID;
+    DualVariableGadget tokenID;
+    DualVariableGadget amount;
+    DualVariableGadget publicKeyX;
+    DualVariableGadget publicKeyY;
 
     // Calculate the new balance
     UnsafeAddGadget uncappedBalanceAfter;
-    MinGadget cappedBalanceAfter;
+    MinGadget balanceAfter;
 
     // Update User
     UpdateBalanceGadget updateBalance;
@@ -46,16 +46,8 @@ public:
         GadgetT(pb, prefix),
 
         // User state
-        balanceBefore({
-            make_variable(pb, FMT(prefix, ".before.balance")),
-            make_variable(pb, FMT(prefix, ".tradingHistoryRoot"))
-        }),
-        accountBefore({
-            make_variable(pb, FMT(prefix, ".publicKeyX_before")),
-            make_variable(pb, FMT(prefix, ".publicKeyY_before")),
-            make_variable(pb, FMT(prefix, ".nonce")),
-            make_variable(pb, FMT(prefix, ".balancesRoot_before"))
-        }),
+        balanceBefore(pb, FMT(prefix, ".balanceBefore")),
+        accountBefore(pb, FMT(prefix, ".accountBefore")),
 
         // Inputs
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
@@ -66,12 +58,12 @@ public:
 
         // Calculate the new balance
         uncappedBalanceAfter(pb, balanceBefore.balance, amount.packed, FMT(prefix, ".uncappedBalanceAfter")),
-        cappedBalanceAfter(pb, uncappedBalanceAfter.result(), constants.maxAmount, NUM_BITS_AMOUNT + 1, FMT(prefix, ".cappedBalanceAfter")),
+        balanceAfter(pb, uncappedBalanceAfter.result(), constants.maxAmount, NUM_BITS_AMOUNT + 1, FMT(prefix, ".balanceAfter")),
 
         // Update User
         updateBalance(pb, accountBefore.balancesRoot, tokenID.bits,
                       {balanceBefore.balance, balanceBefore.tradingHistory},
-                      {cappedBalanceAfter.result(), balanceBefore.tradingHistory},
+                      {balanceAfter.result(), balanceBefore.tradingHistory},
                       FMT(prefix, ".updateBalance")),
         updateAccount(pb, root, accountID.bits,
                       {accountBefore.publicKeyX, accountBefore.publicKeyY, accountBefore.nonce, accountBefore.balancesRoot},
@@ -84,28 +76,19 @@ public:
     void generate_r1cs_witness(const Deposit& deposit)
     {
         // User state
-        pb.val(accountBefore.publicKeyX) = deposit.accountUpdate.before.publicKey.x;
-        pb.val(accountBefore.publicKeyY) = deposit.accountUpdate.before.publicKey.y;
-        pb.val(accountBefore.nonce) = deposit.accountUpdate.before.nonce;
-        pb.val(accountBefore.balancesRoot) = deposit.accountUpdate.before.balancesRoot;
-        pb.val(balanceBefore.balance) = deposit.balanceUpdate.before.balance;
-        pb.val(balanceBefore.tradingHistory) = deposit.balanceUpdate.before.tradingHistoryRoot;
+        balanceBefore.generate_r1cs_witness(deposit.balanceUpdate.before);
+        accountBefore.generate_r1cs_witness(deposit.accountUpdate.before);
 
         // Inputs
-        accountID.bits.fill_with_bits_of_field_element(pb, deposit.accountUpdate.accountID);
-        accountID.generate_r1cs_witness_from_bits();
-        tokenID.bits.fill_with_bits_of_field_element(pb, deposit.balanceUpdate.tokenID);
-        tokenID.generate_r1cs_witness_from_bits();
-        amount.bits.fill_with_bits_of_field_element(pb, deposit.amount);
-        amount.generate_r1cs_witness_from_bits();
-        publicKeyX.bits.fill_with_bits_of_field_element(pb, deposit.accountUpdate.after.publicKey.x);
-        publicKeyX.generate_r1cs_witness_from_bits();
-        publicKeyY.bits.fill_with_bits_of_field_element(pb, deposit.accountUpdate.after.publicKey.y);
-        publicKeyY.generate_r1cs_witness_from_bits();
+        accountID.generate_r1cs_witness(pb, deposit.accountUpdate.accountID);
+        tokenID.generate_r1cs_witness(pb, deposit.balanceUpdate.tokenID);
+        amount.generate_r1cs_witness(pb, deposit.amount);
+        publicKeyX.generate_r1cs_witness(pb, deposit.accountUpdate.after.publicKey.x);
+        publicKeyY.generate_r1cs_witness(pb, deposit.accountUpdate.after.publicKey.y);
 
         // Calculate the new balance
         uncappedBalanceAfter.generate_r1cs_witness();
-        cappedBalanceAfter.generate_r1cs_witness();
+        balanceAfter.generate_r1cs_witness();
 
         // Update User
         updateBalance.generate_r1cs_witness(deposit.balanceUpdate.proof);
@@ -114,6 +97,10 @@ public:
 
     void generate_r1cs_constraints()
     {
+        // User state
+        balanceBefore.generate_r1cs_constraints();
+        accountBefore.generate_r1cs_constraints();
+
         // Inputs
         accountID.generate_r1cs_constraints(true);
         tokenID.generate_r1cs_constraints(true);
@@ -123,7 +110,7 @@ public:
 
         // Calculate the new balance
         uncappedBalanceAfter.generate_r1cs_constraints();
-        cappedBalanceAfter.generate_r1cs_constraints();
+        balanceAfter.generate_r1cs_constraints();
 
         // Update User
         updateBalance.generate_r1cs_constraints();
@@ -152,12 +139,12 @@ public:
     Constants constants;
 
     // Inputs
-    libsnark::dual_variable_gadget<FieldT> exchangeID;
-    libsnark::dual_variable_gadget<FieldT> merkleRootBefore;
-    libsnark::dual_variable_gadget<FieldT> merkleRootAfter;
-    libsnark::dual_variable_gadget<FieldT> depositBlockHashStart;
-    libsnark::dual_variable_gadget<FieldT> startIndex;
-    libsnark::dual_variable_gadget<FieldT> count;
+    DualVariableGadget exchangeID;
+    DualVariableGadget merkleRootBefore;
+    DualVariableGadget merkleRootAfter;
+    DualVariableGadget depositBlockHashStart;
+    DualVariableGadget startIndex;
+    DualVariableGadget count;
 
     // Deposits
     unsigned int numDeposits;
@@ -235,21 +222,12 @@ public:
         constants.generate_r1cs_witness();
 
         // Inputs
-        exchangeID.bits.fill_with_bits_of_field_element(pb, block.exchangeID);
-        exchangeID.generate_r1cs_witness_from_bits();
-        merkleRootBefore.bits.fill_with_bits_of_field_element(pb, block.merkleRootBefore);
-        merkleRootBefore.generate_r1cs_witness_from_bits();
-        merkleRootAfter.bits.fill_with_bits_of_field_element(pb, block.merkleRootAfter);
-        merkleRootAfter.generate_r1cs_witness_from_bits();
-        for (unsigned int i = 0; i < 256; i++)
-        {
-            pb.val(depositBlockHashStart.bits[255 - i]) = block.startHash.test_bit(i);
-        }
-        depositBlockHashStart.generate_r1cs_witness_from_bits();
-        startIndex.bits.fill_with_bits_of_field_element(pb, block.startIndex);
-        startIndex.generate_r1cs_witness_from_bits();
-        count.bits.fill_with_bits_of_field_element(pb, block.count);
-        count.generate_r1cs_witness_from_bits();
+        exchangeID.generate_r1cs_witness(pb, block.exchangeID);
+        merkleRootBefore.generate_r1cs_witness(pb, block.merkleRootBefore);
+        merkleRootAfter.generate_r1cs_witness(pb, block.merkleRootAfter);
+        depositBlockHashStart.generate_r1cs_witness(pb, block.startHash);
+        startIndex.generate_r1cs_witness(pb, block.startIndex);
+        count.generate_r1cs_witness(pb, block.count);
         // printBits("start hash input: 0x", depositBlockHashStart.get_bits(pb), true);
 
         // Deposits

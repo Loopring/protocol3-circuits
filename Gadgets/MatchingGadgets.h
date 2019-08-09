@@ -256,6 +256,7 @@ public:
     }
 };
 
+// Calculate the max fill amounts of the order
 class MaxFillAmountsGadget : public GadgetT
 {
 public:
@@ -279,9 +280,9 @@ public:
 
         // All results here are guaranteed to fit in NUM_BITS_AMOUNT bits
         // `remainingS_buy = remaining * order.amountS // order.amountB`
-        // `remainingS_buy` has a maximumm value of order.amountB, so needs NUM_BITS_AMOUNT max.
+        // `remainingS_buy` has a maximum value of order.amountB, so needs NUM_BITS_AMOUNT max.
         // `fillAmountB = fillAmountS * order.amountB // order.amountS`
-        // `fillAmountS` has a maximumm value of order.amountS, so needs NUM_BITS_AMOUNT max.
+        // `fillAmountS` has a maximum value of order.amountS, so needs NUM_BITS_AMOUNT max.
 
         limit(pb, order.buy.packed, order.amountB.packed, order.amountS.packed, FMT(prefix, ".limit")),
         filledLimited(pb, limit.result(), order.tradeHistory.getFilled(), NUM_BITS_AMOUNT, FMT(prefix, ".filledLimited")),
@@ -344,6 +345,7 @@ struct Fill
     const VariableT B;
 };
 
+// Calculates the settlement fill amounts of 2 orders
 class TakerMakerMatchingGadget : public GadgetT
 {
 public:
@@ -450,7 +452,8 @@ public:
     }
 };
 
-
+// Does TakerMakerMatchingGadget(orderA, orderB) if orderA is a buy order (with fillA.S = fillB.B),
+// else TakerMakerMatchingGadget(orderB, orderA) (with fillA.B = fillB.S)
 class MatchingGadget : public GadgetT
 {
 public:
@@ -571,7 +574,7 @@ public:
     }
 };
 
-
+// Matches 2 orders
 class OrderMatchingGadget : public GadgetT
 {
 public:

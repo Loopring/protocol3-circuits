@@ -111,49 +111,49 @@ static BigInt toBigInt(ethsnarks::FieldT value)
 
 static unsigned int toFloat(BigInt value, const FloatEncoding& encoding)
 {
-  const unsigned int maxExponent = (1 << encoding.numBitsExponent) - 1;
-  const unsigned int maxMantissa = (1 << encoding.numBitsMantissa) - 1;
-  BigInt maxExponentValue = 1;
-  for (unsigned int i = 0; i < maxExponent; i++)
-  {
-      maxExponentValue *= encoding.exponentBase;
-  }
-  BigInt maxValue = BigInt(maxMantissa) * BigInt(maxExponentValue);
-  assert(value <= maxValue);
+    const unsigned int maxExponent = (1 << encoding.numBitsExponent) - 1;
+    const unsigned int maxMantissa = (1 << encoding.numBitsMantissa) - 1;
+    BigInt maxExponentValue = 1;
+    for (unsigned int i = 0; i < maxExponent; i++)
+    {
+        maxExponentValue *= encoding.exponentBase;
+    }
+    BigInt maxValue = BigInt(maxMantissa) * BigInt(maxExponentValue);
+    assert(value <= maxValue);
 
-  unsigned int exponent = 0;
-  BigInt r = value / BigInt(maxMantissa);
-  BigInt d = 1;
-  while (r >= encoding.exponentBase || d * maxMantissa < value)
-  {
-      r = r / encoding.exponentBase;
-      exponent += 1;
-      d = d * encoding.exponentBase;
-  }
-  BigInt mantissa = value / d;
+    unsigned int exponent = 0;
+    BigInt r = value / BigInt(maxMantissa);
+    BigInt d = 1;
+    while (r >= encoding.exponentBase || d * maxMantissa < value)
+    {
+        r = r / encoding.exponentBase;
+        exponent += 1;
+        d = d * encoding.exponentBase;
+    }
+    BigInt mantissa = value / d;
 
-  assert(exponent <= maxExponent);
-  assert(mantissa <= maxMantissa);
-  const unsigned int f = (exponent << encoding.numBitsMantissa) + mantissa.to_long();
-  return f;
+    assert(exponent <= maxExponent);
+    assert(mantissa <= maxMantissa);
+    const unsigned int f = (exponent << encoding.numBitsMantissa) + mantissa.to_long();
+    return f;
 }
 
 static unsigned int toFloat(ethsnarks::FieldT value, const FloatEncoding& encoding)
 {
-  return toFloat(toBigInt(value), encoding);
+    return toFloat(toBigInt(value), encoding);
 }
 
 static BigInt fromFloat(unsigned int f, const FloatEncoding& encoding)
 {
-  const unsigned int exponent = f >> encoding.numBitsMantissa;
-  const unsigned int mantissa = f & ((1 << encoding.numBitsMantissa) - 1);
-  BigInt multiplier = 1;
-  for (unsigned int i = 0; i < exponent; i++)
-  {
-      multiplier *= 10;
-  }
-  BigInt value = BigInt(mantissa) * multiplier;
-  return value;
+    const unsigned int exponent = f >> encoding.numBitsMantissa;
+    const unsigned int mantissa = f & ((1 << encoding.numBitsMantissa) - 1);
+    BigInt multiplier = 1;
+    for (unsigned int i = 0; i < exponent; i++)
+    {
+        multiplier *= 10;
+    }
+    BigInt value = BigInt(mantissa) * multiplier;
+    return value;
 }
 
 }

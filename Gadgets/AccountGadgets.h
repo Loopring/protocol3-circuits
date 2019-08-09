@@ -24,6 +24,42 @@ struct AccountState
     VariableT balancesRoot;
 };
 
+class AccountGadget : public GadgetT
+{
+public:
+    VariableT publicKeyX;
+    VariableT publicKeyY;
+    VariableT nonce;
+    VariableT balancesRoot;
+
+    AccountGadget(
+        ProtoboardT& pb,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        publicKeyX(make_variable(pb, FMT(prefix, ".publicKeyX"))),
+        publicKeyY(make_variable(pb, FMT(prefix, ".publicKeyY"))),
+        nonce(make_variable(pb, FMT(prefix, ".nonce"))),
+        balancesRoot(make_variable(pb, FMT(prefix, ".balancesRoot")))
+    {
+
+    }
+
+    void generate_r1cs_witness(const Account& account)
+    {
+        pb.val(publicKeyX) = account.publicKey.x;
+        pb.val(publicKeyY) = account.publicKey.y;
+        pb.val(nonce) = account.nonce;
+        pb.val(balancesRoot) = account.balancesRoot;
+    }
+
+    void generate_r1cs_constraints()
+    {
+
+    }
+};
+
 class UpdateAccountGadget : public GadgetT
 {
 public:
@@ -83,6 +119,36 @@ struct BalanceState
 {
     VariableT balance;
     VariableT tradingHistory;
+};
+
+class BalanceGadget : public GadgetT
+{
+public:
+    VariableT balance;
+    VariableT tradingHistory;
+
+    BalanceGadget(
+        ProtoboardT& pb,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        balance(make_variable(pb, FMT(prefix, ".balance"))),
+        tradingHistory(make_variable(pb, FMT(prefix, ".tradingHistory")))
+    {
+
+    }
+
+    void generate_r1cs_witness(const BalanceLeaf& balanceLeaf)
+    {
+        pb.val(balance) = balanceLeaf.balance;
+        pb.val(tradingHistory) = balanceLeaf.tradingHistoryRoot;
+    }
+
+    void generate_r1cs_constraints()
+    {
+
+    }
 };
 
 class UpdateBalanceGadget : public GadgetT

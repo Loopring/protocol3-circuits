@@ -21,6 +21,39 @@ struct TradeHistoryState
     VariableT orderID;
 };
 
+class TradeHistoryGadget : public GadgetT
+{
+public:
+    VariableT filled;
+    VariableT cancelled;
+    VariableT orderID;
+
+    TradeHistoryGadget(
+        ProtoboardT& pb,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        filled(make_variable(pb, FMT(prefix, ".filled"))),
+        cancelled(make_variable(pb, FMT(prefix, ".cancelled"))),
+        orderID(make_variable(pb, FMT(prefix, ".orderID")))
+    {
+
+    }
+
+    void generate_r1cs_witness(const TradeHistoryLeaf& tradeHistoryLeaf)
+    {
+        pb.val(filled) = tradeHistoryLeaf.filled;
+        pb.val(cancelled) = tradeHistoryLeaf.cancelled;
+        pb.val(orderID) = tradeHistoryLeaf.orderID;
+    }
+
+    void generate_r1cs_constraints()
+    {
+
+    }
+};
+
 class UpdateTradeHistoryGadget : public GadgetT
 {
 public:

@@ -973,6 +973,11 @@ TEST_CASE("Range limit", "[dual_variable_gadget]")
             rangeLimitChecked(0, true);
         }
 
+        SECTION("1")
+        {
+            rangeLimitChecked(0, true);
+        }
+
         SECTION("max")
         {
             rangeLimitChecked(getMaxFieldElement(n), true);
