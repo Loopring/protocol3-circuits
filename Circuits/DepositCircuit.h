@@ -18,19 +18,23 @@ class DepositGadget : public GadgetT
 {
 public:
 
+    // User state
+    BalanceState balanceBefore;
+    AccountState accountBefore;
+
+    // Inputs
     libsnark::dual_variable_gadget<FieldT> accountID;
     libsnark::dual_variable_gadget<FieldT> tokenID;
     libsnark::dual_variable_gadget<FieldT> amount;
     libsnark::dual_variable_gadget<FieldT> publicKeyX;
     libsnark::dual_variable_gadget<FieldT> publicKeyY;
 
-    BalanceState balanceBefore;
-    AccountState accountBefore;
+    // Calculate the new balance
     UnsafeAddGadget uncappedBalanceAfter;
     MinGadget cappedBalanceAfter;
-    BalanceState balanceAfter;
+
+    // Update User
     UpdateBalanceGadget updateBalance;
-    AccountState accountAfter;
     UpdateAccountGadget updateAccount;
 
     DepositGadget(
@@ -41,54 +45,53 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
-        tokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID")),
-        amount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amount")),
-        publicKeyX(pb, 256, FMT(prefix, ".publicKeyX")),
-        publicKeyY(pb, 256, FMT(prefix, ".publicKeyY")),
-
-        // Balance
+        // User state
         balanceBefore({
             make_variable(pb, FMT(prefix, ".before.balance")),
             make_variable(pb, FMT(prefix, ".tradingHistoryRoot"))
         }),
-        uncappedBalanceAfter(pb, balanceBefore.balance, amount.packed, FMT(prefix, ".uncappedBalanceAfter")),
-        cappedBalanceAfter(pb, uncappedBalanceAfter.result(), constants.maxAmount, NUM_BITS_AMOUNT + 1, FMT(prefix, ".cappedBalanceAfter")),
-        balanceAfter({
-            cappedBalanceAfter.result(),
-            balanceBefore.tradingHistory
-        }),
-        // Account
         accountBefore({
             make_variable(pb, FMT(prefix, ".publicKeyX_before")),
             make_variable(pb, FMT(prefix, ".publicKeyY_before")),
             make_variable(pb, FMT(prefix, ".nonce")),
             make_variable(pb, FMT(prefix, ".balancesRoot_before"))
         }),
-        // Update balance
-        updateBalance(pb, accountBefore.balancesRoot, tokenID.bits, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance")),
-        accountAfter({
-            publicKeyX.packed,
-            publicKeyY.packed,
-            accountBefore.nonce,
-            updateBalance.result()
-        }),
-        // Update account
-        updateAccount(pb, root, accountID.bits, accountBefore, accountAfter, FMT(prefix, ".updateAccount"))
+
+        // Inputs
+        accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
+        tokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID")),
+        amount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amount")),
+        publicKeyX(pb, 256, FMT(prefix, ".publicKeyX")),
+        publicKeyY(pb, 256, FMT(prefix, ".publicKeyY")),
+
+        // Calculate the new balance
+        uncappedBalanceAfter(pb, balanceBefore.balance, amount.packed, FMT(prefix, ".uncappedBalanceAfter")),
+        cappedBalanceAfter(pb, uncappedBalanceAfter.result(), constants.maxAmount, NUM_BITS_AMOUNT + 1, FMT(prefix, ".cappedBalanceAfter")),
+
+        // Update User
+        updateBalance(pb, accountBefore.balancesRoot, tokenID.bits,
+                      {balanceBefore.balance, balanceBefore.tradingHistory},
+                      {cappedBalanceAfter.result(), balanceBefore.tradingHistory},
+                      FMT(prefix, ".updateBalance")),
+        updateAccount(pb, root, accountID.bits,
+                      {accountBefore.publicKeyX, accountBefore.publicKeyY, accountBefore.nonce, accountBefore.balancesRoot},
+                      {publicKeyX.packed, publicKeyY.packed, accountBefore.nonce, updateBalance.result()},
+                      FMT(prefix, ".updateAccount"))
     {
 
     }
 
     void generate_r1cs_witness(const Deposit& deposit)
     {
+        // User state
         pb.val(accountBefore.publicKeyX) = deposit.accountUpdate.before.publicKey.x;
         pb.val(accountBefore.publicKeyY) = deposit.accountUpdate.before.publicKey.y;
         pb.val(accountBefore.nonce) = deposit.accountUpdate.before.nonce;
         pb.val(accountBefore.balancesRoot) = deposit.accountUpdate.before.balancesRoot;
-
         pb.val(balanceBefore.balance) = deposit.balanceUpdate.before.balance;
         pb.val(balanceBefore.tradingHistory) = deposit.balanceUpdate.before.tradingHistoryRoot;
 
+        // Inputs
         accountID.bits.fill_with_bits_of_field_element(pb, deposit.accountUpdate.accountID);
         accountID.generate_r1cs_witness_from_bits();
         tokenID.bits.fill_with_bits_of_field_element(pb, deposit.balanceUpdate.tokenID);
@@ -100,24 +103,29 @@ public:
         publicKeyY.bits.fill_with_bits_of_field_element(pb, deposit.accountUpdate.after.publicKey.y);
         publicKeyY.generate_r1cs_witness_from_bits();
 
+        // Calculate the new balance
         uncappedBalanceAfter.generate_r1cs_witness();
         cappedBalanceAfter.generate_r1cs_witness();
 
+        // Update User
         updateBalance.generate_r1cs_witness(deposit.balanceUpdate.proof);
         updateAccount.generate_r1cs_witness(deposit.accountUpdate.proof);
     }
 
     void generate_r1cs_constraints()
     {
+        // Inputs
         accountID.generate_r1cs_constraints(true);
         tokenID.generate_r1cs_constraints(true);
         amount.generate_r1cs_constraints(true);
         publicKeyX.generate_r1cs_constraints(true);
         publicKeyY.generate_r1cs_constraints(true);
 
+        // Calculate the new balance
         uncappedBalanceAfter.generate_r1cs_constraints();
         cappedBalanceAfter.generate_r1cs_constraints();
 
+        // Update User
         updateBalance.generate_r1cs_constraints();
         updateAccount.generate_r1cs_constraints();
     }

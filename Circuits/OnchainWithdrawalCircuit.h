@@ -44,10 +44,8 @@ public:
     // Calculate the new balance
     UnsafeSubGadget balance_after;
 
-    // Update the state of the account
-    BalanceState balanceAfter;
+    // Update User
     UpdateBalanceGadget updateBalance_A;
-    AccountState accountAfter;
     UpdateAccountGadget updateAccount_A;
 
     OnchainWithdrawalGadget(
@@ -93,19 +91,15 @@ public:
         // Calculate the new balance
         balance_after(pb, balanceBefore.balance, amountToSubtract.result(), FMT(prefix, ".balance_after")),
 
-        // Update the state of the account
-        balanceAfter({
-            balance_after.result(),
-            tradingHistoryAfter.result()
-        }),
-        updateBalance_A(pb, accountBefore.balancesRoot, tokenID.bits, balanceBefore, balanceAfter, FMT(prefix, ".updateBalance_A")),
-        accountAfter({
-            publicKeyXAfter.result(),
-            publicKeyYAfter.result(),
-            nonceAfter.result(),
-            updateBalance_A.result()
-        }),
-        updateAccount_A(pb, accountsMerkleRoot, accountID.bits, accountBefore, accountAfter, FMT(prefix, ".updateAccount_A"))
+        // Update User
+        updateBalance_A(pb, accountBefore.balancesRoot, tokenID.bits,
+                        {balanceBefore.balance, balanceBefore.tradingHistory},
+                        {balance_after.result(), tradingHistoryAfter.result()},
+                        FMT(prefix, ".updateBalance_A")),
+        updateAccount_A(pb, accountsMerkleRoot, accountID.bits,
+                        {accountBefore.publicKeyX, accountBefore.publicKeyY, accountBefore.nonce, accountBefore.balancesRoot},
+                        {publicKeyXAfter.result(), publicKeyYAfter.result(), nonceAfter.result(), updateBalance_A.result()},
+                        FMT(prefix, ".updateAccount_A"))
     {
 
     }
@@ -115,7 +109,6 @@ public:
         // User state
         pb.val(balanceBefore.tradingHistory) = withdrawal.balanceUpdate.before.tradingHistoryRoot;
         pb.val(balanceBefore.balance) = withdrawal.balanceUpdate.before.balance;
-        pb.val(balanceAfter.balance) = withdrawal.balanceUpdate.after.balance;
         pb.val(accountBefore.publicKeyX) = withdrawal.accountUpdate.before.publicKey.x;
         pb.val(accountBefore.publicKeyY) = withdrawal.accountUpdate.before.publicKey.y;
         pb.val(accountBefore.nonce) = withdrawal.accountUpdate.before.nonce;
@@ -145,7 +138,7 @@ public:
         // Calculate the new balance
         balance_after.generate_r1cs_witness();
 
-        // Update the state of the account
+        // Update User
         updateBalance_A.generate_r1cs_witness(withdrawal.balanceUpdate.proof);
         updateAccount_A.generate_r1cs_witness(withdrawal.accountUpdate.proof);
     }
@@ -173,7 +166,7 @@ public:
         // Calculate the new balance
         balance_after.generate_r1cs_constraints();
 
-        // Update the state of the account
+        // Update User
         updateBalance_A.generate_r1cs_constraints();
         updateAccount_A.generate_r1cs_constraints();
     }

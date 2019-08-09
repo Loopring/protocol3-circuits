@@ -106,6 +106,7 @@ class RingSettlementGadget : public GadgetT
 {
 public:
 
+    // Balances
     DynamicVariableGadget balanceS_A;
     DynamicVariableGadget balanceB_A;
     DynamicVariableGadget balanceS_B;
@@ -114,10 +115,10 @@ public:
     DynamicVariableGadget balanceB_P;
     DynamicVariableGadget balanceA_O;
     DynamicVariableGadget balanceB_O;
-
+    // Initial balances roots
     const VariableT balancesRootA;
     const VariableT balancesRootB;
-
+    // Initial trading history roots
     const VariableT tradingHistoryRootS_A;
     const VariableT tradingHistoryRootB_A;
     const VariableT tradingHistoryRootS_B;
@@ -125,53 +126,66 @@ public:
     const VariableT tradingHistoryRootA_O;
     const VariableT tradingHistoryRootB_O;
 
+    // Orders
     OrderGadget orderA;
     OrderGadget orderB;
 
+    // Match orders
     OrderMatchingGadget orderMatching;
 
+    // Fill amounts
     TernaryGadget uFillS_A;
     TernaryGadget uFillS_B;
-
     FloatGadget fillS_A;
     FloatGadget fillS_B;
-
     RequireAccuracyGadget requireAccuracyFillS_A;
     RequireAccuracyGadget requireAccuracyFillS_B;
 
+    // Filled amounts
     TernaryGadget filledA;
     TernaryGadget filledB;
     AddGadget filledAfterA;
     AddGadget filledAfterB;
 
+    // Calculate fees
     FeeCalculatorGadget feeCalculatorA;
     FeeCalculatorGadget feeCalculatorB;
 
+    /* Token Transfers */
+    // Actual trade
     TransferGadget fillBB_from_balanceSA_to_balanceBB;
     TransferGadget fillSB_from_balanceSB_to_balanceBA;
+    // Fees
     TransferGadget feeA_from_balanceBA_to_balanceAO;
     TransferGadget feeB_from_balanceBB_to_balanceBO;
+    // Rebates
     TransferGadget rebateA_from_balanceAO_to_balanceBA;
     TransferGadget rebateB_from_balanceBO_to_balanceBB;
+    // Protocol fees
     TransferGadget protocolFeeA_from_balanceAO_to_balanceAP;
     TransferGadget protocolFeeB_from_balanceBO_to_balanceBP;
 
+    // Update trading history
     UpdateTradeHistoryGadget updateTradeHistoryA;
     UpdateTradeHistoryGadget updateTradeHistoryB;
 
+    // Update UserA
     UpdateBalanceGadget updateBalanceS_A;
     UpdateBalanceGadget updateBalanceB_A;
     VariableT nonce_A;
     UpdateAccountGadget updateAccount_A;
 
+    // Update UserB
     UpdateBalanceGadget updateBalanceS_B;
     UpdateBalanceGadget updateBalanceB_B;
     VariableT nonce_B;
     UpdateAccountGadget updateAccount_B;
 
+    // Update Protocol pool
     UpdateBalanceGadget updateBalanceA_P;
     UpdateBalanceGadget updateBalanceB_P;
 
+    // Update Operator
     UpdateBalanceGadget updateBalanceA_O;
     UpdateBalanceGadget updateBalanceB_O;
 
@@ -200,11 +214,9 @@ public:
         balanceB_P(pb, FMT(prefix, ".balanceB_P")),
         balanceA_O(pb, FMT(prefix, ".balanceA_O")),
         balanceB_O(pb, FMT(prefix, ".balanceA_O")),
-
         // Initial balances roots
         balancesRootA(make_variable(pb, FMT(prefix, ".balancesRootA"))),
         balancesRootB(make_variable(pb, FMT(prefix, ".balancesRootB"))),
-
         // Initial trading history roots
         tradingHistoryRootS_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootS_A"))),
         tradingHistoryRootB_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_A"))),
@@ -238,6 +250,7 @@ public:
         feeCalculatorA(pb, constants, fillS_B.value(), protocolTakerFeeBips, orderA.feeBips.packed, orderA.rebateBips.packed, FMT(prefix, ".feeCalculatorA")),
         feeCalculatorB(pb, constants, fillS_A.value(), protocolMakerFeeBips, orderB.feeBips.packed, orderB.rebateBips.packed, FMT(prefix, ".feeCalculatorB")),
 
+        /* Token Transfers */
         // Actual trade
         fillBB_from_balanceSA_to_balanceBB(pb, balanceS_A, balanceB_B, fillS_A.value(), FMT(prefix, ".fillBB_from_balanceSA_to_balanceBB")),
         fillSB_from_balanceSB_to_balanceBA(pb, balanceS_B, balanceB_A, fillS_B.value(), FMT(prefix, ".fillSB_from_balanceSB_to_balanceBA")),
@@ -261,7 +274,7 @@ public:
                             {filledAfterB.result(), orderB.tradeHistory.getCancelledToStore(), orderB.tradeHistory.getOrderIDToStore()},
                             FMT(prefix, ".updateTradeHistoryB")),
 
-        // Update OwnerA
+        // Update UserA
         updateBalanceS_A(pb, balancesRootA, orderA.tokenS.bits,
                          {balanceS_A.front(), tradingHistoryRootS_A},
                          {balanceS_A.back(), updateTradeHistoryA.result()},
@@ -276,7 +289,7 @@ public:
                         {orderA.publicKey.x, orderA.publicKey.y, nonce_A, updateBalanceB_A.result()},
                         FMT(prefix, ".updateAccount_A")),
 
-        // Update OwnerB
+        // Update UserB
         updateBalanceS_B(pb, balancesRootB, orderB.tokenS.bits,
                          {balanceS_B.front(), tradingHistoryRootS_B},
                          {balanceS_B.back(), updateTradeHistoryB.result()},
@@ -371,13 +384,17 @@ public:
         feeCalculatorA.generate_r1cs_witness();
         feeCalculatorB.generate_r1cs_witness();
 
-        // Calculate new balances
+        /* Token Transfers */
+        // Actual trade
         fillBB_from_balanceSA_to_balanceBB.generate_r1cs_witness();
         fillSB_from_balanceSB_to_balanceBA.generate_r1cs_witness();
+        // Fees
         feeA_from_balanceBA_to_balanceAO.generate_r1cs_witness();
         feeB_from_balanceBB_to_balanceBO.generate_r1cs_witness();
+        // Rebates
         rebateA_from_balanceAO_to_balanceBA.generate_r1cs_witness();
         rebateB_from_balanceBO_to_balanceBB.generate_r1cs_witness();
+        // Protocol fees
         protocolFeeA_from_balanceAO_to_balanceAP.generate_r1cs_witness();
         protocolFeeB_from_balanceBO_to_balanceBP.generate_r1cs_witness();
 
@@ -385,19 +402,22 @@ public:
         updateTradeHistoryA.generate_r1cs_witness(ringSettlement.tradeHistoryUpdate_A.proof);
         updateTradeHistoryB.generate_r1cs_witness(ringSettlement.tradeHistoryUpdate_B.proof);
 
-        // Update OwnerA
+        // Update UserA
         pb.val(nonce_A) = ringSettlement.accountUpdate_A.before.nonce;
         updateBalanceS_A.generate_r1cs_witness(ringSettlement.balanceUpdateS_A.proof);
         updateBalanceB_A.generate_r1cs_witness(ringSettlement.balanceUpdateB_A.proof);
         updateAccount_A.generate_r1cs_witness(ringSettlement.accountUpdate_A.proof);
-        // Update OwnerB
+
+        // Update UserB
         pb.val(nonce_B) = ringSettlement.accountUpdate_B.before.nonce;
         updateBalanceS_B.generate_r1cs_witness(ringSettlement.balanceUpdateS_B.proof);
         updateBalanceB_B.generate_r1cs_witness(ringSettlement.balanceUpdateB_B.proof);
         updateAccount_B.generate_r1cs_witness(ringSettlement.accountUpdate_B.proof);
+
         // Update Protocol pool
         updateBalanceA_P.generate_r1cs_witness(ringSettlement.balanceUpdateA_P.proof);
         updateBalanceB_P.generate_r1cs_witness(ringSettlement.balanceUpdateB_P.proof);
+
         // Update Operator
         updateBalanceA_O.generate_r1cs_witness(ringSettlement.balanceUpdateA_O.proof);
         updateBalanceB_O.generate_r1cs_witness(ringSettlement.balanceUpdateB_O.proof);
@@ -431,13 +451,17 @@ public:
         feeCalculatorA.generate_r1cs_constraints();
         feeCalculatorB.generate_r1cs_constraints();
 
-        // Calculate new balances
+        /* Token Transfers */
+        // Actual trade
         fillBB_from_balanceSA_to_balanceBB.generate_r1cs_constraints();
         fillSB_from_balanceSB_to_balanceBA.generate_r1cs_constraints();
+        // Fees
         feeA_from_balanceBA_to_balanceAO.generate_r1cs_constraints();
         feeB_from_balanceBB_to_balanceBO.generate_r1cs_constraints();
+        // Rebates
         rebateA_from_balanceAO_to_balanceBA.generate_r1cs_constraints();
         rebateB_from_balanceBO_to_balanceBB.generate_r1cs_constraints();
+        // Protocol fees
         protocolFeeA_from_balanceAO_to_balanceAP.generate_r1cs_constraints();
         protocolFeeB_from_balanceBO_to_balanceBP.generate_r1cs_constraints();
 
@@ -445,17 +469,20 @@ public:
         updateTradeHistoryA.generate_r1cs_constraints();
         updateTradeHistoryB.generate_r1cs_constraints();
 
-        // Update OwnerA
+        // Update UserA
         updateBalanceS_A.generate_r1cs_constraints();
         updateBalanceB_A.generate_r1cs_constraints();
         updateAccount_A.generate_r1cs_constraints();
-        // Update OwnerB
+
+        // Update UserB
         updateBalanceS_B.generate_r1cs_constraints();
         updateBalanceB_B.generate_r1cs_constraints();
         updateAccount_B.generate_r1cs_constraints();
+
         // Update Protocol fee pool
         updateBalanceA_P.generate_r1cs_constraints();
         updateBalanceB_P.generate_r1cs_constraints();
+
         // Update Operator
         updateBalanceA_O.generate_r1cs_constraints();
         updateBalanceB_O.generate_r1cs_constraints();

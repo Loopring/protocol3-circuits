@@ -20,10 +20,21 @@ class OrderCancellationGadget : public GadgetT
 {
 public:
 
-    const Constants& constants;
-
+    // User state
     const jubjub::VariablePointT publicKey;
+    VariableT filled;
+    VariableT cancelled_before;
+    VariableT orderID_before;
+    VariableT balanceT_A;
+    VariableT tradingHistoryRootT_A_before;
+    VariableT balanceF_A_before;
+    VariableT tradingHistoryRootF_A;
+    VariableT balanceF_O_before;
+    VariableT tradingHistoryRootF_O;
+    VariableT nonce_before;
+    VariableT balancesRoot_before;
 
+    // Inputs
     libsnark::dual_variable_gadget<FieldT> accountID;
     libsnark::dual_variable_gadget<FieldT> orderTokenID;
     libsnark::dual_variable_gadget<FieldT> orderID;
@@ -31,45 +42,36 @@ public:
     libsnark::dual_variable_gadget<FieldT> fee;
     libsnark::dual_variable_gadget<FieldT> label;
 
+    // OrderID check
+    RequireLeqGadget oldOrderID_leq_newOrderID;
+
+    // Fee as float
     FloatGadget fFee;
     RequireAccuracyGadget requireAccuracyFee;
 
-    VariableT filled;
-    VariableT cancelled_before;
-    VariableT cancelled_after;
-    VariableT orderID_before;
-
-    VariableT balanceT_A;
-    VariableT tradingHistoryRootT_A_before;
-
-    VariableT balanceF_A_before;
-    VariableT tradingHistoryRootF_A;
-
-    VariableT balanceF_O_before;
-    VariableT tradingHistoryRootF_O;
-
-    libsnark::dual_variable_gadget<FieldT> nonce_before;
-    UnsafeAddGadget nonce_after;
-    VariableT balancesRoot_before;
-
+    // Fee payment from the user to the operator
     subadd_gadget feePayment;
 
+    // Increase the nonce of the user by 1
+    AddGadget nonce_after;
+
+    // Update User
     UpdateTradeHistoryGadget updateTradeHistory_A;
     UpdateBalanceGadget updateBalanceT_A;
     UpdateBalanceGadget updateBalanceF_A;
     UpdateAccountGadget updateAccount_A;
 
+    // Update Operator
     UpdateBalanceGadget updateBalanceF_O;
 
-    RequireLeqGadget checkOrderID;
-
+    // Signature
     Poseidon_gadget_T<9, 1, 6, 53, 8, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OrderCancellationGadget(
         ProtoboardT& pb,
         const jubjub::Params& params,
-        const Constants& _constants,
+        const Constants& constants,
         const VariableT& _accountsMerkleRoot,
         const VariableT& _operatorBalancesRoot,
         const VariableT& blockExchangeID,
@@ -77,10 +79,21 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        constants(_constants),
-
+        // User state
         publicKey(pb, FMT(prefix, ".publicKey")),
+        filled(make_variable(pb, 0, FMT(prefix, ".filled"))),
+        cancelled_before(make_variable(pb, 0, FMT(prefix, ".cancelled_before"))),
+        orderID_before(make_variable(pb, 0, FMT(prefix, ".orderID_before"))),
+        balanceT_A(make_variable(pb, FMT(prefix, ".balanceT_A"))),
+        tradingHistoryRootT_A_before(make_variable(pb, FMT(prefix, ".tradingHistoryRootT_A_before"))),
+        balanceF_A_before(make_variable(pb, FMT(prefix, ".balanceF_A_before"))),
+        tradingHistoryRootF_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_A"))),
+        balanceF_O_before(make_variable(pb, FMT(prefix, ".balanceF_O_before"))),
+        tradingHistoryRootF_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_O"))),
+        nonce_before(make_variable(pb, FMT(prefix, ".nonce_before"))),
+        balancesRoot_before(make_variable(pb, FMT(prefix, ".balancesRoot_before"))),
 
+        // Inputs
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
         orderTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".orderTokenID")),
         orderID(pb, NUM_BITS_ORDERID, FMT(prefix, ".orderID")),
@@ -88,59 +101,42 @@ public:
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
 
+        // OrderID check
+        oldOrderID_leq_newOrderID(pb, orderID_before, orderID.packed, NUM_BITS_ORDERID, FMT(prefix, ".checkOrderID")),
+
+        // Fee as float
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
         requireAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFee")),
 
-        filled(make_variable(pb, 0, FMT(prefix, ".filled"))),
-        cancelled_before(make_variable(pb, 0, FMT(prefix, ".cancelled_before"))),
-        orderID_before(make_variable(pb, 0, FMT(prefix, ".orderID_before"))),
-
-        balanceT_A(make_variable(pb, FMT(prefix, ".balanceT_A"))),
-        tradingHistoryRootT_A_before(make_variable(pb, FMT(prefix, ".tradingHistoryRootT_A_before"))),
-
-        balanceF_A_before(make_variable(pb, FMT(prefix, ".balanceF_A_before"))),
-        tradingHistoryRootF_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_A"))),
-
-        balanceF_O_before(make_variable(pb, FMT(prefix, ".balanceF_O_before"))),
-        tradingHistoryRootF_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootF_O"))),
-
-        nonce_before(pb, NUM_BITS_NONCE, FMT(prefix, ".nonce_before")),
-        // Increase nonce by 1
-        nonce_after(pb, nonce_before.packed, constants.one, FMT(prefix, ".nonce_after")),
-        balancesRoot_before(make_variable(pb, FMT(prefix, ".balancesRoot_before"))),
-
-        // Fee payment to the operator
+        // Fee payment from the user to the operator
         feePayment(pb, NUM_BITS_AMOUNT, balanceF_A_before, balanceF_O_before, fFee.value(), FMT(prefix, ".feePayment")),
 
-        // Trade history
+        // Increase the nonce of the user by 1
+        nonce_after(pb, nonce_before, constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_after")),
+
+        // Update User
         updateTradeHistory_A(pb, tradingHistoryRootT_A_before, subArray(orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
                              {filled, cancelled_before, orderID_before},
                              {filled, constants.one, orderID.packed},
                              FMT(prefix, ".updateTradeHistory_A")),
-        // Balance
         updateBalanceT_A(pb, balancesRoot_before, orderTokenID.bits,
                          {balanceT_A, tradingHistoryRootT_A_before},
                          {balanceT_A, updateTradeHistory_A.result()},
                          FMT(prefix, ".updateBalanceT_A")),
-        // Balance Fee
         updateBalanceF_A(pb, updateBalanceT_A.result(), feeTokenID.bits,
                          {balanceF_A_before, tradingHistoryRootF_A},
                          {feePayment.X, tradingHistoryRootF_A},
                          FMT(prefix, ".updateBalanceF_A")),
-        // Account
         updateAccount_A(pb, _accountsMerkleRoot, accountID.bits,
-                        {publicKey.x, publicKey.y, nonce_before.packed, balancesRoot_before},
+                        {publicKey.x, publicKey.y, nonce_before, balancesRoot_before},
                         {publicKey.x, publicKey.y, nonce_after.result(), updateBalanceF_A.result()},
                         FMT(prefix, ".updateAccount_A")),
 
-        // Operator balance
+        // Update Operator
         updateBalanceF_O(pb, _operatorBalancesRoot, feeTokenID.bits,
                          {balanceF_O_before, tradingHistoryRootF_O},
                          {feePayment.Y, tradingHistoryRootF_O},
                          FMT(prefix, ".updateBalanceF_O")),
-
-        // OrderID check
-        checkOrderID(pb, orderID_before, orderID.packed, NUM_BITS_ORDERID, FMT(prefix, ".checkOrderID")),
 
         // Signature
         hash(pb, var_array({
@@ -151,37 +147,31 @@ public:
             feeTokenID.packed,
             fee.packed,
             label.packed,
-            nonce_before.packed
+            nonce_before
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }
 
-    const VariableT getNewAccountsRoot() const
-    {
-        return updateAccount_A.result();
-    }
-
-    const VariableT getNewOperatorBalancesRoot() const
-    {
-        return updateBalanceF_O.result();
-    }
-
-    const std::vector<VariableArrayT> getPublicData() const
-    {
-        return {accountID.bits,
-                orderID.bits,
-                orderTokenID.bits,
-                feeTokenID.bits,
-                fFee.bits()};
-    }
-
     void generate_r1cs_witness(const Cancellation& cancellation)
     {
+        // User state
         pb.val(publicKey.x) = cancellation.accountUpdate_A.before.publicKey.x;
         pb.val(publicKey.y) = cancellation.accountUpdate_A.before.publicKey.y;
+        pb.val(filled) = cancellation.tradeHistoryUpdate_A.before.filled;
+        pb.val(cancelled_before) = cancellation.tradeHistoryUpdate_A.before.cancelled;
+        pb.val(orderID_before) = cancellation.tradeHistoryUpdate_A.before.orderID;
+        pb.val(balanceT_A) = cancellation.balanceUpdateT_A.before.balance;
+        pb.val(tradingHistoryRootT_A_before) = cancellation.balanceUpdateT_A.before.tradingHistoryRoot;
+        pb.val(balanceF_A_before) = cancellation.balanceUpdateF_A.before.balance;
+        pb.val(tradingHistoryRootF_A) = cancellation.balanceUpdateF_A.before.tradingHistoryRoot;
+        pb.val(balanceF_O_before) = cancellation.balanceUpdateF_O.before.balance;
+        pb.val(tradingHistoryRootF_O) = cancellation.balanceUpdateF_O.before.tradingHistoryRoot;
+        pb.val(nonce_before) = cancellation.accountUpdate_A.before.nonce;
+        pb.val(balancesRoot_before) = cancellation.accountUpdate_A.before.balancesRoot;
 
+        // Inputs
         accountID.bits.fill_with_bits_of_field_element(pb, cancellation.accountUpdate_A.accountID);
         accountID.generate_r1cs_witness_from_bits();
         orderTokenID.bits.fill_with_bits_of_field_element(pb, cancellation.balanceUpdateT_A.tokenID);
@@ -195,38 +185,27 @@ public:
         label.bits.fill_with_bits_of_field_element(pb, cancellation.label);
         label.generate_r1cs_witness_from_bits();
 
+        // OrderID check
+        oldOrderID_leq_newOrderID.generate_r1cs_witness();
+
+        // Fee as float
         fFee.generate_r1cs_witness(toFloat(cancellation.fee, Float16Encoding));
         requireAccuracyFee.generate_r1cs_witness();
 
-        pb.val(filled) = cancellation.tradeHistoryUpdate_A.before.filled;
-        pb.val(cancelled_before) = cancellation.tradeHistoryUpdate_A.before.cancelled;
-        pb.val(orderID_before) = cancellation.tradeHistoryUpdate_A.before.orderID;
-
-        pb.val(balanceT_A) = cancellation.balanceUpdateT_A.before.balance;
-        pb.val(tradingHistoryRootT_A_before) = cancellation.balanceUpdateT_A.before.tradingHistoryRoot;
-
-        pb.val(balanceF_A_before) = cancellation.balanceUpdateF_A.before.balance;
-        pb.val(tradingHistoryRootF_A) = cancellation.balanceUpdateF_A.before.tradingHistoryRoot;
-
-        pb.val(balanceF_O_before) = cancellation.balanceUpdateF_O.before.balance;
-        pb.val(tradingHistoryRootF_O) = cancellation.balanceUpdateF_O.before.tradingHistoryRoot;
-
-        nonce_before.bits.fill_with_bits_of_field_element(pb, cancellation.accountUpdate_A.before.nonce);
-        nonce_before.generate_r1cs_witness_from_bits();
-        nonce_after.generate_r1cs_witness();
-        pb.val(balancesRoot_before) = cancellation.accountUpdate_A.before.balancesRoot;
-
-        // Fee payment calculations
+        // Fee payment from the user to the operator
         feePayment.generate_r1cs_witness();
 
+        // Increase the nonce of the user by 1
+        nonce_after.generate_r1cs_witness();
+
+        // Update User
         updateTradeHistory_A.generate_r1cs_witness(cancellation.tradeHistoryUpdate_A.proof);
         updateBalanceT_A.generate_r1cs_witness(cancellation.balanceUpdateT_A.proof);
         updateBalanceF_A.generate_r1cs_witness(cancellation.balanceUpdateF_A.proof);
         updateAccount_A.generate_r1cs_witness(cancellation.accountUpdate_A.proof);
 
+        // Update Operator
         updateBalanceF_O.generate_r1cs_witness(cancellation.balanceUpdateF_O.proof);
-
-        checkOrderID.generate_r1cs_witness();
 
         // Check signature
         hash.generate_r1cs_witness();
@@ -235,6 +214,7 @@ public:
 
     void generate_r1cs_constraints()
     {
+        // Inputs
         accountID.generate_r1cs_constraints(true);
         orderTokenID.generate_r1cs_constraints(true);
         orderID.generate_r1cs_constraints(true);
@@ -242,29 +222,50 @@ public:
         fee.generate_r1cs_constraints(true);
         label.generate_r1cs_constraints(true);
 
+        // OrderID check
+        oldOrderID_leq_newOrderID.generate_r1cs_constraints();
+
+        // Fee as float
         fFee.generate_r1cs_constraints();
         requireAccuracyFee.generate_r1cs_constraints();
 
-        nonce_before.generate_r1cs_constraints(true);
-        nonce_after.generate_r1cs_constraints();
-
-        // Fee payment calculations
+        // Fee payment from the user to the operator
         feePayment.generate_r1cs_constraints();
 
-        // Account
+        // Increase the nonce of the user by 1
+        nonce_after.generate_r1cs_constraints();
+
+        // Update User
         updateTradeHistory_A.generate_r1cs_constraints();
         updateBalanceT_A.generate_r1cs_constraints();
         updateBalanceF_A.generate_r1cs_constraints();
         updateAccount_A.generate_r1cs_constraints();
 
-        // Operator
+        // Update Operator
         updateBalanceF_O.generate_r1cs_constraints();
-
-        checkOrderID.generate_r1cs_constraints();
 
         // Check signature
         hash.generate_r1cs_constraints();
         signatureVerifier.generate_r1cs_constraints();
+    }
+
+    const std::vector<VariableArrayT> getPublicData() const
+    {
+        return {accountID.bits,
+                orderID.bits,
+                orderTokenID.bits,
+                feeTokenID.bits,
+                fFee.bits()};
+    }
+
+    const VariableT getNewAccountsRoot() const
+    {
+        return updateAccount_A.result();
+    }
+
+    const VariableT getNewOperatorBalancesRoot() const
+    {
+        return updateBalanceF_O.result();
     }
 };
 
