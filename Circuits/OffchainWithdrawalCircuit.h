@@ -286,29 +286,34 @@ public:
 class OffchainWithdrawalCircuit : public GadgetT
 {
 public:
-    jubjub::Params params;
-
-    bool onchainDataAvailability;
-    unsigned int numWithdrawals;
-    std::vector<OffchainWithdrawalGadget> withdrawals;
 
     PublicDataGadget publicData;
-
     Constants constants;
+    jubjub::Params params;
 
-    libsnark::dual_variable_gadget<FieldT> exchangeID;
-    libsnark::dual_variable_gadget<FieldT> merkleRootBefore;
-    libsnark::dual_variable_gadget<FieldT> merkleRootAfter;
-
-    libsnark::dual_variable_gadget<FieldT> operatorAccountID;
+    // State
     const jubjub::VariablePointT publicKey;
     VariableT nonce;
     VariableT balancesRoot_before;
 
+    // Inputs
+    libsnark::dual_variable_gadget<FieldT> exchangeID;
+    libsnark::dual_variable_gadget<FieldT> merkleRootBefore;
+    libsnark::dual_variable_gadget<FieldT> merkleRootAfter;
+    libsnark::dual_variable_gadget<FieldT> operatorAccountID;
+
+    // Operator account check
     RequireNotZeroGadget publicKeyX_notZero;
 
+    // Withdrawals
+    bool onchainDataAvailability;
+    unsigned int numWithdrawals;
+    std::vector<OffchainWithdrawalGadget> withdrawals;
+
+    // Update Operator
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
+    // Labels
     std::vector<VariableT> labels;
     std::unique_ptr<LabelHasher> labelHasher;
 
@@ -316,18 +321,20 @@ public:
         GadgetT(pb, prefix),
 
         publicData(pb, FMT(prefix, ".publicData")),
-
         constants(pb, FMT(prefix, ".constants")),
 
-        exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
-        merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
-        merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
-
-        operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
+        // State
         publicKey(pb, FMT(prefix, ".publicKey")),
         nonce(make_variable(pb, 0, FMT(prefix, ".nonce"))),
         balancesRoot_before(make_variable(pb, 0, FMT(prefix, ".balancesRoot_before"))),
 
+        // Inputs
+        exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
+        merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
+        merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
+        operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
+
+        // Operator account check
         publicKeyX_notZero(pb, publicKey.x, FMT(prefix, ".publicKeyX_notZero"))
     {
 
@@ -340,12 +347,16 @@ public:
 
         constants.generate_r1cs_constraints();
 
-        publicKeyX_notZero.generate_r1cs_constraints();
-
+        // Inputs
         exchangeID.generate_r1cs_constraints(true);
         merkleRootBefore.generate_r1cs_constraints(true);
         merkleRootAfter.generate_r1cs_constraints(true);
+        operatorAccountID.generate_r1cs_constraints(true);
 
+        // Operator account check
+        publicKeyX_notZero.generate_r1cs_constraints();
+
+        // Withdrawals
         for (size_t j = 0; j < numWithdrawals; j++)
         {
             VariableT withdrawalAccountsRoot = (j == 0) ? merkleRootBefore.packed : withdrawals.back().getNewAccountsRoot();
@@ -363,16 +374,14 @@ public:
             labels.push_back(withdrawals.back().label.packed);
         }
 
-        operatorAccountID.generate_r1cs_constraints(true);
-
-        // Update the operator account
+        // Update Operator
         updateAccount_O.reset(new UpdateAccountGadget(pb, withdrawals.back().getNewAccountsRoot(), operatorAccountID.bits,
             {publicKey.x, publicKey.y, nonce, balancesRoot_before},
             {publicKey.x, publicKey.y, nonce, withdrawals.back().getNewOperatorBalancesRoot()},
             FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
-        // Calculate the label hash
+        // Labels
         labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelHash")));
         labelHasher->generate_r1cs_constraints();
 
@@ -396,54 +405,56 @@ public:
                 publicData.add(withdrawal.getDataAvailabilityData());
             }
         }
-
-        // Check the input hash
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root
         forceEqual(pb, updateAccount_O->result(), merkleRootAfter.packed, "newMerkleRoot");
     }
 
-    void printInfo()
-    {
-        std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numWithdrawals) << "/offchain withdrawal)" << std::endl;
-    }
-
     bool generateWitness(const OffchainWithdrawalBlock& block)
     {
         constants.generate_r1cs_witness();
 
-        exchangeID.bits.fill_with_bits_of_field_element(pb, block.exchangeID);
-        exchangeID.generate_r1cs_witness_from_bits();
-
-        merkleRootBefore.bits.fill_with_bits_of_field_element(pb, block.merkleRootBefore);
-        merkleRootBefore.generate_r1cs_witness_from_bits();
-        merkleRootAfter.bits.fill_with_bits_of_field_element(pb, block.merkleRootAfter);
-        merkleRootAfter.generate_r1cs_witness_from_bits();
-
-        // Operator
-        operatorAccountID.bits.fill_with_bits_of_field_element(pb, block.operatorAccountID);
-        operatorAccountID.generate_r1cs_witness_from_bits();
+        // State
         pb.val(publicKey.x) = block.accountUpdate_O.before.publicKey.x;
         pb.val(publicKey.y) = block.accountUpdate_O.before.publicKey.y;
         pb.val(nonce) = block.accountUpdate_O.before.nonce;
         pb.val(balancesRoot_before) = block.accountUpdate_O.before.balancesRoot;
 
+        // Inputs
+        exchangeID.bits.fill_with_bits_of_field_element(pb, block.exchangeID);
+        exchangeID.generate_r1cs_witness_from_bits();
+        merkleRootBefore.bits.fill_with_bits_of_field_element(pb, block.merkleRootBefore);
+        merkleRootBefore.generate_r1cs_witness_from_bits();
+        merkleRootAfter.bits.fill_with_bits_of_field_element(pb, block.merkleRootAfter);
+        merkleRootAfter.generate_r1cs_witness_from_bits();
+        operatorAccountID.bits.fill_with_bits_of_field_element(pb, block.operatorAccountID);
+        operatorAccountID.generate_r1cs_witness_from_bits();
+
+        // Operator account check
         publicKeyX_notZero.generate_r1cs_witness();
 
+        // Withdrawals
         for(unsigned int i = 0; i < block.withdrawals.size(); i++)
         {
             withdrawals[i].generate_r1cs_witness(block.withdrawals[i]);
         }
 
+        // Update Operator
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
 
-        // Calculate the label hash
+        // Labels
         labelHasher->generate_r1cs_witness();
 
+        // Public data
         publicData.generate_r1cs_witness();
 
         return true;
+    }
+
+    void printInfo()
+    {
+        std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numWithdrawals) << "/offchain withdrawal)" << std::endl;
     }
 };
 

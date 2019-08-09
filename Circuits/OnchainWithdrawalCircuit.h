@@ -50,7 +50,6 @@ public:
 
     OnchainWithdrawalGadget(
         ProtoboardT& pb,
-        const jubjub::Params& params,
         const Constants& constants,
         const VariableT& accountsMerkleRoot,
         const VariableT& bShutdownMode,
@@ -194,43 +193,42 @@ public:
 class OnchainWithdrawalCircuit : public GadgetT
 {
 public:
-    jubjub::Params params;
-
-    bool onchainDataAvailability;
-    unsigned int numWithdrawals;
-    std::vector<OnchainWithdrawalGadget> withdrawals;
 
     PublicDataGadget publicData;
-
     Constants constants;
 
+    // Inputs
     libsnark::dual_variable_gadget<FieldT> exchangeID;
     libsnark::dual_variable_gadget<FieldT> merkleRootBefore;
     libsnark::dual_variable_gadget<FieldT> merkleRootAfter;
-
-    VariableArrayT withdrawalBlockHashStart;
+    libsnark::dual_variable_gadget<FieldT> withdrawalBlockHashStart;
     libsnark::dual_variable_gadget<FieldT> startIndex;
     libsnark::dual_variable_gadget<FieldT> count;
 
+    // Shutdown
     EqualGadget bShutdownMode;
 
+    // Withdrawals
+    bool onchainDataAvailability;
+    unsigned int numWithdrawals;
+    std::vector<OnchainWithdrawalGadget> withdrawals;
     std::vector<sha256_many> hashers;
 
     OnchainWithdrawalCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
 
         publicData(pb, FMT(prefix, ".publicData")),
-
         constants(pb, FMT(prefix, ".constants")),
 
+        // Inputs
         exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
         merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
         merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
-
-        withdrawalBlockHashStart(make_var_array(pb, 256, FMT(prefix, ".withdrawalBlockHashStart"))),
+        withdrawalBlockHashStart(pb, 256, FMT(prefix, ".withdrawalBlockHashStart")),
         startIndex(pb, 32, FMT(prefix, ".startIndex")),
         count(pb, 32, FMT(prefix, ".count")),
 
+        // Shutdown
         bShutdownMode(pb, count.packed, constants.zero, FMT(prefix, ".bShutdownMode"))
     {
 
@@ -243,24 +241,23 @@ public:
 
         constants.generate_r1cs_constraints();
 
+        // Inputs
         exchangeID.generate_r1cs_constraints(true);
         merkleRootBefore.generate_r1cs_constraints(true);
         merkleRootAfter.generate_r1cs_constraints(true);
-
+        withdrawalBlockHashStart.generate_r1cs_constraints(true);
         startIndex.generate_r1cs_constraints(true);
         count.generate_r1cs_constraints(true);
 
+        // Shutdown
         bShutdownMode.generate_r1cs_constraints();
 
-        publicData.add(exchangeID.bits);
-        publicData.add(merkleRootBefore.bits);
-        publicData.add(merkleRootAfter.bits);
+        // Withdrawals
         for (size_t j = 0; j < numWithdrawals; j++)
         {
             VariableT withdrawalAccountsRoot = (j == 0) ? merkleRootBefore.packed : withdrawals.back().getNewAccountsRoot();
             withdrawals.emplace_back(
                 pb,
-                params,
                 constants,
                 withdrawalAccountsRoot,
                 bShutdownMode.result(),
@@ -268,30 +265,28 @@ public:
             );
             withdrawals.back().generate_r1cs_constraints();
 
-            VariableArrayT withdrawalBlockHash = (j == 0) ? withdrawalBlockHashStart : hashers.back().result().bits;
-
             // Hash data from withdrawal request
             std::vector<VariableArrayT> withdrawalRequestData = withdrawals.back().getOnchainData(constants);
             std::vector<VariableArrayT> hash;
-            hash.push_back(reverse(withdrawalBlockHash));
+            hash.push_back(reverse((j == 0) ? withdrawalBlockHashStart.bits : hashers.back().result().bits));
             hash.insert(hash.end(), withdrawalRequestData.begin(), withdrawalRequestData.end());
             hashers.emplace_back(pb, flattenReverse(hash), std::string("hash_") + std::to_string(j));
             hashers.back().generate_r1cs_constraints();
         }
 
-        // Add the ending hash
-        publicData.add(reverse(withdrawalBlockHashStart));
+        // Public data
+        publicData.add(exchangeID.bits);
+        publicData.add(merkleRootBefore.bits);
+        publicData.add(merkleRootAfter.bits);
+        publicData.add(reverse(withdrawalBlockHashStart.bits));
         publicData.add(reverse(hashers.back().result().bits));
         publicData.add(startIndex.bits);
         publicData.add(count.bits);
-
         // Store the approved data for all withdrawals
         for (auto& withdrawal : withdrawals)
         {
             publicData.add(withdrawal.getApprovedWithdrawalData());
         }
-
-        // Check the input hash
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root
@@ -302,39 +297,35 @@ public:
     {
         constants.generate_r1cs_witness();
 
+        // Inputs
         exchangeID.bits.fill_with_bits_of_field_element(pb, block.exchangeID);
         exchangeID.generate_r1cs_witness_from_bits();
-
         merkleRootBefore.bits.fill_with_bits_of_field_element(pb, block.merkleRootBefore);
         merkleRootBefore.generate_r1cs_witness_from_bits();
         merkleRootAfter.bits.fill_with_bits_of_field_element(pb, block.merkleRootAfter);
         merkleRootAfter.generate_r1cs_witness_from_bits();
-
-        // Store the starting hash
         for (unsigned int i = 0; i < 256; i++)
         {
-            pb.val(withdrawalBlockHashStart[255 - i]) = block.startHash.test_bit(i);
+            pb.val(withdrawalBlockHashStart.bits[255 - i]) = block.startHash.test_bit(i);
         }
-        // printBits("start hash input: 0x", depositBlockHashStart.get_bits(pb), true);
+        withdrawalBlockHashStart.generate_r1cs_witness_from_bits();
         startIndex.bits.fill_with_bits_of_field_element(pb, block.startIndex);
         startIndex.generate_r1cs_witness_from_bits();
         count.bits.fill_with_bits_of_field_element(pb, block.count);
         count.generate_r1cs_witness_from_bits();
+        // printBits("start hash input: 0x", depositBlockHashStart.get_bits(pb), true);
 
+        // Shutdown
         bShutdownMode.generate_r1cs_witness();
 
-        // All withdrawals
+        // Withdrawals
+        assert(withdrawals.size() == hashers.size());
         for(unsigned int i = 0; i < block.withdrawals.size(); i++)
         {
             withdrawals[i].generate_r1cs_witness(block.withdrawals[i]);
+            hashers[i].generate_r1cs_witness();
         }
-
-        // All hashes
-        for (auto& hasher : hashers)
-        {
-            hasher.generate_r1cs_witness();
-        }
-        printBits("WithdrawBlockHash: 0x", hashers.back().result().bits.get_bits(pb));
+        // printBits("WithdrawBlockHash: 0x", hashers.back().result().bits.get_bits(pb));
 
         // Public data
         publicData.generate_r1cs_witness();

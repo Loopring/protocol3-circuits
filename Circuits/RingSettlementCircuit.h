@@ -525,68 +525,83 @@ class RingSettlementCircuit : public GadgetT
 {
 public:
 
-    bool onchainDataAvailability;
-    unsigned int numRings;
-    jubjub::Params params;
-    std::vector<RingSettlementGadget> ringSettlements;
-
     PublicDataGadget publicData;
-
-    Bitstream dataAvailabityData;
-    TransformRingSettlementDataGadget transformData;
-
     Constants constants;
+    jubjub::Params params;
 
+    // State
+    // Operator
+    const jubjub::VariablePointT publicKey;
+    const VariableT balancesRootO_before;
+    const VariableT nonce_before;
+    // Protocol pool
+    const VariableT balancesRootP_before;
+
+    // Inputs
     libsnark::dual_variable_gadget<FieldT> exchangeID;
     libsnark::dual_variable_gadget<FieldT> merkleRootBefore;
     libsnark::dual_variable_gadget<FieldT> merkleRootAfter;
     libsnark::dual_variable_gadget<FieldT> timestamp;
-
     libsnark::dual_variable_gadget<FieldT> protocolTakerFeeBips;
     libsnark::dual_variable_gadget<FieldT> protocolMakerFeeBips;
-
-    // Protocol fee pool
-    const VariableT balancesRootP_before;
-    std::unique_ptr<UpdateAccountGadget> updateAccount_P;
-
-    // Operator
     libsnark::dual_variable_gadget<FieldT> operatorAccountID;
-    const jubjub::VariablePointT publicKey;
-    const VariableT balancesRootO_before;
-    const VariableT nonce_before;
-    UnsafeAddGadget nonce_after;
-    std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
-    std::vector<VariableT> labels;
-    std::unique_ptr<LabelHasher> labelHasher;
+    // Increment the nonce of the Operator
+    AddGadget nonce_after;
 
+    // Transform the ring data
+    TransformRingSettlementDataGadget transformData;
+
+    // Signature
     Poseidon_gadget_T<3, 1, 6, 51, 2, 1> hash;
     SignatureVerifier signatureVerifier;
+
+    // Ring settlements
+    bool onchainDataAvailability;
+    unsigned int numRings;
+    std::vector<RingSettlementGadget> ringSettlements;
+    Bitstream dataAvailabityData;
+
+    // Update Protocol pool
+    std::unique_ptr<UpdateAccountGadget> updateAccount_P;
+
+    // Update Operator
+    std::unique_ptr<UpdateAccountGadget> updateAccount_O;
+
+    // Labels
+    std::vector<VariableT> labels;
+    std::unique_ptr<LabelHasher> labelHasher;
 
     RingSettlementCircuit(ProtoboardT& pb, const std::string& prefix) :
         GadgetT(pb, prefix),
 
         publicData(pb, FMT(prefix, ".publicData")),
-
         constants(pb, FMT(prefix, ".constants")),
 
-        transformData(pb, FMT(prefix, ".transformData")),
+        // State
+        // Operator
+        publicKey(pb, FMT(prefix, ".publicKey")),
+        balancesRootO_before(make_variable(pb, FMT(prefix, ".balancesRootO_before"))),
+        nonce_before(make_variable(pb, FMT(prefix, ".nonce_before"))),
+        // Protocol pool
+        balancesRootP_before(make_variable(pb, FMT(prefix, ".balancesRootP_before"))),
 
+        // Inputs
         exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
         merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
         merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
         timestamp(pb, NUM_BITS_TIMESTAMP, FMT(prefix, ".timestamp")),
         protocolTakerFeeBips(pb, NUM_BITS_PROTOCOL_FEE_BIPS, FMT(prefix, ".protocolTakerFeeBips")),
         protocolMakerFeeBips(pb, NUM_BITS_PROTOCOL_FEE_BIPS, FMT(prefix, ".protocolMakerFeeBips")),
-
-        balancesRootP_before(make_variable(pb, FMT(prefix, ".balancesRootP_before"))),
-
         operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
-        publicKey(pb, FMT(prefix, ".publicKey")),
-        balancesRootO_before(make_variable(pb, FMT(prefix, ".balancesRootO_before"))),
-        nonce_before(make_variable(pb, FMT(prefix, ".nonce_before"))),
-        nonce_after(pb, nonce_before, constants.one, FMT(prefix, ".nonce_after")),
 
+        // Increment the nonce of the Operator
+        nonce_after(pb, nonce_before, constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_after")),
+
+        // Transform the ring data
+        transformData(pb, FMT(prefix, ".transformData")),
+
+        // Signature
         hash(pb, var_array({
             publicData.publicInput,
             nonce_before
@@ -603,14 +618,19 @@ public:
 
         constants.generate_r1cs_constraints();
 
+        // Inputs
         exchangeID.generate_r1cs_constraints(true);
         merkleRootBefore.generate_r1cs_constraints(true);
         merkleRootAfter.generate_r1cs_constraints(true);
         timestamp.generate_r1cs_constraints(true);
         protocolTakerFeeBips.generate_r1cs_constraints(true);
         protocolMakerFeeBips.generate_r1cs_constraints(true);
+        operatorAccountID.generate_r1cs_constraints(true);
+
+        // Increment the nonce of the Operator
         nonce_after.generate_r1cs_constraints();
 
+        // Ring settlements
         for (size_t j = 0; j < numRings; j++)
         {
             const VariableT ringAccountsRoot = (j == 0) ? merkleRootBefore.packed : ringSettlements.back().getNewAccountsRoot();
@@ -641,21 +661,21 @@ public:
             }
         }
 
-        // Update the protocol fee pool
+        // Update Protocol pool
         updateAccount_P.reset(new UpdateAccountGadget(pb, ringSettlements.back().getNewAccountsRoot(), constants.zeroAccount,
                       {constants.zero, constants.zero, constants.zero, balancesRootP_before},
                       {constants.zero, constants.zero, constants.zero, ringSettlements.back().getNewProtocolBalancesRoot()},
                       FMT(annotation_prefix, ".updateAccount_P")));
         updateAccount_P->generate_r1cs_constraints();
 
-        // Update the operator
+        // Update Operator
         updateAccount_O.reset(new UpdateAccountGadget(pb, updateAccount_P->result(), operatorAccountID.bits,
                       {publicKey.x, publicKey.y, nonce_before, balancesRootO_before},
                       {publicKey.x, publicKey.y, nonce_after.result(), ringSettlements.back().getNewOperatorBalancesRoot()},
                       FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
-        // Calculate the label hash
+        // Labels
         labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelHash")));
         labelHasher->generate_r1cs_constraints();
 
@@ -675,15 +695,14 @@ public:
             transformData.generate_r1cs_constraints(numRings, flattenReverse(dataAvailabityData.data));
             publicData.add(reverse(transformData.result()));
         }
-
-        // Check the input hash
         publicData.generate_r1cs_constraints();
+
+        // Signature
+        hash.generate_r1cs_constraints();
+        signatureVerifier.generate_r1cs_constraints();
 
         // Check the new merkle root
         forceEqual(pb, updateAccount_O->result(), merkleRootAfter.packed, "newMerkleRoot");
-
-        hash.generate_r1cs_constraints();
-        signatureVerifier.generate_r1cs_constraints();
     }
 
     bool generateWitness(const RingSettlementBlock& block)
@@ -696,47 +715,58 @@ public:
 
         constants.generate_r1cs_witness();
 
-        exchangeID.bits.fill_with_bits_of_field_element(pb, block.exchangeID);
-        exchangeID.generate_r1cs_witness_from_bits();
-
-        merkleRootBefore.bits.fill_with_bits_of_field_element(pb, block.merkleRootBefore);
-        merkleRootBefore.generate_r1cs_witness_from_bits();
-        merkleRootAfter.bits.fill_with_bits_of_field_element(pb, block.merkleRootAfter);
-        merkleRootAfter.generate_r1cs_witness_from_bits();
-
-        timestamp.bits.fill_with_bits_of_field_element(pb, block.timestamp);
-        timestamp.generate_r1cs_witness_from_bits();
-
-        protocolTakerFeeBips.bits.fill_with_bits_of_field_element(pb, block.protocolTakerFeeBips);
-        protocolTakerFeeBips.generate_r1cs_witness_from_bits();
-        protocolMakerFeeBips.bits.fill_with_bits_of_field_element(pb, block.protocolMakerFeeBips);
-        protocolMakerFeeBips.generate_r1cs_witness_from_bits();
-
-        operatorAccountID.bits.fill_with_bits_of_field_element(pb, block.operatorAccountID);
-        operatorAccountID.generate_r1cs_witness_from_bits();
+        // State
+        // Operator
         pb.val(publicKey.x) = block.accountUpdate_O.before.publicKey.x;
         pb.val(publicKey.y) = block.accountUpdate_O.before.publicKey.y;
         pb.val(balancesRootO_before) = block.accountUpdate_O.before.balancesRoot;
         pb.val(nonce_before) = block.accountUpdate_O.before.nonce;
-        nonce_after.generate_r1cs_witness();
+        // Operator pool
         pb.val(balancesRootP_before) = block.accountUpdate_P.before.balancesRoot;
 
+        // Inputs
+        exchangeID.bits.fill_with_bits_of_field_element(pb, block.exchangeID);
+        exchangeID.generate_r1cs_witness_from_bits();
+        merkleRootBefore.bits.fill_with_bits_of_field_element(pb, block.merkleRootBefore);
+        merkleRootBefore.generate_r1cs_witness_from_bits();
+        merkleRootAfter.bits.fill_with_bits_of_field_element(pb, block.merkleRootAfter);
+        merkleRootAfter.generate_r1cs_witness_from_bits();
+        timestamp.bits.fill_with_bits_of_field_element(pb, block.timestamp);
+        timestamp.generate_r1cs_witness_from_bits();
+        protocolTakerFeeBips.bits.fill_with_bits_of_field_element(pb, block.protocolTakerFeeBips);
+        protocolTakerFeeBips.generate_r1cs_witness_from_bits();
+        protocolMakerFeeBips.bits.fill_with_bits_of_field_element(pb, block.protocolMakerFeeBips);
+        protocolMakerFeeBips.generate_r1cs_witness_from_bits();
+        operatorAccountID.bits.fill_with_bits_of_field_element(pb, block.operatorAccountID);
+        operatorAccountID.generate_r1cs_witness_from_bits();
+
+        // Increment the nonce of the Operator
+        nonce_after.generate_r1cs_witness();
+
+        // Ring settlements
         for(unsigned int i = 0; i < block.ringSettlements.size(); i++)
         {
             ringSettlements[i].generate_r1cs_witness(block.ringSettlements[i]);
         }
+
+        // Update Protocol pool
         updateAccount_P->generate_r1cs_witness(block.accountUpdate_P.proof);
+
+        // Update Operator
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
 
-        // Calculate the label hash
+        // Labels
         labelHasher->generate_r1cs_witness();
 
+        // Transform the ring data
         if (onchainDataAvailability)
         {
             transformData.generate_r1cs_witness();
         }
+        // Public data
         publicData.generate_r1cs_witness();
 
+        // Signature
         hash.generate_r1cs_witness();
         signatureVerifier.generate_r1cs_witness(block.signature);
 
