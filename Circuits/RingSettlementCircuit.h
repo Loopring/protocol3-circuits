@@ -18,6 +18,7 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
+// Transforms the DA data for ring settlements
 class TransformRingSettlementDataGadget : public GadgetT
 {
 public:
@@ -495,11 +496,11 @@ public:
 
             orderA.tokenS.bits,
             fillS_A.bits(),
-            orderA.buy.bits, VariableArrayT(1, orderA.bRebateNonZero.result()), orderA.feeOrRebateBips.bits,
+            orderA.buy.bits, VariableArrayT(1, orderA.hasRebate()), orderA.feeOrRebateBips.bits,
 
             orderB.tokenS.bits,
             fillS_B.bits(),
-            orderB.buy.bits, VariableArrayT(1, orderB.bRebateNonZero.result()), orderB.feeOrRebateBips.bits,
+            orderB.buy.bits, VariableArrayT(1, orderB.hasRebate()), orderB.feeOrRebateBips.bits,
         };
     }
 
@@ -646,8 +647,8 @@ public:
             );
             ringSettlements.back().generate_r1cs_constraints();
 
-            labels.push_back(ringSettlements.back().orderA.label.packed);
-            labels.push_back(ringSettlements.back().orderB.label.packed);
+            labels.push_back(ringSettlements.back().orderA.label);
+            labels.push_back(ringSettlements.back().orderB.label);
 
             if (onchainDataAvailability)
             {

@@ -1432,8 +1432,8 @@ public:
 
     void generate_r1cs_witness(ProtoboardT& pb, const FieldT& value)
     {
-        bits.fill_with_bits_of_field_element(pb, value);
-        generate_r1cs_witness_from_bits();
+        pb.val(packed) = value;
+        generate_r1cs_witness_from_packed();
     }
 
     void generate_r1cs_witness(ProtoboardT& pb, const libff::bigint<libff::alt_bn128_r_limbs>& value)

@@ -32,7 +32,7 @@ public:
     DualVariableGadget amountRequested;
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
-    DualVariableGadget label;
+    VariableT label;
 
     // Fee as float
     FloatGadget fFee;
@@ -88,7 +88,7 @@ public:
         amountRequested(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amountRequested")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
-        label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
+        label(make_variable(pb, FMT(prefix, ".label"))),
 
         // Fee as float
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
@@ -136,7 +136,7 @@ public:
             amountRequested.packed,
             feeTokenID.packed,
             fee.packed,
-            label.packed,
+            label,
             accountBefore.nonce
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, jubjub::VariablePointT(accountBefore.publicKeyX, accountBefore.publicKeyY),
@@ -160,7 +160,7 @@ public:
         amountRequested.generate_r1cs_witness(pb, withdrawal.amountRequested);
         feeTokenID.generate_r1cs_witness(pb, withdrawal.balanceUpdateF_A.tokenID);
         fee.generate_r1cs_witness(pb, withdrawal.fee);
-        label.generate_r1cs_witness(pb, withdrawal.label);
+        pb.val(label) = withdrawal.label;
 
         // Fee as float
         fFee.generate_r1cs_witness(toFloat(withdrawal.fee, Float16Encoding));
@@ -208,7 +208,7 @@ public:
         amountRequested.generate_r1cs_constraints(true);
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
-        label.generate_r1cs_constraints(true);
+        // label has no limit
 
         // Fee as float
         fFee.generate_r1cs_constraints();
@@ -352,7 +352,7 @@ public:
                 std::string("withdrawals_") + std::to_string(j)
             );
             withdrawals.back().generate_r1cs_constraints();
-            labels.push_back(withdrawals.back().label.packed);
+            labels.push_back(withdrawals.back().label);
         }
 
         // Update Operator

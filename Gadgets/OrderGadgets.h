@@ -38,7 +38,7 @@ public:
     DualVariableGadget validUntil;
     DualVariableGadget maxFeeBips;
     DualVariableGadget buy;
-    DualVariableGadget label;
+    VariableT label;
 
     DualVariableGadget feeBips;
     DualVariableGadget rebateBips;
@@ -91,7 +91,7 @@ public:
         validUntil(pb, NUM_BITS_TIMESTAMP, FMT(prefix, ".validUntil")),
         maxFeeBips(pb, NUM_BITS_BIPS, FMT(prefix, ".maxFeeBips")),
         buy(pb, 1, FMT(prefix, ".buy")),
-        label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
+        label(make_variable(pb, FMT(prefix, ".label"))),
 
         feeBips(pb, NUM_BITS_BIPS, FMT(prefix, ".feeBips")),
         rebateBips(pb, NUM_BITS_BIPS, FMT(prefix, ".rebateBips")),
@@ -125,7 +125,7 @@ public:
             validUntil.packed,
             maxFeeBips.packed,
             buy.packed,
-            label.packed
+            label
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
@@ -157,7 +157,7 @@ public:
         validUntil.generate_r1cs_witness(pb, order.validUntil);
         maxFeeBips.generate_r1cs_witness(pb, order.maxFeeBips);
         buy.generate_r1cs_witness(pb, order.buy);
-        label.generate_r1cs_witness(pb, order.label);
+        pb.val(label) = order.label;
 
         feeBips.generate_r1cs_witness(pb, order.feeBips);
         rebateBips.generate_r1cs_witness(pb, order.rebateBips);
@@ -182,9 +182,10 @@ public:
         signatureVerifier.generate_r1cs_witness(order.signature);
     }
 
-    void generate_r1cs_constraints()
+    void generate_r1cs_constraints(bool doSignatureCheck = true)
     {
         // Inputs
+        orderID.generate_r1cs_constraints(true);
         accountID.generate_r1cs_constraints(true);
         tokenS.generate_r1cs_constraints(true);
         tokenB.generate_r1cs_constraints(true);
@@ -195,7 +196,7 @@ public:
         validUntil.generate_r1cs_constraints(true);
         maxFeeBips.generate_r1cs_constraints(true);
         buy.generate_r1cs_constraints(true);
-        label.generate_r1cs_constraints(true);
+        // label has no limit
 
         feeBips.generate_r1cs_constraints(true);
         rebateBips.generate_r1cs_constraints(true);
@@ -217,12 +218,15 @@ public:
 
         // Signature
         hash.generate_r1cs_constraints();
-        signatureVerifier.generate_r1cs_constraints();
+        if (doSignatureCheck)
+        {
+            signatureVerifier.generate_r1cs_constraints();
+        }
     }
 
-    const VariableArrayT& getHash()
+    const VariableT& hasRebate() const
     {
-        return signatureVerifier.getHash();
+        return bRebateNonZero.result();
     }
 };
 

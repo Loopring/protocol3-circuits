@@ -225,7 +225,7 @@ bool cancel(Mode mode, bool onchainDataAvailability, unsigned int numCancels, co
     return true;
 }
 
-int main (int argc, char **argv)
+int main(int argc, char **argv)
 {
     ethsnarks::ppT::init_public_params();
 

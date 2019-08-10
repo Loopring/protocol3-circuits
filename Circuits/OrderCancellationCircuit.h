@@ -34,7 +34,7 @@ public:
     DualVariableGadget orderID;
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
-    DualVariableGadget label;
+    VariableT label;
 
     // OrderID check
     RequireLeqGadget oldOrderID_leq_newOrderID;
@@ -87,7 +87,7 @@ public:
         orderID(pb, NUM_BITS_ORDERID, FMT(prefix, ".orderID")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
-        label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
+        label(make_variable(pb, FMT(prefix, ".label"))),
 
         // OrderID check
         oldOrderID_leq_newOrderID(pb, tradeHistoryBefore.orderID, orderID.packed, NUM_BITS_ORDERID, FMT(prefix, ".checkOrderID")),
@@ -134,7 +134,7 @@ public:
             orderID.packed,
             feeTokenID.packed,
             fee.packed,
-            label.packed,
+            label,
             accountBefore.nonce
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, jubjub::VariablePointT(accountBefore.publicKeyX, accountBefore.publicKeyY),
@@ -159,7 +159,7 @@ public:
         orderID.generate_r1cs_witness(pb, cancellation.tradeHistoryUpdate_A.orderID);
         feeTokenID.generate_r1cs_witness(pb, cancellation.balanceUpdateF_A.tokenID);
         fee.generate_r1cs_witness(pb, cancellation.fee);
-        label.generate_r1cs_witness(pb, cancellation.label);
+        pb.val(label) = cancellation.label;
 
         // OrderID check
         oldOrderID_leq_newOrderID.generate_r1cs_witness();
@@ -204,7 +204,7 @@ public:
         orderID.generate_r1cs_constraints(true);
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
-        label.generate_r1cs_constraints(true);
+        // label has no limit
 
         // OrderID check
         oldOrderID_leq_newOrderID.generate_r1cs_constraints();
@@ -340,7 +340,7 @@ public:
                 std::string("cancels_") + std::to_string(j)
             );
             cancels.back().generate_r1cs_constraints();
-            labels.push_back(cancels.back().label.packed);
+            labels.push_back(cancels.back().label);
         }
 
         // Update Operator
