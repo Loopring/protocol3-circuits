@@ -37,7 +37,11 @@ public:
     VariableT label;
 
     // OrderID check
-    RequireLeqGadget oldOrderID_leq_newOrderID;
+    LeqGadget oldOrderID_leq_newOrderID;
+    RequireEqualGadget require_oldOrderID_leq_newOrderID;
+
+    // New filled amount
+    TernaryGadget filled_after;
 
     // Fee as float
     FloatGadget fFee;
@@ -90,11 +94,15 @@ public:
         label(make_variable(pb, FMT(prefix, ".label"))),
 
         // OrderID check
-        oldOrderID_leq_newOrderID(pb, tradeHistoryBefore.orderID, orderID.packed, NUM_BITS_ORDERID, FMT(prefix, ".checkOrderID")),
+        oldOrderID_leq_newOrderID(pb, tradeHistoryBefore.orderID, orderID.packed, NUM_BITS_ORDERID, FMT(prefix, ".oldOrderID_leq_newOrderID")),
+        require_oldOrderID_leq_newOrderID(pb, oldOrderID_leq_newOrderID.leq(), constants.one, FMT(prefix, ".require_oldOrderID_leq_newOrderID")),
 
         // Fee as float
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
         requireAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFee")),
+
+        // New filled amount
+        filled_after(pb, oldOrderID_leq_newOrderID.lt(), constants.zero, tradeHistoryBefore.filled, FMT(prefix, ".filled_after")),
 
         // Fee payment from the user to the operator
         feePayment(pb, NUM_BITS_AMOUNT, balanceFBefore.balance, balanceBefore_O.balance, fFee.value(), FMT(prefix, ".feePayment")),
@@ -105,7 +113,7 @@ public:
         // Update User
         updateTradeHistory_A(pb, balanceTBefore.tradingHistory, subArray(orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
                              {tradeHistoryBefore.filled, tradeHistoryBefore.cancelled, tradeHistoryBefore.orderID},
-                             {tradeHistoryBefore.filled, constants.one, orderID.packed},
+                             {filled_after.result(), constants.one, orderID.packed},
                              FMT(prefix, ".updateTradeHistory_A")),
         updateBalanceT_A(pb, accountBefore.balancesRoot, orderTokenID.bits,
                          {balanceTBefore.balance, balanceTBefore.tradingHistory},
@@ -162,6 +170,10 @@ public:
 
         // OrderID check
         oldOrderID_leq_newOrderID.generate_r1cs_witness();
+        require_oldOrderID_leq_newOrderID.generate_r1cs_witness();
+
+        // New filled amount
+        filled_after.generate_r1cs_witness();
 
         // Fee as float
         fFee.generate_r1cs_witness(toFloat(cancellation.fee, Float16Encoding));
@@ -199,6 +211,10 @@ public:
 
         // OrderID check
         oldOrderID_leq_newOrderID.generate_r1cs_constraints();
+        require_oldOrderID_leq_newOrderID.generate_r1cs_constraints();
+
+        // New filled amount
+        filled_after.generate_r1cs_constraints();
 
         // Fee as float
         fFee.generate_r1cs_constraints();
