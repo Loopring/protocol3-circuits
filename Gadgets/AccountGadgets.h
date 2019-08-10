@@ -27,8 +27,7 @@ struct AccountState
 class AccountGadget : public GadgetT
 {
 public:
-    VariableT publicKeyX;
-    VariableT publicKeyY;
+    const jubjub::VariablePointT publicKey;
     VariableT nonce;
     VariableT balancesRoot;
 
@@ -38,8 +37,7 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        publicKeyX(make_variable(pb, FMT(prefix, ".publicKeyX"))),
-        publicKeyY(make_variable(pb, FMT(prefix, ".publicKeyY"))),
+        publicKey(pb, FMT(prefix, ".publicKey")),
         nonce(make_variable(pb, FMT(prefix, ".nonce"))),
         balancesRoot(make_variable(pb, FMT(prefix, ".balancesRoot")))
     {
@@ -48,15 +46,10 @@ public:
 
     void generate_r1cs_witness(const Account& account)
     {
-        pb.val(publicKeyX) = account.publicKey.x;
-        pb.val(publicKeyY) = account.publicKey.y;
+        pb.val(publicKey.x) = account.publicKey.x;
+        pb.val(publicKey.y) = account.publicKey.y;
         pb.val(nonce) = account.nonce;
         pb.val(balancesRoot) = account.balancesRoot;
-    }
-
-    void generate_r1cs_constraints()
-    {
-
     }
 };
 
@@ -143,11 +136,6 @@ public:
     {
         pb.val(balance) = balanceLeaf.balance;
         pb.val(tradingHistory) = balanceLeaf.tradingHistoryRoot;
-    }
-
-    void generate_r1cs_constraints()
-    {
-
     }
 };
 

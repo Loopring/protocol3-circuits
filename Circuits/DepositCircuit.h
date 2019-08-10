@@ -66,7 +66,7 @@ public:
                       {balanceAfter.result(), balanceBefore.tradingHistory},
                       FMT(prefix, ".updateBalance")),
         updateAccount(pb, root, accountID.bits,
-                      {accountBefore.publicKeyX, accountBefore.publicKeyY, accountBefore.nonce, accountBefore.balancesRoot},
+                      {accountBefore.publicKey.x, accountBefore.publicKey.y, accountBefore.nonce, accountBefore.balancesRoot},
                       {publicKeyX.packed, publicKeyY.packed, accountBefore.nonce, updateBalance.result()},
                       FMT(prefix, ".updateAccount"))
     {
@@ -97,10 +97,6 @@ public:
 
     void generate_r1cs_constraints()
     {
-        // User state
-        balanceBefore.generate_r1cs_constraints();
-        accountBefore.generate_r1cs_constraints();
-
         // Inputs
         accountID.generate_r1cs_constraints(true);
         tokenID.generate_r1cs_constraints(true);

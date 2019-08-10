@@ -75,8 +75,8 @@ public:
         // Shutdown mode
         amountToSubtract(pb, bShutdownMode, amountToWithdraw.result(), amountWithdrawn.value(), FMT(prefix, ".amountToSubtract")),
         tradingHistoryAfter(pb, bShutdownMode, constants.emptyTradeHistory, balanceBefore.tradingHistory, FMT(prefix, ".tradingHistoryAfter")),
-        publicKeyXAfter(pb, bShutdownMode, constants.zero, accountBefore.publicKeyX, FMT(prefix, ".publicKeyXAfter")),
-        publicKeyYAfter(pb, bShutdownMode, constants.zero, accountBefore.publicKeyY, FMT(prefix, ".publicKeyYAfter")),
+        publicKeyXAfter(pb, bShutdownMode, constants.zero, accountBefore.publicKey.x, FMT(prefix, ".publicKeyXAfter")),
+        publicKeyYAfter(pb, bShutdownMode, constants.zero, accountBefore.publicKey.y, FMT(prefix, ".publicKeyYAfter")),
         nonceAfter(pb, bShutdownMode, constants.zero, accountBefore.nonce, FMT(prefix, ".tradingHistoryAfter")),
 
         // Calculate the new balance
@@ -88,7 +88,7 @@ public:
                         {balance_after.result(), tradingHistoryAfter.result()},
                         FMT(prefix, ".updateBalance_A")),
         updateAccount_A(pb, accountsMerkleRoot, accountID.bits,
-                        {accountBefore.publicKeyX, accountBefore.publicKeyY, accountBefore.nonce, accountBefore.balancesRoot},
+                        {accountBefore.publicKey.x, accountBefore.publicKey.y, accountBefore.nonce, accountBefore.balancesRoot},
                         {publicKeyXAfter.result(), publicKeyYAfter.result(), nonceAfter.result(), updateBalance_A.result()},
                         FMT(prefix, ".updateAccount_A"))
     {
@@ -129,10 +129,6 @@ public:
 
     void generate_r1cs_constraints()
     {
-        // User state
-        balanceBefore.generate_r1cs_constraints();
-        accountBefore.generate_r1cs_constraints();
-
         // Inputs
         accountID.generate_r1cs_constraints(true);
         tokenID.generate_r1cs_constraints(true);

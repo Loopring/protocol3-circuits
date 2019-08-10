@@ -1,9 +1,10 @@
 #ifndef _ORDERGADGETS_H_
 #define _ORDERGADGETS_H_
 
-#include "TradingHistoryGadgets.h"
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
+#include "TradingHistoryGadgets.h"
+#include "AccountGadgets.h"
 
 #include "ethsnarks.hpp"
 #include "gadgets/poseidon.hpp"
@@ -19,12 +20,10 @@ class OrderGadget : public GadgetT
 public:
 
     // State
-    const jubjub::VariablePointT publicKey;
-    VariableT balanceS;
-    VariableT balanceB;
-    VariableT tradeHistoryFilled;
-    VariableT tradeHistoryCancelled;
-    VariableT tradeHistoryOrderID;
+    TradeHistoryGadget tradeHistoryBefore;
+    BalanceGadget balanceSBefore;
+    BalanceGadget balanceBBefore;
+    AccountGadget accountBefore;
 
     // Inputs
     DualVariableGadget orderID;
@@ -72,12 +71,10 @@ public:
         GadgetT(pb, prefix),
 
         // State
-        publicKey(pb, FMT(prefix, ".publicKey")),
-        balanceS(make_variable(pb, FMT(prefix, ".balanceS"))),
-        balanceB(make_variable(pb, FMT(prefix, ".balanceB"))),
-        tradeHistoryFilled(make_variable(pb, FMT(prefix, ".tradeHistoryFilled"))),
-        tradeHistoryCancelled(make_variable(pb, FMT(prefix, ".tradeHistoryCancelled"))),
-        tradeHistoryOrderID(make_variable(pb, FMT(prefix, ".tradeHistoryOrderID"))),
+        tradeHistoryBefore(pb, FMT(prefix, ".tradeHistoryBefore")),
+        balanceSBefore(pb, FMT(prefix, ".balanceSBefore")),
+        balanceBBefore(pb, FMT(prefix, ".balanceBBefore")),
+        accountBefore(pb, FMT(prefix, ".accountBefore")),
 
         // Inputs
         orderID(pb, NUM_BITS_ORDERID, FMT(prefix, ".orderID")),
@@ -109,7 +106,7 @@ public:
         bRebateNonZero(pb, rebateBips.packed, FMT(prefix, ".bRebateNonZero")),
 
         // Trade history
-        tradeHistory(pb, constants, tradeHistoryFilled, tradeHistoryCancelled, tradeHistoryOrderID, orderID.packed, FMT(prefix, ".tradeHistory")),
+        tradeHistory(pb, constants, tradeHistoryBefore, orderID.packed, FMT(prefix, ".tradeHistory")),
 
         // Signature
         hash(pb, var_array({
@@ -127,7 +124,7 @@ public:
             buy.packed,
             label
         }), FMT(this->annotation_prefix, ".hash")),
-        signatureVerifier(pb, params, publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
+        signatureVerifier(pb, params, accountBefore.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }
@@ -137,13 +134,10 @@ public:
                                const TradeHistoryLeaf& tradeHistoryLeaf)
     {
         // State
-        pb.val(publicKey.x) = account.publicKey.x;
-        pb.val(publicKey.y) = account.publicKey.y;
-        pb.val(balanceS) = balanceLeafS.balance;
-        pb.val(balanceB) = balanceLeafB.balance;
-        pb.val(tradeHistoryFilled) = tradeHistoryLeaf.filled;
-        pb.val(tradeHistoryCancelled) = tradeHistoryLeaf.cancelled;
-        pb.val(tradeHistoryOrderID) = tradeHistoryLeaf.orderID;
+        tradeHistoryBefore.generate_r1cs_witness(tradeHistoryLeaf);
+        balanceSBefore.generate_r1cs_witness(balanceLeafS);
+        balanceBBefore.generate_r1cs_witness(balanceLeafB);
+        accountBefore.generate_r1cs_witness(account);
 
         // Inputs
         orderID.generate_r1cs_witness(pb, order.orderID);

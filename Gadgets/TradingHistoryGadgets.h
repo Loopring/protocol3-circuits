@@ -47,11 +47,6 @@ public:
         pb.val(cancelled) = tradeHistoryLeaf.cancelled;
         pb.val(orderID) = tradeHistoryLeaf.orderID;
     }
-
-    void generate_r1cs_constraints()
-    {
-
-    }
 };
 
 class UpdateTradeHistoryGadget : public GadgetT
@@ -111,8 +106,6 @@ public:
 
 class TradeHistoryTrimmingGadget : public GadgetT
 {
-public:
-
     LeqGadget bNew;
     NotGadget bTrim;
 
@@ -121,24 +114,24 @@ public:
     TernaryGadget cancelled;
     TernaryGadget orderIDToStore;
 
+public:
+
     TradeHistoryTrimmingGadget(
         ProtoboardT& pb,
         const Constants& constants,
-        const VariableT& tradeHistoryFilled,
-        const VariableT& tradeHistoryCancelled,
-        const VariableT& tradeHistoryOrderID,
+        const TradeHistoryGadget& tradeHistory,
         const VariableT& orderID,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
-        bNew(pb, tradeHistoryOrderID, orderID, NUM_BITS_ORDERID, FMT(prefix, ".tradeHistoryOrderID <(=) orderID")),
+        bNew(pb, tradeHistory.orderID, orderID, NUM_BITS_ORDERID, FMT(prefix, ".tradeHistoryOrderID <(=) orderID")),
         bTrim(pb, bNew.leq(), FMT(prefix, ".!bNew")),
 
-        filled(pb, bNew.lt(), constants.zero, tradeHistoryFilled, FMT(prefix, ".filled")),
-        cancelledToStore(pb, bNew.lt(), constants.zero, tradeHistoryCancelled, FMT(prefix, ".cancelledToStore")),
+        filled(pb, bNew.lt(), constants.zero, tradeHistory.filled, FMT(prefix, ".filled")),
+        cancelledToStore(pb, bNew.lt(), constants.zero, tradeHistory.cancelled, FMT(prefix, ".cancelledToStore")),
         cancelled(pb, bTrim.result(), constants.one, cancelledToStore.result(), FMT(prefix, ".cancelled")),
-        orderIDToStore(pb, bNew.lt(), orderID, tradeHistoryOrderID, FMT(prefix, ".orderIDToStore"))
+        orderIDToStore(pb, bNew.lt(), orderID, tradeHistory.orderID, FMT(prefix, ".orderIDToStore"))
     {
 
     }

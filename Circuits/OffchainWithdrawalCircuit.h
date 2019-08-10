@@ -118,8 +118,8 @@ public:
                         {balance_after.result(), balanceBefore.tradingHistory},
                         FMT(prefix, ".updateBalance_A")),
         updateAccount_A(pb, accountsMerkleRoot, accountID.bits,
-                        {accountBefore.publicKeyX, accountBefore.publicKeyY, accountBefore.nonce, accountBefore.balancesRoot},
-                        {accountBefore.publicKeyX, accountBefore.publicKeyY, nonce_after.result(), updateBalance_A.result()},
+                        {accountBefore.publicKey.x, accountBefore.publicKey.y, accountBefore.nonce, accountBefore.balancesRoot},
+                        {accountBefore.publicKey.x, accountBefore.publicKey.y, nonce_after.result(), updateBalance_A.result()},
                         FMT(prefix, ".updateAccount_A")),
 
         // Update Operator
@@ -139,8 +139,7 @@ public:
             label,
             accountBefore.nonce
         }), FMT(this->annotation_prefix, ".hash")),
-        signatureVerifier(pb, params, jubjub::VariablePointT(accountBefore.publicKeyX, accountBefore.publicKeyY),
-                          hash.result(), FMT(prefix, ".signatureVerifier"))
+        signatureVerifier(pb, params, accountBefore.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }
@@ -195,13 +194,6 @@ public:
 
     void generate_r1cs_constraints()
     {
-         // User state
-        balanceFBefore.generate_r1cs_constraints();
-        balanceBefore.generate_r1cs_constraints();
-        accountBefore.generate_r1cs_constraints();
-        // Operator state
-        balanceBefore_O.generate_r1cs_constraints();
-
         // Inputs
         accountID.generate_r1cs_constraints(true);
         tokenID.generate_r1cs_constraints(true);
@@ -313,7 +305,7 @@ public:
         operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
 
         // Operator account check
-        publicKeyX_notZero(pb, accountBefore_O.publicKeyX, FMT(prefix, ".publicKeyX_notZero"))
+        publicKeyX_notZero(pb, accountBefore_O.publicKey.x, FMT(prefix, ".publicKeyX_notZero"))
     {
 
     }
@@ -324,9 +316,6 @@ public:
         this->numWithdrawals = numWithdrawals;
 
         constants.generate_r1cs_constraints();
-
-        // State
-        accountBefore_O.generate_r1cs_constraints();
 
         // Inputs
         exchangeID.generate_r1cs_constraints(true);
@@ -357,8 +346,8 @@ public:
 
         // Update Operator
         updateAccount_O.reset(new UpdateAccountGadget(pb, withdrawals.back().getNewAccountsRoot(), operatorAccountID.bits,
-            {accountBefore_O.publicKeyX, accountBefore_O.publicKeyY, accountBefore_O.nonce, accountBefore_O.balancesRoot},
-            {accountBefore_O.publicKeyX, accountBefore_O.publicKeyY, accountBefore_O.nonce, withdrawals.back().getNewOperatorBalancesRoot()},
+            {accountBefore_O.publicKey.x, accountBefore_O.publicKey.y, accountBefore_O.nonce, accountBefore_O.balancesRoot},
+            {accountBefore_O.publicKey.x, accountBefore_O.publicKey.y, accountBefore_O.nonce, withdrawals.back().getNewOperatorBalancesRoot()},
             FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 

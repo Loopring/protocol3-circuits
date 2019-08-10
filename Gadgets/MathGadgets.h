@@ -85,6 +85,7 @@ class DynamicVariableGadget : public GadgetT
 public:
 
     std::vector<VariableT> variables;
+    bool allowGeneratingWitness;
 
     DynamicVariableGadget(
         ProtoboardT& pb,
@@ -92,7 +93,19 @@ public:
     ) :
         GadgetT(pb, prefix)
     {
-        add(make_variable(pb, FMT(prefix, ".frontValue")));
+        add(make_variable(pb, FMT(prefix, ".initialValue")));
+        allowGeneratingWitness = true;
+    }
+
+    DynamicVariableGadget(
+        ProtoboardT& pb,
+        const VariableT& initialValue,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix)
+    {
+        add(initialValue);
+        allowGeneratingWitness = false;
     }
 
     const VariableT& front() const
@@ -112,6 +125,7 @@ public:
 
     void generate_r1cs_witness(ethsnarks::FieldT value)
     {
+        assert(allowGeneratingWitness);
         pb.val(variables.front()) = value;
     }
 };
@@ -1438,7 +1452,7 @@ public:
 
     void generate_r1cs_witness(ProtoboardT& pb, const libff::bigint<libff::alt_bn128_r_limbs>& value)
     {
-        assert(value.size() == 256);
+        // assert(value.size() == 256);
         for (unsigned int i = 0; i < 256; i++)
         {
             pb.val(bits[255 - i]) = value.test_bit(i);

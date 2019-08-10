@@ -290,7 +290,7 @@ public:
         remaining(pb, order.tradeHistory.getCancelled(), constants.zero, remainingBeforeCancelled.result(), FMT(prefix, ".remaining")),
         remainingS_buy(pb, constants, remaining.result(), order.amountS.packed, order.amountB.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".remainingS_buy")),
         remainingS(pb, order.buy.packed, remainingS_buy.result(), remaining.result(), FMT(prefix, ".remainingS")),
-        fillAmountS(pb, order.balanceS, remainingS.result(), NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountS")),
+        fillAmountS(pb, order.balanceSBefore.balance, remainingS.result(), NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountS")),
         fillAmountB(pb, constants, fillAmountS.result(), order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB"))
     {
 
