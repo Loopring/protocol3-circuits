@@ -121,8 +121,8 @@ void run_prover(
 
     size_t space = ((m + 1) + R - 1) / R;
 
-    //auto A_mults = load_points_affine<ECp>(((1U << C) - 1)*(m + 1), preprocessed_file);
-    //auto out_A = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
+    auto A_mults = load_points_affine<ECp>(((1U << C) - 1)*(m + 1), preprocessed_file);
+    auto out_A = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
 
     auto B1_mults = load_points_affine<ECp>(((1U << C) - 1)*(m + 1), preprocessed_file);
     auto out_B1 = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
@@ -156,13 +156,13 @@ void run_prover(
 
     cudaStream_t sA, sB1, sB2, sL;
 
-    //ec_reduce_straus<ECp, C, R>(sA, out_A.get(), A_mults.get(), w, m + 1);
+    ec_reduce_straus<ECp, C, R>(sA, out_A.get(), A_mults.get(), w, m + 1);
     ec_reduce_straus<ECp, C, R>(sB1, out_B1.get(), B1_mults.get(), w, m + 1);
     ec_reduce_straus<ECpe, C, 2*R>(sB2, out_B2.get(), B2_mults.get(), w, m + 1);
     ec_reduce_straus<ECp, C, R>(sL, out_L.get(), L_mults.get(), w + (primary_input_size + 1) * ELT_LIMBS, m - 1);
     print_time(t, "gpu launch");
 
-    G1 *evaluation_At = B::multiexp_G1(B::input_w(inputs), B::params_A(params), m + 1);
+    //G1 *evaluation_At = B::multiexp_G1(B::input_w(inputs), B::params_A(params), m + 1);
     //G1 *evaluation_Bt1 = B::multiexp_G1(B::input_w(inputs), B::params_B1(params), m + 1);
     //G2 *evaluation_Bt2 = B::multiexp_G2(B::input_w(inputs), B::params_B2(params), m + 1);
 
@@ -176,8 +176,8 @@ void run_prover(
     print_time(t, "cpu 1");
 
     cudaDeviceSynchronize();
-    //cudaStreamSynchronize(sA);
-    //G1 *evaluation_At = B::read_pt_ECp(out_A.get());
+    cudaStreamSynchronize(sA);
+    G1 *evaluation_At = B::read_pt_ECp(out_A.get());
 
     cudaStreamSynchronize(sB1);
     G1 *evaluation_Bt1 = B::read_pt_ECp(out_B1.get());
@@ -202,7 +202,7 @@ void run_prover(
 
     print_time(t_main, "Total time from input to output: ");
 
-    //cudaStreamDestroy(sA);
+    cudaStreamDestroy(sA);
     cudaStreamDestroy(sB1);
     cudaStreamDestroy(sB2);
     cudaStreamDestroy(sL);
@@ -233,11 +233,11 @@ int main(int argc, char **argv) {
 
   if (mode == "compute") {
       const char *input_path = argv[3];
-      const char *output_path = argv[4];
-      run_prover<alt_bn128_libsnark>(params_path, input_path, output_path, "ALT_BN128_preprocessed");
+      const char *preprocess_path = argv[4];
+      const char *output_path = argv[5];
+      run_prover<alt_bn128_libsnark>(params_path, input_path, output_path, preprocess_path);
   } else if (mode == "preprocess") {
-        const char *params_path = argv[3];
-        const char *preprocess_path = argv[4];
+        const char *preprocess_path = argv[3];
         run_preprocess(params_path, preprocess_path);
   }
 
