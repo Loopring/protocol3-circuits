@@ -575,12 +575,12 @@ void from_json(const json& j, InternalTransfer& interTrans)
     interTrans.label = ethsnarks::FieldT(j.at("label"));
     interTrans.signature = j.at("signature").get<Signature>();
 
-    interTrans.balanceUpdateF_A = j.at("balanceUpdateF_A").get<BalanceUpdate>();
-    interTrans.balanceUpdateT_A = j.at("balanceUpdateT_A").get<BalanceUpdate>();
-    interTrans.accountUpdate_A = j.at("accountUpdate_A").get<AccountUpdate>();
+    interTrans.balanceUpdateF_A = j.at("balanceUpdateF_From").get<BalanceUpdate>();
+    interTrans.balanceUpdateT_A = j.at("balanceUpdateT_From").get<BalanceUpdate>();
+    interTrans.accountUpdate_A = j.at("accountUpdate_From").get<AccountUpdate>();
 
-    interTrans.balanceUpdateT_B = j.at("balanceUpdateT_B").get<BalanceUpdate>();
-    interTrans.accountUpdate_B = j.at("accountUpdate_B").get<AccountUpdate>();
+    interTrans.balanceUpdateT_B = j.at("balanceUpdateT_To").get<BalanceUpdate>();
+    interTrans.accountUpdate_B = j.at("accountUpdate_To").get<AccountUpdate>();
 
     interTrans.balanceUpdateF_O = j.at("balanceUpdateF_O").get<BalanceUpdate>();
 }
@@ -610,7 +610,7 @@ void from_json(const json& j, InternalTransferBlock& block)
     block.accountUpdate_O = j.at("accountUpdate_O").get<AccountUpdate>();
 
     // Read internal transferres
-    json jInterTranferres = j["interTransferres"];
+    json jInterTranferres = j["internalTransferres"];
     for(unsigned int i = 0; i < jInterTranferres.size(); i++)
     {
         block.interTransferres.emplace_back(jInterTranferres[i].get<Loopring::InternalTransfer>());

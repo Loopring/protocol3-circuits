@@ -89,12 +89,14 @@ public:
         accountID_A(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID_A")),
         accountID_B(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID_B")),
 
+        feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
+        transTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".transTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
+        transAmount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amount")),
         label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
-        transAmount(pb, NUM_BITS_LABEL, FMT(prefix, ".amount")),
 
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
-        fTransAmount(pb, constants, Float28Encoding, FMT(prefix, ".fFee")),
+        fTransAmount(pb, constants, Float28Encoding, FMT(prefix, ".ftransAmount")),
         ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFee")),
         ensureAccuracyTransAmount(pb, fTransAmount.value(), transAmount.packed, Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyTransAmount")),
 
@@ -107,9 +109,11 @@ public:
 
         balanceF_O_before(make_variable(pb, FMT(prefix, ".balanceF_O_before"))),
 
-        nonce_A_before(pb, NUM_BITS_NONCE, FMT(prefix, ".nonce_before")),
-        // Increase nonce by 1
-        nonce_A_after(pb, nonce_A_before.packed, constants.one, FMT(prefix, ".nonce_after")),
+        nonce_A_before(pb, NUM_BITS_NONCE, FMT(prefix, ".nonce_A_before")),
+        // Increase A nonce by 1
+        nonce_A_after(pb, nonce_A_before.packed, constants.one, FMT(prefix, ".nonce_A_after")),
+
+        nonce_B_before(pb, NUM_BITS_NONCE, FMT(prefix, ".nonce_B_before")),
 
         // Fee payment to the operator
         feePayment(pb, NUM_BITS_AMOUNT, balanceT_A_before, balanceF_O_before, fFee.value(), FMT(prefix, ".feePayment")),
