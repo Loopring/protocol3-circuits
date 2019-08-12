@@ -1,15 +1,14 @@
-#ifndef _TRADINGCIRCUIT_H_
-#define _TRADINGCIRCUIT_H_
+#ifndef _UTILS_H_
+#define _UTILS_H_
 
 #include "Constants.h"
 #include "Data.h"
 
-#include "../ThirdParty/BigInt.hpp"
+#include "../ThirdParty/BigIntHeader.hpp"
 #include "ethsnarks.hpp"
 #include "utils.hpp"
 #include "jubjub/point.hpp"
 #include "jubjub/eddsa.hpp"
-#include "gadgets/mimc.hpp"
 #include "gadgets/merkle_tree.hpp"
 #include "gadgets/sha256_many.hpp"
 #include "gadgets/subadd.hpp"
@@ -20,18 +19,18 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
-void print(const char* description, const ethsnarks::FieldT& value)
+static void print(const char* description, const ethsnarks::FieldT& value)
 {
     std::cout << description << ": ";
     value.as_bigint().print();
 }
 
-void print(const ProtoboardT& pb, const char* description, const ethsnarks::VariableT& variable)
+static void print(const ProtoboardT& pb, const char* description, const ethsnarks::VariableT& variable)
 {
     print(description, pb.val(variable));
 }
 
-void printBits(const char* name, const libff::bit_vector& _bits, bool reverse = false)
+static void printBits(const char* name, const libff::bit_vector& _bits, bool reverse = false)
 {
     libff::bit_vector bits = _bits;
     if(reverse)
@@ -55,7 +54,7 @@ void printBits(const char* name, const libff::bit_vector& _bits, bool reverse = 
 /**
 * Convert an array of variable arrays into a flat contiguous array of variables
 */
-const VariableArrayT flattenReverse( const std::vector<VariableArrayT> &in_scalars )
+static const VariableArrayT flattenReverse( const std::vector<VariableArrayT> &in_scalars )
 {
     size_t total_sz = 0;
     for( const auto& scalar : in_scalars )
@@ -76,12 +75,12 @@ const VariableArrayT flattenReverse( const std::vector<VariableArrayT> &in_scala
     return result;
 }
 
-const VariableArrayT reverse(const VariableArrayT& values)
+static const VariableArrayT reverse(const VariableArrayT& values)
 {
     return flattenReverse({values});
 }
 
-const VariableArrayT subArray(const VariableArrayT& bits, unsigned int start, unsigned int length)
+static const VariableArrayT subArray(const VariableArrayT& bits, unsigned int start, unsigned int length)
 {
     VariableArrayT result;
     result.resize(length);
@@ -95,12 +94,12 @@ const VariableArrayT subArray(const VariableArrayT& bits, unsigned int start, un
     return result;
 }
 
-inline const VariableArrayT var_array(const std::vector<VariableT>& inputs)
+static const VariableArrayT var_array(const std::vector<VariableT>& inputs)
 {
     return VariableArrayT(inputs.begin(), inputs.end());
 }
 
-BigInt toBigInt(ethsnarks::FieldT value)
+static BigInt toBigInt(ethsnarks::FieldT value)
 {
     BigInt bi = 0;
     for(unsigned int i = 0; i < value.as_bigint().num_bits(); i++)
@@ -110,38 +109,51 @@ BigInt toBigInt(ethsnarks::FieldT value)
     return bi;
 }
 
-unsigned int toFloat(BigInt value, const FloatEncoding& encoding)
+static unsigned int toFloat(BigInt value, const FloatEncoding& encoding)
 {
-  const unsigned int maxExponent = (1 << encoding.numBitsExponent) - 1;
-  const unsigned int maxMantissa = (1 << encoding.numBitsMantissa) - 1;
-  BigInt maxExponentValue = 1;
-  for (unsigned int i = 0; i < maxExponent; i++)
-  {
-      maxExponentValue *= encoding.exponentBase;
-  }
-  BigInt maxValue = BigInt(maxMantissa) * BigInt(maxExponentValue);
-  assert(value <= maxValue);
+    const unsigned int maxExponent = (1 << encoding.numBitsExponent) - 1;
+    const unsigned int maxMantissa = (1 << encoding.numBitsMantissa) - 1;
+    BigInt maxExponentValue = 1;
+    for (unsigned int i = 0; i < maxExponent; i++)
+    {
+        maxExponentValue *= encoding.exponentBase;
+    }
+    BigInt maxValue = BigInt(maxMantissa) * BigInt(maxExponentValue);
+    assert(value <= maxValue);
 
-  unsigned int exponent = 0;
-  BigInt r = value / BigInt(maxMantissa);
-  BigInt d = 1;
-  while (r >= encoding.exponentBase || d * maxMantissa < value)
-  {
-      r = r / encoding.exponentBase;
-      exponent += 1;
-      d = d * encoding.exponentBase;
-  }
-  BigInt mantissa = value / d;
+    unsigned int exponent = 0;
+    BigInt r = value / BigInt(maxMantissa);
+    BigInt d = 1;
+    while (r >= encoding.exponentBase || d * maxMantissa < value)
+    {
+        r = r / encoding.exponentBase;
+        exponent += 1;
+        d = d * encoding.exponentBase;
+    }
+    BigInt mantissa = value / d;
 
-  assert(exponent <= maxExponent);
-  assert(mantissa <= maxMantissa);
-  const unsigned int f = (exponent << encoding.numBitsMantissa) + mantissa.to_long();
-  return f;
+    assert(exponent <= maxExponent);
+    assert(mantissa <= maxMantissa);
+    const unsigned int f = (exponent << encoding.numBitsMantissa) + mantissa.to_long();
+    return f;
 }
 
-unsigned int toFloat(ethsnarks::FieldT value, const FloatEncoding& encoding)
+static unsigned int toFloat(ethsnarks::FieldT value, const FloatEncoding& encoding)
 {
-  return toFloat(toBigInt(value), encoding);
+    return toFloat(toBigInt(value), encoding);
+}
+
+static BigInt fromFloat(unsigned int f, const FloatEncoding& encoding)
+{
+    const unsigned int exponent = f >> encoding.numBitsMantissa;
+    const unsigned int mantissa = f & ((1 << encoding.numBitsMantissa) - 1);
+    BigInt multiplier = 1;
+    for (unsigned int i = 0; i < exponent; i++)
+    {
+        multiplier *= 10;
+    }
+    BigInt value = BigInt(mantissa) * multiplier;
+    return value;
 }
 
 }

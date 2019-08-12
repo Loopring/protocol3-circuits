@@ -1,5 +1,5 @@
-#ifndef _MERKLE_TREE_H_
-#define _MERKLE_TREE_H_
+#ifndef _MERKLETREE_H_
+#define _MERKLETREE_H_
 
 #include "ethsnarks.hpp"
 #include "gadgets/poseidon.hpp"
@@ -44,7 +44,7 @@ public:
         m_bit0(bit0),
         m_bit1(bit1),
 
-        bit0_or_bit1(pb, bit0, bit1, FMT(prefix, ".bit0_or_bit1")),
+        bit0_or_bit1(pb, {bit0, bit1}, FMT(prefix, ".bit0_or_bit1")),
         bit0_and_bit1(pb, {bit0, bit1}, FMT(prefix, ".bit0_and_bit1")),
 
         child0(pb, bit0_or_bit1.result(), sideNodes[0], input, FMT(prefix, ".child0")),
@@ -135,7 +135,7 @@ public:
         }
     }
 
-    const VariableT result() const
+    const VariableT& result() const
     {
         assert( m_hashers.size() > 0 );
         return m_hashers.back().result();

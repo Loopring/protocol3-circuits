@@ -18,6 +18,8 @@ namespace Loopring
     static const unsigned int NUM_BITS_NONCE = 32;
     static const unsigned int NUM_BITS_BIPS = 6;
     static const unsigned int NUM_BITS_LABEL = 32;
+    static const unsigned int NUM_BITS_EXCHANGE_ID = 32;
+    static const unsigned int NUM_BITS_PROTOCOL_FEE_BIPS = 8;
 
     static const char* EMPTY_TRADE_HISTORY = "6592749167578234498153410564243369229486412054742481069049239297514590357090";
     static const char* MAX_AMOUNT = "79228162514264337593543950335"; // 2^96 - 1
@@ -37,9 +39,9 @@ namespace Loopring
         unsigned int numerator;
         unsigned int denominator;
     };
-    static const Accuracy Float28Accuracy = {12, 10000000};
-    static const Accuracy Float24Accuracy = { 2, 100000};
-    static const Accuracy Float16Accuracy = { 5, 1000};
+    static const Accuracy Float28Accuracy = {10000000 - 12, 10000000};
+    static const Accuracy Float24Accuracy = {100000 - 2, 100000};
+    static const Accuracy Float16Accuracy = {1000 - 5, 1000};
 }
 
 #endif

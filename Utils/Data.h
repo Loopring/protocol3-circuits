@@ -20,7 +20,7 @@ public:
     std::vector<ethsnarks::FieldT> data;
 };
 
-void from_json(const json& j, Proof& proof)
+static void from_json(const json& j, Proof& proof)
 {
     for(unsigned int i = 0; i < j.size(); i++)
     {
@@ -36,7 +36,7 @@ public:
     ethsnarks::FieldT orderID;
 };
 
-void from_json(const json& j, TradeHistoryLeaf& leaf)
+static void from_json(const json& j, TradeHistoryLeaf& leaf)
 {
     leaf.filled = ethsnarks::FieldT(j.at("filled").get<std::string>().c_str());
     leaf.cancelled = ethsnarks::FieldT(j.at("cancelled"));
@@ -50,7 +50,7 @@ public:
     ethsnarks::FieldT tradingHistoryRoot;
 };
 
-void from_json(const json& j, BalanceLeaf& leaf)
+static void from_json(const json& j, BalanceLeaf& leaf)
 {
     leaf.balance = ethsnarks::FieldT(j.at("balance").get<std::string>().c_str());
     leaf.tradingHistoryRoot = ethsnarks::FieldT(j.at("tradingHistoryRoot").get<std::string>().c_str());
@@ -64,7 +64,7 @@ public:
     ethsnarks::FieldT balancesRoot;
 };
 
-void from_json(const json& j, Account& account)
+static void from_json(const json& j, Account& account)
 {
     account.publicKey.x = ethsnarks::FieldT(j.at("publicKeyX").get<std::string>().c_str());
     account.publicKey.y = ethsnarks::FieldT(j.at("publicKeyY").get<std::string>().c_str());
@@ -83,7 +83,7 @@ public:
     BalanceLeaf after;
 };
 
-void from_json(const json& j, BalanceUpdate& balanceUpdate)
+static void from_json(const json& j, BalanceUpdate& balanceUpdate)
 {
     balanceUpdate.tokenID = ethsnarks::FieldT(j.at("tokenID"));
     balanceUpdate.proof = j.at("proof").get<Proof>();
@@ -104,7 +104,7 @@ public:
     TradeHistoryLeaf after;
 };
 
-void from_json(const json& j, TradeHistoryUpdate& tradeHistoryUpdate)
+static void from_json(const json& j, TradeHistoryUpdate& tradeHistoryUpdate)
 {
     tradeHistoryUpdate.orderID = ethsnarks::FieldT(j.at("orderID"));
     tradeHistoryUpdate.proof = j.at("proof").get<Proof>();
@@ -125,7 +125,7 @@ public:
     Account after;
 };
 
-void from_json(const json& j, AccountUpdate& accountUpdate)
+static void from_json(const json& j, AccountUpdate& accountUpdate)
 {
     accountUpdate.accountID = ethsnarks::FieldT(j.at("accountID"));
     accountUpdate.proof = j.at("proof").get<Proof>();
@@ -138,11 +138,22 @@ void from_json(const json& j, AccountUpdate& accountUpdate)
 class Signature
 {
 public:
+
+    Signature()
+    {
+
+    }
+
+    Signature(ethsnarks::jubjub::EdwardsPoint _R, ethsnarks::FieldT _s) : R(_R), s(_s)
+    {
+
+    }
+
     ethsnarks::jubjub::EdwardsPoint R;
     ethsnarks::FieldT s;
 };
 
-void from_json(const json& j, Signature& signature)
+static void from_json(const json& j, Signature& signature)
 {
     signature.R.x = ethsnarks::FieldT(j.at("Rx").get<std::string>().c_str());
     signature.R.y = ethsnarks::FieldT(j.at("Ry").get<std::string>().c_str());
@@ -172,7 +183,7 @@ public:
     Signature signature;
 };
 
-void from_json(const json& j, Order& order)
+static void from_json(const json& j, Order& order)
 {
     order.exchangeID = ethsnarks::FieldT(j.at("exchangeID"));
     order.orderID = ethsnarks::FieldT(j.at("orderID"));
@@ -201,7 +212,7 @@ public:
     Order orderB;
 };
 
-void from_json(const json& j, Ring& ring)
+static void from_json(const json& j, Ring& ring)
 {
     ring.orderA = j.at("orderA").get<Order>();
     ring.orderB = j.at("orderB").get<Order>();
@@ -232,7 +243,7 @@ public:
     BalanceUpdate balanceUpdateB_O;
 };
 
-void from_json(const json& j, RingSettlement& ringSettlement)
+static void from_json(const json& j, RingSettlement& ringSettlement)
 {
     ringSettlement.ring = j.at("ring").get<Ring>();
 
@@ -280,7 +291,7 @@ public:
     std::vector<Loopring::RingSettlement> ringSettlements;
 };
 
-void from_json(const json& j, RingSettlementBlock& block)
+static void from_json(const json& j, RingSettlementBlock& block)
 {
     block.exchangeID = ethsnarks::FieldT(j["exchangeID"].get<unsigned int>());
 
@@ -315,7 +326,7 @@ public:
     AccountUpdate accountUpdate;
 };
 
-void from_json(const json& j, Deposit& deposit)
+static void from_json(const json& j, Deposit& deposit)
 {
     deposit.amount = ethsnarks::FieldT(j.at("amount").get<std::string>().c_str());
     deposit.balanceUpdate = j.at("balanceUpdate").get<BalanceUpdate>();
@@ -338,7 +349,7 @@ public:
     std::vector<Loopring::Deposit> deposits;
 };
 
-void from_json(const json& j, DepositBlock& block)
+static void from_json(const json& j, DepositBlock& block)
 {
     block.exchangeID = ethsnarks::FieldT(j["exchangeID"].get<unsigned int>());
 
@@ -362,15 +373,13 @@ class OnchainWithdrawal
 {
 public:
     ethsnarks::FieldT amountRequested;
-    ethsnarks::FieldT fAmountWithdrawn;
     BalanceUpdate balanceUpdate;
     AccountUpdate accountUpdate;
 };
 
-void from_json(const json& j, OnchainWithdrawal& withdrawal)
+static void from_json(const json& j, OnchainWithdrawal& withdrawal)
 {
     withdrawal.amountRequested = ethsnarks::FieldT(j.at("amountRequested").get<std::string>().c_str());
-    withdrawal.fAmountWithdrawn = ethsnarks::FieldT(j.at("fAmountWithdrawn"));
     withdrawal.balanceUpdate = j.at("balanceUpdate").get<BalanceUpdate>();
     withdrawal.accountUpdate = j.at("accountUpdate").get<AccountUpdate>();
 }
@@ -392,7 +401,7 @@ public:
     std::vector<Loopring::OnchainWithdrawal> withdrawals;
 };
 
-void from_json(const json& j, OnchainWithdrawalBlock& block)
+static void from_json(const json& j, OnchainWithdrawalBlock& block)
 {
     block.exchangeID = ethsnarks::FieldT(j["exchangeID"].get<unsigned int>());
 
@@ -427,7 +436,7 @@ public:
     BalanceUpdate balanceUpdateF_O;
 };
 
-void from_json(const json& j, OffchainWithdrawal& withdrawal)
+static void from_json(const json& j, OffchainWithdrawal& withdrawal)
 {
     withdrawal.amountRequested = ethsnarks::FieldT(j.at("amountRequested").get<std::string>().c_str());
     withdrawal.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
@@ -460,7 +469,7 @@ public:
     std::vector<Loopring::OffchainWithdrawal> withdrawals;
 };
 
-void from_json(const json& j, OffchainWithdrawalBlock& block)
+static void from_json(const json& j, OffchainWithdrawalBlock& block)
 {
     block.exchangeID = ethsnarks::FieldT(j["exchangeID"].get<unsigned int>());
 
@@ -493,7 +502,7 @@ public:
     BalanceUpdate balanceUpdateF_O;
 };
 
-void from_json(const json& j, Cancellation& cancellation)
+static void from_json(const json& j, Cancellation& cancellation)
 {
     cancellation.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
     cancellation.label = ethsnarks::FieldT(j.at("label"));
@@ -520,7 +529,7 @@ public:
     std::vector<Loopring::Cancellation> cancels;
 };
 
-void from_json(const json& j, OrderCancellationBlock& block)
+static void from_json(const json& j, OrderCancellationBlock& block)
 {
     block.exchangeID = ethsnarks::FieldT(j["exchangeID"].get<unsigned int>());
 

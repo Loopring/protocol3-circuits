@@ -1,3 +1,5 @@
+
+#include "ThirdParty/BigInt.hpp"
 #include "Utils/Data.h"
 #include "Circuits/RingSettlementCircuit.h"
 #include "Circuits/DepositCircuit.h"
@@ -223,7 +225,7 @@ bool cancel(Mode mode, bool onchainDataAvailability, unsigned int numCancels, co
     return true;
 }
 
-int main (int argc, char **argv)
+int main(int argc, char **argv)
 {
     ethsnarks::ppT::init_public_params();
 
