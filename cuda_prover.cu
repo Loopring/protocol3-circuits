@@ -7,6 +7,7 @@
 
 #include "multiexp/reduce.cu"
 
+extern void run_preprocess(const char *params_path, const char *preprocess_path);
 // This is where all the FFTs happen
 
 // template over the bundle of types and functions.
@@ -226,18 +227,18 @@ void run_prover(
 int main(int argc, char **argv) {
   printf("main start\n");
   setbuf(stdout, NULL);
-  std::string curve(argv[1]);
-  std::string mode(argv[2]);
+  std::string mode(argv[1]);
 
-  const char *params_path = argv[3];
+  const char *params_path = argv[2];
 
   if (mode == "compute") {
-      const char *input_path = argv[4];
-      const char *output_path = argv[5];
-
-      if (curve == "ALT_BN128") {
-          run_prover<alt_bn128_libsnark>(params_path, input_path, output_path, "ALT_BN128_preprocessed");
-      }
+      const char *input_path = argv[3];
+      const char *output_path = argv[4];
+      run_prover<alt_bn128_libsnark>(params_path, input_path, output_path, "ALT_BN128_preprocessed");
+  } else if (mode == "preprocess") {
+        const char *params_path = argv[3];
+        const char *preprocess_path = argv[4];
+        run_preprocess(params_path, preprocess_path);
   }
 
   return 0;
