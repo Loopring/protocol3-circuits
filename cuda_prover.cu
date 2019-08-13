@@ -18,26 +18,33 @@ typename B::vector_Fr *compute_H(size_t d, typename B::vector_Fr *ca,
                                  typename B::vector_Fr *cc) {
   auto domain = B::get_evaluation_domain(d + 1);
 
-  B::domain_iFFT(domain, ca);
-  B::domain_iFFT(domain, cb);
+  auto cA = B::vector_Fr_zeros(B::get_domain_m(domain));
+  auto cB = B::vector_Fr_zeros(B::get_domain_m(domain));
+  auto cC = B::vector_Fr_zeros(B::get_domain_m(domain));
+  B::vector_Fr_copy_into(ca, cA, d + 1);
+  B::vector_Fr_copy_into(cb, cB, d + 1);
+  B::vector_Fr_copy_into(cc, cC, d + 1);
 
-  B::domain_cosetFFT(domain, ca);
-  B::domain_cosetFFT(domain, cb);
+  B::domain_iFFT(domain, cA);
+  B::domain_iFFT(domain, cB);
+
+  B::domain_cosetFFT(domain, cA);
+  B::domain_cosetFFT(domain, cB);
 
   // Use ca to store H
-  auto H_tmp = ca;
+  auto H_tmp = cA;
 
   size_t m = B::domain_get_m(domain);
   // for i in 0 to m: H_tmp[i] *= cb[i]
-  B::vector_Fr_muleq(H_tmp, cb, m);
+  B::vector_Fr_muleq(H_tmp, cB, m);
 
-  B::domain_iFFT(domain, cc);
-  B::domain_cosetFFT(domain, cc);
+  B::domain_iFFT(domain, cC);
+  B::domain_cosetFFT(domain, cC);
 
   m = B::domain_get_m(domain);
 
   // for i in 0 to m: H_tmp[i] -= cc[i]
-  B::vector_Fr_subeq(H_tmp, cc, m);
+  B::vector_Fr_subeq(H_tmp, cC, m);
 
   B::domain_divide_by_Z_on_coset(domain, H_tmp);
 
