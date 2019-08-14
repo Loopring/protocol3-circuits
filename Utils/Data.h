@@ -197,7 +197,7 @@ static void from_json(const json& j, Order& order)
     order.validUntil = ethsnarks::FieldT(j.at("validUntil"));
     order.maxFeeBips = ethsnarks::FieldT(j.at("maxFeeBips"));
     order.buy = ethsnarks::FieldT(j.at("buy").get<bool>() ? 1 : 0);
-    order.label = ethsnarks::FieldT(j.at("label"));
+    order.label = ethsnarks::FieldT(j.at("label").get<std::string>().c_str());
 
     order.feeBips = ethsnarks::FieldT(j.at("feeBips"));
     order.rebateBips = ethsnarks::FieldT(j.at("rebateBips"));
@@ -440,7 +440,7 @@ static void from_json(const json& j, OffchainWithdrawal& withdrawal)
 {
     withdrawal.amountRequested = ethsnarks::FieldT(j.at("amountRequested").get<std::string>().c_str());
     withdrawal.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
-    withdrawal.label = ethsnarks::FieldT(j.at("label"));
+    withdrawal.label = ethsnarks::FieldT(j.at("label").get<std::string>().c_str());
     withdrawal.signature = j.at("signature").get<Signature>();
 
     withdrawal.balanceUpdateF_A = j.at("balanceUpdateF_A").get<BalanceUpdate>();
@@ -505,7 +505,7 @@ public:
 static void from_json(const json& j, Cancellation& cancellation)
 {
     cancellation.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
-    cancellation.label = ethsnarks::FieldT(j.at("label"));
+    cancellation.label = ethsnarks::FieldT(j.at("label").get<std::string>().c_str());
     cancellation.signature = j.at("signature").get<Signature>();
 
     cancellation.tradeHistoryUpdate_A = j.at("tradeHistoryUpdate_A").get<TradeHistoryUpdate>();

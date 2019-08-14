@@ -141,11 +141,11 @@ bool deposit(Mode mode, unsigned int numDeposits, const json& input, ethsnarks::
     return true;
 }
 
-bool onchainWithdraw(Mode mode, bool onchainDataAvailability, unsigned int numWithdrawals, const json& input, ethsnarks::ProtoboardT& outPb)
+bool onchainWithdraw(Mode mode, unsigned int numWithdrawals, const json& input, ethsnarks::ProtoboardT& outPb)
 {
     // Build the circuit
     Loopring::OnchainWithdrawalCircuit circuit(outPb, "circuit");
-    circuit.generate_r1cs_constraints(onchainDataAvailability, numWithdrawals);
+    circuit.generate_r1cs_constraints(numWithdrawals);
     circuit.printInfo();
 
     if (mode == Mode::Validate || mode == Mode::Prove)
@@ -320,7 +320,7 @@ int main(int argc, char **argv)
         case 2:
         {
             baseFilename += "withdraw_onchain" + postFix;
-            if (!onchainWithdraw(mode, onchainDataAvailability, blockSize, input, pb))
+            if (!onchainWithdraw(mode, blockSize, input, pb))
             {
                 return 1;
             }

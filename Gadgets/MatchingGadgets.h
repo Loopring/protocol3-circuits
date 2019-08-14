@@ -53,11 +53,6 @@ public:
 
     }
 
-    const VariableT& isValid()
-    {
-        return valid.lt();
-    }
-
     void generate_r1cs_witness()
     {
         fillAmountS_mul_amountB.generate_r1cs_witness();
@@ -78,6 +73,11 @@ public:
         fillAmountB_mul_amountS_mul_101.generate_r1cs_constraints();
 
         valid.generate_r1cs_constraints();
+    }
+
+    const VariableT& isValid()
+    {
+        return valid.lt();
     }
 };
 
@@ -116,6 +116,7 @@ public:
     ) :
         GadgetT(pb, prefix),
 
+        // This can be combined in a single comparison (buy/sell order)
         fillAmountS_lt_amountS(pb, fillAmountS, order.amountS.packed, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountS_lt_amountS")),
         fillAmountB_lt_amountB(pb, fillAmountB, order.amountB.packed, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB_lt_amountB")),
         order_sell(pb, order.buy.packed, FMT(prefix, ".order_sell")),
@@ -130,6 +131,7 @@ public:
 
         checkFillRate(pb, constants, order.amountS.packed, order.amountB.packed, fillAmountS, fillAmountB, NUM_BITS_AMOUNT, FMT(prefix, ".checkFillRate")),
 
+        // This is an important check that makes sure no token transfers can happen to unregistered token IDs
         isNonZeroFillAmountS(pb, fillAmountS, FMT(prefix, "isNonZeroFillAmountS")),
         isNonZeroFillAmountB(pb, fillAmountB, FMT(prefix, "isNonZeroFillAmountB")),
 
@@ -204,6 +206,8 @@ class FeeCalculatorGadget : public GadgetT
 {
 public:
 
+    // We could combine the fee and rebate calculations here, saving a MulDiv, but the MulDiv is cheap here,
+    // so let's keep things simple.
     MulDivGadget protocolFee;
     MulDivGadget fee;
     MulDivGadget rebate;
@@ -240,17 +244,17 @@ public:
         rebate.generate_r1cs_constraints();
     }
 
-    const VariableT getProtocolFee() const
+    const VariableT& getProtocolFee() const
     {
         return protocolFee.result();
     }
 
-    const VariableT getFee() const
+    const VariableT& getFee() const
     {
         return fee.result();
     }
 
-    const VariableT getRebate() const
+    const VariableT& getRebate() const
     {
         return rebate.result();
     }
@@ -377,6 +381,9 @@ public:
 
         takerFillB_lt_makerFillS(pb, takerFill.B, makerFill.S, NUM_BITS_AMOUNT, FMT(prefix, ".takerFill.B < makerFill.B")),
 
+        // Do a single MulDiv for both case:
+        // - if takerFill.B < makerFill.S: takerFill.B * makerOrder.amountB // makerOrder.amountS
+        // - else: makerFill.S * takerOrder.amountS // takerOrder.amountB
         value(pb, takerFillB_lt_makerFillS.lt(), takerFill.B, makerFill.S, FMT(prefix, ".value")),
         numerator(pb, takerFillB_lt_makerFillS.lt(), makerOrder.amountB, takerOrder.amountS, FMT(prefix, ".numerator")),
         denominator(pb, takerFillB_lt_makerFillS.lt(), makerOrder.amountS, takerOrder.amountB, FMT(prefix, ".denominator")),
@@ -579,14 +586,18 @@ class OrderMatchingGadget : public GadgetT
 {
 public:
 
+    // Get the max amount the orders can be filled
     MaxFillAmountsGadget maxFillAmountA;
     MaxFillAmountsGadget maxFillAmountB;
 
+    // Match the orders
     MatchingGadget matchingGadget;
 
+    // Check if tokenS/tokenB match
     RequireEqualGadget orderA_tokenS_eq_orderB_tokenB;
     RequireEqualGadget orderA_tokenB_eq_orderB_tokenS;
 
+    // Check if the orders in the settlement are correctly filled
     CheckValidGadget checkValidA;
     CheckValidGadget checkValidB;
     AndGadget valid;

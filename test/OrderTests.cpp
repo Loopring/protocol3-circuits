@@ -265,7 +265,7 @@ TEST_CASE("Order", "[OrderGadget]")
             _order.amountS = 0;
             orderChecked(exchangeID, _order, account, balanceLeafS, balanceLeafB, tradeHistoryLeaf, false);
         }
-         SECTION("amountB == 0")
+        SECTION("amountB == 0")
         {
             Order _order = order;
             _order.amountB = 0;

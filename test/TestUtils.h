@@ -12,10 +12,21 @@ using namespace ethsnarks;
 using namespace Loopring;
 
 static const char* TEST_DATA_PATH = "../../../protocol3-circuits/test/data/";
+static BigInt SNARK_SCALAR_FIELD = BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+
+
+static const BigInt& validate(const BigInt& v)
+{
+    // Check for overflow
+    REQUIRE(v < SNARK_SCALAR_FIELD);
+    // Check for underflow
+    REQUIRE(v >= 0);
+    return v;
+}
 
 static FieldT toFieldElement(const BigInt& v)
 {
-    return FieldT(v.to_string().c_str());
+    return FieldT(validate(v).to_string().c_str());
 }
 
 static BigInt getRandomFieldElementAsBigInt(unsigned int numBits = 254)
@@ -29,7 +40,7 @@ static BigInt getRandomFieldElementAsBigInt(unsigned int numBits = 254)
 
     if (numBits >= 254)
     {
-        v %= BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495617");
+        v %= SNARK_SCALAR_FIELD;
     }
     else
     {
@@ -47,7 +58,7 @@ static BigInt getMaxFieldElementAsBigInt(unsigned int numBits = 254)
 {
     if (numBits >= 254)
     {
-        return BigInt("21888242871839275222246405745257275088548364400416034343698204186575808495616");
+        return SNARK_SCALAR_FIELD - 1;
     }
     else
     {

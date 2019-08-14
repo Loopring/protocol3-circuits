@@ -17,17 +17,16 @@ using namespace jubjub;
 namespace Loopring
 {
 
-// Forced A == B
-static void forceEqual(ProtoboardT& pb, const VariableT& A, const VariableT& B, const std::string& annotation_prefix)
+// require(A == B)
+static void requireEqual(ProtoboardT& pb, const VariableT& A, const VariableT& B, const std::string& annotation_prefix)
 {
-    pb.add_r1cs_constraint(ConstraintT(A, FieldT::one(), B), FMT(annotation_prefix, ".forceEqual"));
+    pb.add_r1cs_constraint(ConstraintT(A, FieldT::one(), B), FMT(annotation_prefix, ".requireEqual"));
 }
 
 // Constants stored in a VariableT for ease of use
 class Constants : public GadgetT
 {
 public:
-
     const VariableT zero;
     const VariableT one;
     const VariableT _100;
@@ -83,7 +82,6 @@ public:
 class DynamicVariableGadget : public GadgetT
 {
 public:
-
     std::vector<VariableT> variables;
     bool allowGeneratingWitness;
 
@@ -134,7 +132,6 @@ public:
 class TransferGadget : public GadgetT
 {
 public:
-
     subadd_gadget subadd;
 
     TransferGadget(
@@ -166,7 +163,6 @@ public:
 class UnsafeSubGadget : public GadgetT
 {
 public:
-
     VariableT value;
     VariableT sub;
     VariableT sum;
@@ -205,7 +201,6 @@ public:
 class UnsafeAddGadget : public GadgetT
 {
 public:
-
     VariableT value;
     VariableT add;
     VariableT sum;
@@ -244,7 +239,6 @@ public:
 class UnsafeMulGadget : public GadgetT
 {
 public:
-
     VariableT valueA;
     VariableT valueB;
     VariableT product;
@@ -283,7 +277,6 @@ public:
 class AddGadget : public GadgetT
 {
 public:
-
     UnsafeAddGadget unsafeAdd;
     libsnark::dual_variable_gadget<FieldT> rangeCheck;
 
@@ -659,7 +652,7 @@ public:
 
     void generate_r1cs_constraints()
     {
-        forceEqual(pb, A, B, FMT(annotation_prefix, ".forceEqual"));
+        requireEqual(pb, A, B, FMT(annotation_prefix, ".requireEqual"));
     }
 };
 
@@ -904,6 +897,7 @@ public:
 
         denominator_notZero(pb, denominator, FMT(prefix, ".denominator_notZero")),
         product(pb, value, numerator, FMT(prefix, ".product")),
+        // Range limit the remainder. The comparison below is not guaranteed to work for very large values.
         remainder(pb, numBitsDenominator, FMT(prefix, ".remainder")),
         remainder_lt_denominator(pb, remainder.packed, denominator, numBitsDenominator, FMT(prefix, ".remainder < denominator"))
     {
@@ -981,6 +975,7 @@ public:
     ) :
         GadgetT(pb, prefix),
 
+        // Range limit the value. The comparison below is not guaranteed to work for very large values.
         value(pb, _value, maxNumBits, FMT(prefix, ".value")),
         original(_original),
         accuracy(_accuracy),
@@ -1129,7 +1124,6 @@ public:
 class SignatureVerifier : public GadgetT
 {
 public:
-
     const jubjub::VariablePointT sig_R;
     const VariableArrayT sig_s;
     const VariableT sig_m;
@@ -1175,7 +1169,6 @@ public:
 class Bitstream
 {
 public:
-
     std::vector<VariableArrayT> data;
 
     void add(const VariableArrayT& bits)
@@ -1194,7 +1187,6 @@ public:
 class PublicDataGadget : public GadgetT
 {
 public:
-
     const VariableT publicInput;
     std::vector<VariableArrayT> publicDataBits;
 
@@ -1246,7 +1238,7 @@ public:
             pb, reverse(subArray(hasher->result().bits, 0, NUM_BITS_FIELD_CAPACITY)), ".packCalculatedHash")
         );
         calculatedHash->generate_r1cs_constraints(false);
-        forceEqual(pb, calculatedHash->packed, publicInput, ".publicDataCheck");
+        requireEqual(pb, calculatedHash->packed, publicInput, ".publicDataCheck");
     }
 };
 
@@ -1289,17 +1281,7 @@ public:
         }
     }
 
-    const VariableT& value() const
-    {
-        return values.back();
-    }
-
-    const VariableArrayT& bits() const
-    {
-        return f;
-    }
-
-    void generate_r1cs_witness(ethsnarks::FieldT floatValue)
+    void generate_r1cs_witness(const ethsnarks::FieldT& floatValue)
     {
         f.fill_with_bits_of_field_element(pb, floatValue);
 
@@ -1363,6 +1345,16 @@ public:
             // Shift the value with the partial exponent
             pb.add_r1cs_constraint(ConstraintT(values[i - 1], multipliers[j].result(), values[i]), ".valuesExp");
         }
+    }
+
+    const VariableT& value() const
+    {
+        return values.back();
+    }
+
+    const VariableArrayT& bits() const
+    {
+        return f;
     }
 };
 
@@ -1452,15 +1444,13 @@ public:
 
     void generate_r1cs_witness(ProtoboardT& pb, const libff::bigint<libff::alt_bn128_r_limbs>& value)
     {
-        // assert(value.size() == 256);
+        assert(value.max_bits() == 256);
         for (unsigned int i = 0; i < 256; i++)
         {
             pb.val(bits[255 - i]) = value.test_bit(i);
         }
         generate_r1cs_witness_from_bits();
     }
-
-
 };
 
 }

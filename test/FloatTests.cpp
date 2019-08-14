@@ -32,6 +32,11 @@ TEST_CASE("RequireAccuracy", "[RequireAccuracyGadget]")
             requireAccuracyChecked(0, 0, true);
         }
 
+        SECTION("0, 1")
+        {
+            requireAccuracyChecked(0, 1, false);
+        }
+
         SECTION("0, max")
         {
             requireAccuracyChecked(0, max, false);
@@ -54,7 +59,7 @@ TEST_CASE("RequireAccuracy", "[RequireAccuracyGadget]")
         }
 
         // Do some specific tests
-        if (n == 96)
+        if (n == NUM_BITS_AMOUNT)
         {
             SECTION("100, 100")
             {
@@ -99,7 +104,7 @@ TEST_CASE("Float", "[FloatGadget]")
     FloatEncoding encoding = Float24Encoding;
     unsigned int numBitsFloat = encoding.numBitsExponent + encoding.numBitsMantissa;
 
-    unsigned int maxLength = 96;
+    unsigned int maxLength = NUM_BITS_AMOUNT;
     unsigned int numIterations = 8;
     for (unsigned int n = 1; n <= maxLength; n++) {
         DYNAMIC_SECTION("Bit-length: " << n)
@@ -147,36 +152,57 @@ TEST_CASE("Float", "[FloatGadget]")
 
 TEST_CASE("Float+Accuracy", "[FloatGadget+RequireAccuracy]")
 {
-    FloatEncoding encoding = Float24Encoding;
-    Accuracy accuracy = Float24Accuracy;
-    unsigned int n = 96;
-    unsigned int numBitsFloat = encoding.numBitsExponent + encoding.numBitsMantissa;
-
-    protoboard<FieldT> pb;
-
-    Constants constants(pb, "constants");
-    FloatGadget floatGadget(pb, constants, encoding, "floatGadget");
-    floatGadget.generate_r1cs_constraints();
-
-    pb_variable<FieldT> value = make_variable(pb, ".value");
-    pb_variable<FieldT> rValue = make_variable(pb, ".rValue");
-    RequireAccuracyGadget requireAccuracyGadget(pb, rValue, value, accuracy, n, "requireAccuracyGadget");
-    requireAccuracyGadget.generate_r1cs_constraints();
-
-    SECTION("Random")
+    std::vector<FloatEncoding> encodings = {Float16Encoding, Float24Encoding, Float28Encoding};
+    std::vector<Accuracy> accuracies = {Float16Accuracy, Float24Accuracy, Float28Accuracy};
+    std::vector<FieldT> worstAccuracyValues = {FieldT("20499999999999999999999999999"), FieldT("52428999999999999999999999999"), FieldT("8388609999999999999999999999")};
+    for (unsigned int e = 0; e < encodings.size(); e++) {
+        DYNAMIC_SECTION("Encoding: " << encodings[e].numBitsExponent + encodings[e].numBitsMantissa)
     {
-        unsigned int numIterations = 1024;
-        for (unsigned int j = 0; j < numIterations; j++)
+        const FloatEncoding& encoding = encodings[e];
+        const Accuracy& accuracy = accuracies[e];
+        const FieldT& worstAccuracyValue = worstAccuracyValues[e];
+
+        unsigned int n = NUM_BITS_AMOUNT;
+        unsigned int numBitsFloat = encoding.numBitsExponent + encoding.numBitsMantissa;
+
+        protoboard<FieldT> pb;
+
+        Constants constants(pb, "constants");
+        FloatGadget floatGadget(pb, constants, encoding, "floatGadget");
+        floatGadget.generate_r1cs_constraints();
+
+        pb_variable<FieldT> value = make_variable(pb, ".value");
+        pb_variable<FieldT> rValue = make_variable(pb, ".rValue");
+        RequireAccuracyGadget requireAccuracyGadget(pb, rValue, value, accuracy, n, "requireAccuracyGadget");
+        requireAccuracyGadget.generate_r1cs_constraints();
+
+        SECTION("Value with the worst accuracy")
         {
-            FieldT _value = getRandomFieldElement(n);
-            unsigned int f = toFloat(_value, encoding);
+            unsigned int f = toFloat(worstAccuracyValue, encoding);
             floatGadget.generate_r1cs_witness(FieldT(f));
 
-            pb.val(value) = _value;
+            pb.val(value) = worstAccuracyValue;
             pb.val(rValue) = pb.val(floatGadget.value());
             requireAccuracyGadget.generate_r1cs_witness();
 
             REQUIRE(pb.is_satisfied());
         }
-    }
+
+        SECTION("Random")
+        {
+            unsigned int numIterations = 4 * 1024;
+            for (unsigned int j = 0; j < numIterations; j++)
+            {
+                FieldT _value = getRandomFieldElement(n);
+                unsigned int f = toFloat(_value, encoding);
+                floatGadget.generate_r1cs_witness(FieldT(f));
+
+                pb.val(value) = _value;
+                pb.val(rValue) = pb.val(floatGadget.value());
+                requireAccuracyGadget.generate_r1cs_witness();
+
+                REQUIRE(pb.is_satisfied());
+            }
+        }
+    }}
 }

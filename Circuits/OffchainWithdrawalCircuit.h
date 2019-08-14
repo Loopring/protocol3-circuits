@@ -80,7 +80,7 @@ public:
         balanceBefore(pb, FMT(prefix, ".balanceBefore")),
         accountBefore(pb, FMT(prefix, ".accountBefore")),
         // Operator state
-        balanceBefore_O(pb, FMT(prefix, ".accountBefore_O")),
+        balanceBefore_O(pb, FMT(prefix, ".balanceBefore_O")),
 
         // Inputs
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
@@ -246,12 +246,12 @@ public:
                 fFee.bits()};
     }
 
-    const VariableT getNewAccountsRoot() const
+    const VariableT& getNewAccountsRoot() const
     {
         return updateAccount_A.result();
     }
 
-    const VariableT getNewOperatorBalancesRoot() const
+    const VariableT& getNewOperatorBalancesRoot() const
     {
         return updateBalanceF_O.result();
     }
@@ -378,7 +378,7 @@ public:
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root
-        forceEqual(pb, updateAccount_O->result(), merkleRootAfter.packed, "newMerkleRoot");
+        requireEqual(pb, updateAccount_O->result(), merkleRootAfter.packed, "newMerkleRoot");
     }
 
     bool generateWitness(const OffchainWithdrawalBlock& block)
