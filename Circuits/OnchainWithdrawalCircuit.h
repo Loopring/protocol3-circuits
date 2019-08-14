@@ -31,6 +31,7 @@ public:
     // Calculate how much can be withdrawn
     MinGadget amountToWithdrawMin;
     TernaryGadget amountToWithdraw;
+    // Float
     FloatGadget amountWithdrawn;
     RequireAccuracyGadget requireAccuracyAmountWithdrawn;
 
@@ -67,17 +68,19 @@ public:
         amountRequested(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amountRequested")),
 
         // Calculate how much can be withdrawn
+        // In shutdown mode always withdraw the complete balance
         amountToWithdrawMin(pb, amountRequested.packed, balanceBefore.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
         amountToWithdraw(pb, bShutdownMode, balanceBefore.balance, amountToWithdrawMin.result(), FMT(prefix, ".amountToWithdraw")),
+        // Float
         amountWithdrawn(pb, constants, Float28Encoding, FMT(prefix, ".amountWithdrawn")),
         requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
 
-        // Shutdown mode
+        // Shutdown mode - Reset values to genesis state
         amountToSubtract(pb, bShutdownMode, amountToWithdraw.result(), amountWithdrawn.value(), FMT(prefix, ".amountToSubtract")),
         tradingHistoryAfter(pb, bShutdownMode, constants.emptyTradeHistory, balanceBefore.tradingHistory, FMT(prefix, ".tradingHistoryAfter")),
         publicKeyXAfter(pb, bShutdownMode, constants.zero, accountBefore.publicKey.x, FMT(prefix, ".publicKeyXAfter")),
         publicKeyYAfter(pb, bShutdownMode, constants.zero, accountBefore.publicKey.y, FMT(prefix, ".publicKeyYAfter")),
-        nonceAfter(pb, bShutdownMode, constants.zero, accountBefore.nonce, FMT(prefix, ".tradingHistoryAfter")),
+        nonceAfter(pb, bShutdownMode, constants.zero, accountBefore.nonce, FMT(prefix, ".nonceAfter")),
 
         // Calculate the new balance
         balance_after(pb, balanceBefore.balance, amountToSubtract.result(), FMT(prefix, ".balance_after")),
@@ -109,6 +112,7 @@ public:
         // Withdrawal calculations
         amountToWithdrawMin.generate_r1cs_witness();
         amountToWithdraw.generate_r1cs_witness();
+        // Float
         amountWithdrawn.generate_r1cs_witness(toFloat(pb.val(amountToWithdraw.result()), Float28Encoding));
         requireAccuracyAmountWithdrawn.generate_r1cs_witness();
 
@@ -137,6 +141,7 @@ public:
         // Withdrawal calculations
         amountToWithdrawMin.generate_r1cs_constraints();
         amountToWithdraw.generate_r1cs_constraints();
+        // Float
         amountWithdrawn.generate_r1cs_constraints();
         requireAccuracyAmountWithdrawn.generate_r1cs_constraints();
 
@@ -194,7 +199,6 @@ public:
     EqualGadget bShutdownMode;
 
     // Withdrawals
-    bool onchainDataAvailability;
     unsigned int numWithdrawals;
     std::vector<OnchainWithdrawalGadget> withdrawals;
     std::vector<sha256_many> hashers;
@@ -219,9 +223,8 @@ public:
 
     }
 
-    void generate_r1cs_constraints(bool onchainDataAvailability, int numWithdrawals)
+    void generate_r1cs_constraints(int numWithdrawals)
     {
-        this->onchainDataAvailability = onchainDataAvailability;
         this->numWithdrawals = numWithdrawals;
 
         constants.generate_r1cs_constraints();
@@ -275,7 +278,7 @@ public:
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root
-        forceEqual(pb, withdrawals.back().getNewAccountsRoot(), merkleRootAfter.packed, "newMerkleRoot");
+        requireEqual(pb, withdrawals.back().getNewAccountsRoot(), merkleRootAfter.packed, "newMerkleRoot");
     }
 
     bool generateWitness(const OnchainWithdrawalBlock& block)

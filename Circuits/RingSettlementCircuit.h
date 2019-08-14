@@ -159,16 +159,14 @@ public:
     TransferGadget protocolFeeA_from_balanceAO_to_balanceAP;
     TransferGadget protocolFeeB_from_balanceBO_to_balanceBP;
 
-    // Update trading history
-    UpdateTradeHistoryGadget updateTradeHistoryA;
-    UpdateTradeHistoryGadget updateTradeHistoryB;
-
     // Update UserA
+    UpdateTradeHistoryGadget updateTradeHistory_A;
     UpdateBalanceGadget updateBalanceS_A;
     UpdateBalanceGadget updateBalanceB_A;
     UpdateAccountGadget updateAccount_A;
 
     // Update UserB
+    UpdateTradeHistoryGadget updateTradeHistory_B;
     UpdateBalanceGadget updateBalanceS_B;
     UpdateBalanceGadget updateBalanceB_B;
     UpdateAccountGadget updateAccount_B;
@@ -209,7 +207,7 @@ public:
         balanceA_P(pb, FMT(prefix, ".balanceA_P")),
         balanceB_P(pb, FMT(prefix, ".balanceB_P")),
         balanceA_O(pb, FMT(prefix, ".balanceA_O")),
-        balanceB_O(pb, FMT(prefix, ".balanceA_O")),
+        balanceB_O(pb, FMT(prefix, ".balanceB_O")),
         // Initial trading history roots
         tradingHistoryRootA_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootA_O"))),
         tradingHistoryRootB_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_O"))),
@@ -249,20 +247,14 @@ public:
         protocolFeeA_from_balanceAO_to_balanceAP(pb, balanceA_O, balanceA_P, feeCalculatorA.getProtocolFee(), FMT(prefix, ".protocolFeeA_from_balanceAO_to_balanceAP")),
         protocolFeeB_from_balanceBO_to_balanceBP(pb, balanceB_O, balanceB_P, feeCalculatorB.getProtocolFee(), FMT(prefix, ".protocolFeeB_from_balanceBO_to_balanceBP")),
 
-        // Update trading history
-        updateTradeHistoryA(pb, orderA.balanceSBefore.tradingHistory, subArray(orderA.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
-                            {orderA.tradeHistoryBefore.filled, orderA.tradeHistoryBefore.cancelled, orderA.tradeHistoryBefore.orderID},
-                            {filledAfterA.result(), orderA.tradeHistory.getCancelledToStore(), orderA.tradeHistory.getOrderIDToStore()},
-                            FMT(prefix, ".updateTradeHistoryA")),
-        updateTradeHistoryB(pb, orderB.balanceSBefore.tradingHistory, subArray(orderB.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
-                            {orderB.tradeHistoryBefore.filled, orderB.tradeHistoryBefore.cancelled, orderB.tradeHistoryBefore.orderID},
-                            {filledAfterB.result(), orderB.tradeHistory.getCancelledToStore(), orderB.tradeHistory.getOrderIDToStore()},
-                            FMT(prefix, ".updateTradeHistoryB")),
-
         // Update UserA
+        updateTradeHistory_A(pb, orderA.balanceSBefore.tradingHistory, subArray(orderA.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
+                             {orderA.tradeHistoryBefore.filled, orderA.tradeHistoryBefore.cancelled, orderA.tradeHistoryBefore.orderID},
+                             {filledAfterA.result(), orderA.tradeHistory.getCancelledToStore(), orderA.tradeHistory.getOrderIDToStore()},
+                             FMT(prefix, ".updateTradeHistory_A")),
         updateBalanceS_A(pb, orderA.accountBefore.balancesRoot, orderA.tokenS.bits,
                          {balanceS_A.front(), orderA.balanceSBefore.tradingHistory},
-                         {balanceS_A.back(), updateTradeHistoryA.result()},
+                         {balanceS_A.back(), updateTradeHistory_A.result()},
                          FMT(prefix, ".updateBalanceS_A")),
         updateBalanceB_A(pb, updateBalanceS_A.result(), orderA.tokenB.bits,
                          {balanceB_A.front(), orderA.balanceBBefore.tradingHistory},
@@ -274,9 +266,13 @@ public:
                         FMT(prefix, ".updateAccount_A")),
 
         // Update UserB
+        updateTradeHistory_B(pb, orderB.balanceSBefore.tradingHistory, subArray(orderB.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
+                             {orderB.tradeHistoryBefore.filled, orderB.tradeHistoryBefore.cancelled, orderB.tradeHistoryBefore.orderID},
+                             {filledAfterB.result(), orderB.tradeHistory.getCancelledToStore(), orderB.tradeHistory.getOrderIDToStore()},
+                             FMT(prefix, ".updateTradeHistory_B")),
         updateBalanceS_B(pb, orderB.accountBefore.balancesRoot, orderB.tokenS.bits,
                          {balanceS_B.front(), orderB.balanceSBefore.tradingHistory},
-                         {balanceS_B.back(), updateTradeHistoryB.result()},
+                         {balanceS_B.back(), updateTradeHistory_B.result()},
                          FMT(prefix, ".updateBalanceS_B")),
         updateBalanceB_B(pb, updateBalanceS_B.result(), orderB.tokenB.bits,
                          {balanceB_B.front(), orderB.balanceBBefore.tradingHistory},
@@ -368,16 +364,14 @@ public:
         protocolFeeA_from_balanceAO_to_balanceAP.generate_r1cs_witness();
         protocolFeeB_from_balanceBO_to_balanceBP.generate_r1cs_witness();
 
-        // Update trading history
-        updateTradeHistoryA.generate_r1cs_witness(ringSettlement.tradeHistoryUpdate_A.proof);
-        updateTradeHistoryB.generate_r1cs_witness(ringSettlement.tradeHistoryUpdate_B.proof);
-
         // Update UserA
+        updateTradeHistory_A.generate_r1cs_witness(ringSettlement.tradeHistoryUpdate_A.proof);
         updateBalanceS_A.generate_r1cs_witness(ringSettlement.balanceUpdateS_A.proof);
         updateBalanceB_A.generate_r1cs_witness(ringSettlement.balanceUpdateB_A.proof);
         updateAccount_A.generate_r1cs_witness(ringSettlement.accountUpdate_A.proof);
 
         // Update UserB
+        updateTradeHistory_B.generate_r1cs_witness(ringSettlement.tradeHistoryUpdate_B.proof);
         updateBalanceS_B.generate_r1cs_witness(ringSettlement.balanceUpdateS_B.proof);
         updateBalanceB_B.generate_r1cs_witness(ringSettlement.balanceUpdateB_B.proof);
         updateAccount_B.generate_r1cs_witness(ringSettlement.accountUpdate_B.proof);
@@ -433,16 +427,14 @@ public:
         protocolFeeA_from_balanceAO_to_balanceAP.generate_r1cs_constraints();
         protocolFeeB_from_balanceBO_to_balanceBP.generate_r1cs_constraints();
 
-        // Update trading history
-        updateTradeHistoryA.generate_r1cs_constraints();
-        updateTradeHistoryB.generate_r1cs_constraints();
-
         // Update UserA
+        updateTradeHistory_A.generate_r1cs_constraints();
         updateBalanceS_A.generate_r1cs_constraints();
         updateBalanceB_A.generate_r1cs_constraints();
         updateAccount_A.generate_r1cs_constraints();
 
         // Update UserB
+        updateTradeHistory_B.generate_r1cs_constraints();
         updateBalanceS_B.generate_r1cs_constraints();
         updateBalanceB_B.generate_r1cs_constraints();
         updateAccount_B.generate_r1cs_constraints();
@@ -473,17 +465,17 @@ public:
         };
     }
 
-    const VariableT getNewAccountsRoot() const
+    const VariableT& getNewAccountsRoot() const
     {
         return updateAccount_B.result();
     }
 
-    const VariableT getNewProtocolBalancesRoot() const
+    const VariableT& getNewProtocolBalancesRoot() const
     {
         return updateBalanceB_P.result();
     }
 
-    const VariableT getNewOperatorBalancesRoot() const
+    const VariableT& getNewOperatorBalancesRoot() const
     {
         return updateBalanceB_O.result();
     }
@@ -662,7 +654,7 @@ public:
         signatureVerifier.generate_r1cs_constraints();
 
         // Check the new merkle root
-        forceEqual(pb, updateAccount_O->result(), merkleRootAfter.packed, "newMerkleRoot");
+        requireEqual(pb, updateAccount_O->result(), merkleRootAfter.packed, "newMerkleRoot");
     }
 
     bool generateWitness(const RingSettlementBlock& block)

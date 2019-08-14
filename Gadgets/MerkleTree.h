@@ -20,11 +20,6 @@ public:
     TernaryGadget child2;
     TernaryGadget child3;
 
-    VariableT m_input;
-    const std::vector<VariableT> m_sideNodes;
-    VariableT m_bit0;
-    VariableT m_bit1;
-
     // 00   x  y0  y1 y2
     // 01   y0 x   y1 y2
     // 10   y0 y1   x y2
@@ -38,11 +33,6 @@ public:
         const std::string &prefix
     ) :
         GadgetT(pb, prefix),
-
-        m_input(input),
-        m_sideNodes(sideNodes),
-        m_bit0(bit0),
-        m_bit1(bit1),
 
         bit0_or_bit1(pb, {bit0, bit1}, FMT(prefix, ".bit0_or_bit1")),
         bit0_and_bit1(pb, {bit0, bit1}, FMT(prefix, ".bit0_and_bit1")),

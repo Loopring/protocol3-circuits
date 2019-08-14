@@ -359,6 +359,43 @@ TEST_CASE("RequireNotZero", "[RequireNotZeroGadget]")
     }
 }
 
+TEST_CASE("IsNonZero", "[IsNonZero]")
+{
+    unsigned int numIterations = 1024;
+
+    protoboard<FieldT> pb;
+
+    pb_variable<FieldT> a = make_variable(pb, ".a");
+
+    IsNonZero isNonZero(pb, a, "isNonZero");
+    isNonZero.generate_r1cs_constraints();
+
+    SECTION("0")
+    {
+        pb.val(a) = 0;
+        isNonZero.generate_r1cs_witness();
+
+        REQUIRE(pb.is_satisfied());
+        REQUIRE((pb.val(isNonZero.result()) == FieldT::zero()));
+    }
+
+    SECTION("non-zero")
+    {
+        for (unsigned int i = 0; i < numIterations; i++)
+        {
+            pb.val(a) = getRandomFieldElement();
+            while(pb.val(a) == 0)
+            {
+                pb.val(a) = getRandomFieldElement();
+            }
+            isNonZero.generate_r1cs_witness();
+
+            REQUIRE(pb.is_satisfied());
+            REQUIRE((pb.val(isNonZero.result()) == FieldT::one()));
+        }
+    }
+}
+
 TEST_CASE("RequireNotEqual", "[RequireNotEqualGadget]")
 {
     unsigned int maxLength = 254;
@@ -487,6 +524,78 @@ TEST_CASE("Min", "[MinGadget]")
         SECTION("Random")
         {
             requireLeqChecked(getRandomFieldElementAsBigInt(n), getRandomFieldElementAsBigInt(n));
+        }
+    }}
+}
+
+TEST_CASE("Leq", "[LeqGadget]")
+{
+    unsigned int maxLength = 252;
+    unsigned int numIterations = 8;
+    for (unsigned int n = 1; n <= maxLength; n++) {
+        DYNAMIC_SECTION("Bit-length: " << n)
+    {
+        auto leqChecked = [n](const BigInt& _A, const BigInt& _B)
+        {
+            protoboard<FieldT> pb;
+
+            pb_variable<FieldT> a = make_variable(pb, toFieldElement(_A), ".A");
+            pb_variable<FieldT> b = make_variable(pb, toFieldElement(_B), ".B");
+
+            LeqGadget leqGadget(pb, a, b, n, "leqGadget");
+            leqGadget.generate_r1cs_constraints();
+            leqGadget.generate_r1cs_witness();
+
+            bool expectedLt = _A < _B;
+            bool expectedLeq = _A <= _B;
+            REQUIRE(pb.is_satisfied());
+            REQUIRE((pb.val(leqGadget.lt()) == (expectedLt ? FieldT::one() : FieldT::zero())));
+            REQUIRE((pb.val(leqGadget.leq()) == (expectedLeq ? FieldT::one() : FieldT::zero())));
+        };
+
+        BigInt max = getMaxFieldElementAsBigInt(n);
+
+        SECTION("0 <(=) 0")
+        {
+            leqChecked(0, 0);
+        }
+
+        SECTION("0 <(=) 1")
+        {
+            leqChecked(0, 1);
+        }
+
+        SECTION("max <(=) max")
+        {
+            leqChecked(max, max);
+        }
+
+        SECTION("max - 1 <(=) max")
+        {
+            leqChecked(max - 1, max);
+        }
+
+        SECTION("max <(=) max - 1")
+        {
+            leqChecked(max, max - 1);
+        }
+
+        SECTION("0 <(=) max")
+        {
+            leqChecked(0, max);
+        }
+
+        SECTION("max <(=) 0")
+        {
+            leqChecked(max, 0);
+        }
+
+        SECTION("Random")
+        {
+            for (unsigned int j = 0; j < numIterations; j++)
+            {
+                leqChecked(getRandomFieldElementAsBigInt(n), getRandomFieldElementAsBigInt(n));
+            }
         }
     }}
 }

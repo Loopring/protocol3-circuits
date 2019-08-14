@@ -57,6 +57,9 @@ public:
         publicKeyY(pb, 256, FMT(prefix, ".publicKeyY")),
 
         // Calculate the new balance
+        // We can't let the deposit fail (it's onchain so it needs to be included),
+        // and we do want to cap the balance to NUM_BITS_AMOUNT bits max, so cap the balance even
+        // if it means that the user loses some tokens (NUM_BITS_AMOUNT bits should be more than enough).
         uncappedBalanceAfter(pb, balanceBefore.balance, amount.packed, FMT(prefix, ".uncappedBalanceAfter")),
         balanceAfter(pb, uncappedBalanceAfter.result(), constants.maxAmount, NUM_BITS_AMOUNT + 1, FMT(prefix, ".balanceAfter")),
 
@@ -121,7 +124,7 @@ public:
                 amount.bits};
     }
 
-    const VariableT getNewAccountsRoot() const
+    const VariableT& getNewAccountsRoot() const
     {
         return updateAccount.result();
     }
@@ -210,7 +213,7 @@ public:
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root
-        forceEqual(pb, deposits.back().getNewAccountsRoot(), merkleRootAfter.packed, "newMerkleRoot");
+        requireEqual(pb, deposits.back().getNewAccountsRoot(), merkleRootAfter.packed, "newMerkleRoot");
     }
 
     bool generateWitness(const DepositBlock& block)
