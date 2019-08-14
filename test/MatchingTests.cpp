@@ -921,6 +921,66 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
         }
     }
 
+    SECTION("Filled (buy)")
+    {
+        for (unsigned int i = 0; i < 400; i+=2)
+        {
+            OrderState orderStateA_mod = setOrderState(
+                orderStateA,
+                A_orderID,
+                400, 200, true,
+                maxAmount,
+                i, false, A_orderID
+            );
+            OrderState orderStateB_mod = setOrderState(
+                orderStateB,
+                B_orderID,
+                400, 400, bool(rand() % 2),
+                maxAmount,
+                0, false, B_orderID
+            );
+
+            ExpectedValid expectedValid = (i < 200) ? ExpectedValid::Valid : ExpectedValid::Invalid;
+            FieldT expectedFill = (i < 200) ? 200 - i : 0;
+            orderMatchingChecked(
+                exchangeID, timestamp,
+                orderStateA_mod, orderStateB_mod,
+                true, expectedValid,
+                ExpectedFill::Manual, expectedFill, expectedFill
+            );
+        }
+    }
+
+    SECTION("Filled (sell)")
+    {
+        for (unsigned int i = 0; i < 400; i+=2)
+        {
+            OrderState orderStateA_mod = setOrderState(
+                orderStateA,
+                A_orderID,
+                200, 100, false,
+                maxAmount,
+                i, false, A_orderID
+            );
+            OrderState orderStateB_mod = setOrderState(
+                orderStateB,
+                B_orderID,
+                400, 400, bool(rand() % 2),
+                maxAmount,
+                0, false, B_orderID
+            );
+
+            ExpectedValid expectedValid = (i < 200) ? ExpectedValid::Valid : ExpectedValid::Invalid;
+            FieldT expectedFill = (i < 200) ? 200 - i : 0;
+            orderMatchingChecked(
+                exchangeID, timestamp,
+                orderStateA_mod, orderStateB_mod,
+                true, expectedValid,
+                ExpectedFill::Manual, expectedFill, expectedFill
+            );
+        }
+    }
+
     SECTION("Random")
     {
         for (unsigned int i = 0; i < 64; i++)
