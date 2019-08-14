@@ -143,7 +143,7 @@ public:
                           {publicKeyA.x, publicKeyA.y, nonce_A_after.result(), updateBalanceT_A.getNewRoot()},
                           FMT(prefix, ".updateAccount_A")),
 
-          updateAccount_B(pb, _accountsMerkleRoot, accountID_B.bits,
+          updateAccount_B(pb, updateAccount_A.result(), accountID_B.bits,
                           {publicKeyB.x, publicKeyB.y, nonce_B_before.packed, balancesRoot_B_before},
                           {publicKeyB.x, publicKeyB.y, nonce_B_before.packed, updateBalanceT_B.getNewRoot()},
                           FMT(prefix, ".updateAccount_B")),
@@ -162,7 +162,7 @@ public:
 
     const VariableT getNewAccountsRoot() const
     {
-        return updateAccount_A.result();
+        return updateAccount_B.result();
     }
 
     const VariableT getNewOperatorBalancesRoot() const
@@ -191,7 +191,7 @@ public:
         accountID_A.bits.fill_with_bits_of_field_element(pb, interTransfer.accountUpdate_A.accountID);
         accountID_A.generate_r1cs_witness_from_bits();
 
-        accountID_B.bits.fill_with_bits_of_field_element(pb, interTransfer.accountUpdate_A.accountID);
+        accountID_B.bits.fill_with_bits_of_field_element(pb, interTransfer.accountUpdate_B.accountID);
         accountID_B.generate_r1cs_witness_from_bits();
 
         transTokenID.bits.fill_with_bits_of_field_element(pb, interTransfer.balanceUpdateT_A.tokenID);
@@ -215,10 +215,12 @@ public:
         fTransAmount.generate_r1cs_witness(toFloat(interTransfer.amount, Float28Encoding));
         ensureAccuracyTransAmount.generate_r1cs_witness();
 
+        pb.val(balancesRoot_A_before) = interTransfer.accountUpdate_A.before.balancesRoot;
         pb.val(balanceF_A_before) = interTransfer.balanceUpdateF_A.before.balance;
         pb.val(balanceT_A_before) = interTransfer.balanceUpdateT_A.before.balance;
         pb.val(tradingHistoryRootT_A) = interTransfer.balanceUpdateT_A.before.tradingHistoryRoot;
 
+        pb.val(balancesRoot_B_before) = interTransfer.accountUpdate_B.before.balancesRoot;
         pb.val(balanceT_B_before) = interTransfer.balanceUpdateT_B.before.balance;
         pb.val(tradingHistoryRootT_B) = interTransfer.balanceUpdateT_B.before.tradingHistoryRoot;
 
@@ -228,11 +230,9 @@ public:
         nonce_A_before.bits.fill_with_bits_of_field_element(pb, interTransfer.accountUpdate_A.before.nonce);
         nonce_A_before.generate_r1cs_witness_from_bits();
         nonce_A_after.generate_r1cs_witness();
-        pb.val(balancesRoot_A_before) = interTransfer.accountUpdate_A.before.balancesRoot;
 
         nonce_B_before.bits.fill_with_bits_of_field_element(pb, interTransfer.accountUpdate_B.before.nonce);
         nonce_B_before.generate_r1cs_witness_from_bits();
-        pb.val(balancesRoot_B_before) = interTransfer.accountUpdate_B.before.balancesRoot;
 
         // Fee payment calculations
         feePayment.generate_r1cs_witness();
@@ -256,10 +256,10 @@ public:
     {
         accountID_A.generate_r1cs_constraints(true);
         accountID_B.generate_r1cs_constraints(true);
-        feeTokenID.generate_r1cs_constraints(true);
-        fee.generate_r1cs_constraints(true);
         transTokenID.generate_r1cs_constraints(true);
         transAmount.generate_r1cs_constraints(true);
+        feeTokenID.generate_r1cs_constraints(true);
+        fee.generate_r1cs_constraints(true);
         label.generate_r1cs_constraints(true);
 
         fFee.generate_r1cs_constraints();
@@ -278,8 +278,8 @@ public:
         transferPayment.generate_r1cs_constraints();
 
         // Account
-        updateBalanceT_A.generate_r1cs_constraints();
         updateBalanceF_A.generate_r1cs_constraints();
+        updateBalanceT_A.generate_r1cs_constraints();
         updateAccount_A.generate_r1cs_constraints();
 
         updateBalanceT_B.generate_r1cs_constraints();
@@ -331,6 +331,7 @@ public:
           constants(pb, FMT(prefix, ".constants")),
 
           exchangeID(pb, 32, FMT(prefix, ".exchangeID")),
+
           merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
           merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
 
@@ -355,6 +356,7 @@ public:
         {
             VariableT transAccountsRoot = (j == 0) ? merkleRootBefore.packed : interTransferres.back().getNewAccountsRoot();
             VariableT transOperatorBalancesRoot = (j == 0) ? balancesRoot_O_before : interTransferres.back().getNewOperatorBalancesRoot();
+
             interTransferres.emplace_back(
                 pb,
                 params,
@@ -384,6 +386,7 @@ public:
         publicData.add(merkleRootBefore.bits);
         publicData.add(merkleRootAfter.bits);
         publicData.add(labelHasher->result()->bits);
+
         if (onchainDataAvailability)
         {
             publicData.add(constants.accountPadding);
