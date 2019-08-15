@@ -65,7 +65,7 @@ public:
 
     UpdateBalanceGadget updateBalanceF_O;
 
-    Poseidon_gadget_T<11, 1, 6, 53, 10, 1> hash;
+    Poseidon_gadget_T<10, 1, 6, 53, 9, 1> hash;
     SignatureVerifier signatureVerifier;
 
     InternalTransferGadget(
@@ -155,7 +155,7 @@ public:
                            FMT(prefix, ".updateBalanceF_O")),
 
           // Signature
-          hash(pb, var_array({blockExchangeID, accountID_A.packed, accountID_B.packed, transTokenID.packed, transAmount.packed, feeTokenID.packed, fee.packed, label.packed, nonce_A_before.packed, nonce_B_before.packed}), FMT(this->annotation_prefix, ".hash")),
+          hash(pb, var_array({blockExchangeID, accountID_A.packed, accountID_B.packed, transTokenID.packed, transAmount.packed, feeTokenID.packed, fee.packed, label.packed, nonce_A_before.packed}), FMT(this->annotation_prefix, ".hash")),
           signatureVerifier(pb, params, publicKeyA, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
     }
