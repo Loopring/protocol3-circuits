@@ -31,14 +31,10 @@ public:
     libsnark::dual_variable_gadget<FieldT> fee;
     libsnark::dual_variable_gadget<FieldT> label;
 
-    FloatGadget fFee;
-    FloatGadget fTransAmount;
-    EnsureAccuracyGadget ensureAccuracyFee;
-    EnsureAccuracyGadget ensureAccuracyTransAmount;
-
     VariableT balancesRoot_A_before;
     VariableT balanceF_A_before;
     VariableT balanceT_A_before;
+    VariableT balanceT_A_after; // to make sure trans balance is enough.
     VariableT tradingHistoryRootT_A;
 
     VariableT balancesRoot_B_before;
@@ -47,6 +43,12 @@ public:
 
     VariableT balanceF_O_before;
     VariableT tradingHistoryRootF_O;
+
+    FloatGadget fFee;
+    FloatGadget fTransAmount;
+    MinGadget amountToTransfer;
+    EnsureAccuracyGadget ensureAccuracyFee;
+    EnsureAccuracyGadget ensureAccuracyTransAmount;
 
     libsnark::dual_variable_gadget<FieldT> nonce_A_before;
     UnsafeAddGadget nonce_A_after;
@@ -93,14 +95,18 @@ public:
           label(pb, NUM_BITS_LABEL, FMT(prefix, ".label")),
 
           fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
-          fTransAmount(pb, constants, Float28Encoding, FMT(prefix, ".fTansAmount")),
           ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFee")),
-          ensureAccuracyTransAmount(pb, fTransAmount.value(), transAmount.packed, Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyTransAmount")),
 
           balancesRoot_A_before(make_variable(pb, FMT(prefix, ".balancesRoot_A_before"))),
           balanceF_A_before(make_variable(pb, FMT(prefix, ".balanceF_A_before"))),
           balanceT_A_before(make_variable(pb, FMT(prefix, ".balanceT_A_before"))),
+          balanceT_A_after(make_variable(pb, FMT(prefix, ".balanceT_A_after"))),
           tradingHistoryRootT_A(make_variable(pb, FMT(prefix, ".tradingHistoryRootT_A"))),
+
+          // Calculate how much can be transferred
+          fTransAmount(pb, constants, Float28Encoding, FMT(prefix, ".fTansAmount")),
+          amountToTransfer(pb, transAmount.packed, balanceT_A_before, NUM_BITS_AMOUNT, FMT(prefix, ".min(transAmount, balanceT_A_before)")),
+          ensureAccuracyTransAmount(pb, fTransAmount.value(), amountToTransfer.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyTransAmount")),
 
           balancesRoot_B_before(make_variable(pb, FMT(prefix, ".balancesRoot_B_before"))),
           balanceT_B_before(make_variable(pb, FMT(prefix, ".balanceT_B"))),
@@ -212,12 +218,10 @@ public:
         fFee.generate_r1cs_witness(toFloat(interTransfer.fee, Float16Encoding));
         ensureAccuracyFee.generate_r1cs_witness();
 
-        fTransAmount.generate_r1cs_witness(toFloat(interTransfer.amount, Float28Encoding));
-        ensureAccuracyTransAmount.generate_r1cs_witness();
-
         pb.val(balancesRoot_A_before) = interTransfer.accountUpdate_A.before.balancesRoot;
         pb.val(balanceF_A_before) = interTransfer.balanceUpdateF_A.before.balance;
         pb.val(balanceT_A_before) = interTransfer.balanceUpdateT_A.before.balance;
+        pb.val(balanceT_A_after) = interTransfer.balanceUpdateT_A.after.balance;
         pb.val(tradingHistoryRootT_A) = interTransfer.balanceUpdateT_A.before.tradingHistoryRoot;
 
         pb.val(balancesRoot_B_before) = interTransfer.accountUpdate_B.before.balancesRoot;
@@ -233,6 +237,11 @@ public:
 
         nonce_B_before.bits.fill_with_bits_of_field_element(pb, interTransfer.accountUpdate_B.before.nonce);
         nonce_B_before.generate_r1cs_witness_from_bits();
+
+        // transfer amount calculation
+        fTransAmount.generate_r1cs_witness(toFloat((pb.val(balanceT_A_before) - pb.val(balanceT_A_after)), Float28Encoding));
+        amountToTransfer.generate_r1cs_witness();
+        ensureAccuracyTransAmount.generate_r1cs_witness();
 
         // Fee payment calculations
         feePayment.generate_r1cs_witness();
@@ -266,6 +275,7 @@ public:
         ensureAccuracyFee.generate_r1cs_constraints();
 
         fTransAmount.generate_r1cs_constraints();
+        amountToTransfer.generate_r1cs_constraints();
         ensureAccuracyTransAmount.generate_r1cs_constraints();
 
         nonce_A_before.generate_r1cs_constraints(true);
