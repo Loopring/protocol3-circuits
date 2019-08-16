@@ -47,8 +47,8 @@ public:
     FloatGadget fFee;
     FloatGadget fTransAmount;
     MinGadget amountToTransfer;
-    EnsureAccuracyGadget ensureAccuracyFee;
-    EnsureAccuracyGadget ensureAccuracyTransAmount;
+    RequireAccuracyGadget ensureAccuracyFee;
+    RequireAccuracyGadget ensureAccuracyTransAmount;
 
     libsnark::dual_variable_gadget<FieldT> nonce_A_before;
     UnsafeAddGadget nonce_A_after;
@@ -133,7 +133,7 @@ public:
                            {feePayment.X, tradingHistoryRootT_A},
                            FMT(prefix, ".updateBalanceF_A")),
 
-          updateBalanceT_A(pb, updateBalanceF_A.getNewRoot(), transTokenID.bits,
+          updateBalanceT_A(pb, updateBalanceF_A.result(), transTokenID.bits,
                            {balanceT_A_before, tradingHistoryRootT_A},
                            {transferPayment.X, tradingHistoryRootT_A},
                            FMT(prefix, ".updateBalanceT_A")),
@@ -146,12 +146,12 @@ public:
           // Account
           updateAccount_A(pb, _accountsMerkleRoot, accountID_A.bits,
                           {publicKeyA.x, publicKeyA.y, nonce_A_before.packed, balancesRoot_A_before},
-                          {publicKeyA.x, publicKeyA.y, nonce_A_after.result(), updateBalanceT_A.getNewRoot()},
+                          {publicKeyA.x, publicKeyA.y, nonce_A_after.result(), updateBalanceT_A.result()},
                           FMT(prefix, ".updateAccount_A")),
 
           updateAccount_B(pb, updateAccount_A.result(), accountID_B.bits,
                           {publicKeyB.x, publicKeyB.y, nonce_B_before.packed, balancesRoot_B_before},
-                          {publicKeyB.x, publicKeyB.y, nonce_B_before.packed, updateBalanceT_B.getNewRoot()},
+                          {publicKeyB.x, publicKeyB.y, nonce_B_before.packed, updateBalanceT_B.result()},
                           FMT(prefix, ".updateAccount_B")),
 
           // Operator balance
@@ -173,7 +173,7 @@ public:
 
     const VariableT getNewOperatorBalancesRoot() const
     {
-        return updateBalanceF_O.getNewRoot();
+        return updateBalanceF_O.result();
     }
 
     const std::vector<VariableArrayT> getPublicData() const
@@ -326,7 +326,7 @@ public:
     VariableT nonce;
     VariableT balancesRoot_O_before;
 
-    ForceNotZeroGadget publicKeyX_notZero;
+    RequireNotZeroGadget publicKeyX_notZero;
 
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
@@ -399,7 +399,7 @@ public:
 
         if (onchainDataAvailability)
         {
-            publicData.add(constants.accountPadding);
+            publicData.add(constants.padding_0000);
             publicData.add(operatorAccountID.bits);
             for (const InternalTransferGadget &trans : interTransferres)
             {
@@ -411,7 +411,7 @@ public:
         publicData.generate_r1cs_constraints();
 
         // Check the new merkle root
-        forceEqual(pb, updateAccount_O->result(), merkleRootAfter.packed, "newMerkleRoot");
+        requireEqual(pb, updateAccount_O->result(), merkleRootAfter.packed, "newMerkleRoot");
     }
 
     void printInfo()
