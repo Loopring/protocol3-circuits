@@ -19,9 +19,11 @@ ec_multiexp_straus(var *out, const var *multiples_, const var *scalars_, size_t 
     int idx = elts_per_block * B + tileIdx;
 
     size_t n = (N + RR - 1) / RR;
+//    if (T < 4) return;
     if (idx < n) {
         // TODO: Treat remainder separately so R can remain a compile time constant
         size_t R = (idx < n - 1) ? RR : (N % RR);
+        if (R == 0) R = 1;
 
         typedef typename EC::group_type Fr;
         static constexpr int JAC_POINT_LIMBS = 3 * EC::field_type::DEGREE * ELT_LIMBS;
@@ -39,15 +41,15 @@ ec_multiexp_straus(var *out, const var *multiples_, const var *scalars_, size_t 
         const var *multiples = multiples_ + m_off;
         // TODO: Consider loading multiples and/or scalars into shared memory
 
-        // i is smallest multiple of C such that i > 753
-        int i = C * ((753 + C - 1) / C); // C * ceiling(753/C)
-        assert((i - C * 753) < C);
+        // i is smallest multiple of C such that i > 254
+        int i = C * ((254 + C - 1) / C); // C * ceiling(254/C)
+        assert((i - C * 254) < C);
         static constexpr var C_MASK = (1U << C) - 1U;
 
         EC x;
         EC::set_zero(x);
         while (i >= C) {
-            EC::mul_2exp<C>(x, x);
+            EC::mul_2exp<C>(T, x, x);
             i -= C;
 
             int q = i / digit::BITS, r = i % digit::BITS;
@@ -63,15 +65,16 @@ ec_multiexp_straus(var *out, const var *multiples_, const var *scalars_, size_t 
                     s = g.shfl(scalars[j].a, q + 1);
                     win |= (s << bottom_bits) & C_MASK;
                 }
+                //printf("win %d\n", win);
                 if (win > 0) {
                     EC m;
                     //EC::add(x, x, multiples[win - 1][j]);
                     EC::load_affine(m, multiples + ((win-1)*N + j)*AFF_POINT_LIMBS);
-                    EC::mixed_add(x, x, m);
+                    EC::mixed_add(T, x, x, m);
                 }
             }
         }
-        EC::store_jac(out + out_off, x);
+        EC::store_jac(T, out + out_off, x);
     }
 }
 
@@ -99,7 +102,7 @@ ec_multiexp(var *X, const var *W, size_t n)
         Fr::from_monty(w, w);
         EC::mul(x, w.a, x);
 
-        EC::store_jac(X + x_off, x);
+        EC::store_jac(T, X + x_off, x);
     }
 }
 
@@ -120,9 +123,9 @@ ec_sum_all(var *X, const var *Y, size_t n)
         EC::load_jac(x, X + off);
         EC::load_jac(y, Y + off);
 
-        EC::add(z, x, y);
+        EC::add(T, z, x, y);
 
-        EC::store_jac(X + off, z);
+        EC::store_jac(T, X + off, z);
     }
 }
 

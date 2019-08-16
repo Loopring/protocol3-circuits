@@ -14,7 +14,7 @@ typedef std::uint64_t var;
 static constexpr size_t ELT_LIMBS = 4;
 static constexpr size_t ELT_BYTES = ELT_LIMBS * sizeof(var);
 
-static constexpr size_t BIG_WIDTH = ELT_LIMBS;
+static constexpr size_t BIG_WIDTH = ELT_LIMBS; // = 4
 
 
 struct digit {
@@ -101,9 +101,9 @@ struct digit {
 
 
 struct fixnum {
-    // 16 because digit::BITS * 16 = 1024 > 768 = digit::bits * 12
+    // 4 because digit::BITS * 4 = 256 > 254 = digit::bits * 4
     // Must be < 32 for effective_carries to work.
-    static constexpr unsigned WIDTH = 16;
+    static constexpr unsigned WIDTH = 4;
 
     // TODO: Previous versiona allowed 'auto' return type here instead
     // of this mess

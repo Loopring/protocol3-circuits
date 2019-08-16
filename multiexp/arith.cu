@@ -6,26 +6,71 @@ __device__ __constant__
 const var MOD_Q[BIG_WIDTH] = {
     0x3c208c16d87cfd47ULL, 0x97816a916871ca8dULL,
     0xb85045b68181585dULL, 0x30644e72e131a029ULL
+#if 0
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+#endif
 };
 
 // -Q^{-1} (mod 2^64)
-static constexpr var Q_NINV_MOD = 0xc2e1f593efffffffULL;
+static constexpr var Q_NINV_MOD = 0x87d20782e4866389ULL;
 
 // 2^256 mod Q
 __device__ __constant__
 const var X_MOD_Q[BIG_WIDTH] = {
-    0xd35d438dc58f0d9dULL, 0x0a78eb28f5c70b3dULL,
+    0xd35d438dc58f0d9dULL, 0xa78eb28f5c70b3dULL,
     0x666ea36f7879462cULL, 0xe0a77c19a07df2fULL
+#if 0
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+#endif
 };
+
 //template< const var *mod_, const var ninv_mod_, const var *binpow_mod_ >
 //struct modulus_info {
-struct BN128_MOD {
+struct ALT_BN128_MOD {
     __device__ __forceinline__ static int lane() { return fixnum::layout().thread_rank(); }
     __device__ __forceinline__ static var mod() { return MOD_Q[lane()]; }
     static constexpr var ninv_mod = Q_NINV_MOD;
     __device__ __forceinline__ static var monty_one() { return X_MOD_Q[lane()]; }
 };
 
+__device__ __constant__
+const var MOD_R[BIG_WIDTH] = {
+    0x43e1f593f0000001ULL, 0x2833e84879b97091ULL,
+    0xb85045b68181585dULL, 0x30644e72e131a029ULL
+#if 0
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+#endif
+};
+
+// -R^{-1} (mod 2^64)
+static constexpr var R_NINV_MOD = 0xc2e1f593efffffffULL;
+
+// 2^256 mod R
+__device__ __constant__
+const var X_MOD_R[BIG_WIDTH] = {
+    0xac96341c4ffffffbULL, 0x36fc76959f60cd29ULL,
+    0x666ea36f7879462eULL, 0xe0a77c19a07df2fULL
+#if 0
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
+#endif
+};
+
+//template< const var *mod_, const var ninv_mod_, const var *binpow_mod_ >
+//struct modulus_info {
+struct ALT_BN128_MOD_R {
+    __device__ __forceinline__ static int lane() { return fixnum::layout().thread_rank(); }
+    __device__ __forceinline__ static var mod() { return MOD_R[lane()]; }
+    static constexpr var ninv_mod = R_NINV_MOD;
+    __device__ __forceinline__ static var monty_one() { return X_MOD_R[lane()]; }
+};
 // Apparently we still can't do partial specialisation of function
 // templates in C++, so we do it in a class instead. Woot.
 template< int n >
@@ -562,5 +607,8 @@ struct Fp3 {
     }
 };
 
-typedef Fp<BN128_MOD> Fp_BN128;
-typedef Fp2<Fp_BN128, 13> Fp2_BN128;
+typedef Fp<ALT_BN128_MOD> Fp_ALT_BN128;
+typedef Fp2<Fp_ALT_BN128, 13> Fp2_ALT_BN128;
+
+typedef Fp<ALT_BN128_MOD_R> Fp_ALT_BN128_R;
+typedef Fp2<Fp_ALT_BN128_R, 11> Fp2_ALT_BN128_R;

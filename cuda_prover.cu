@@ -67,8 +67,8 @@ struct ec_type;
 
 template<>
 struct ec_type<alt_bn128_libsnark> {
-    typedef ECp_BN128 ECp;
-    typedef ECp2_BN128 ECpe;
+    typedef ECp_ALT_BN128 ECp;
+    typedef ECp2_ALT_BN128 ECpe;
 };
 
 
