@@ -20,10 +20,10 @@ class InternalTransferGadget : public GadgetT
 public:
     DualVariableGadget accountID_A; // from A
     DualVariableGadget accountID_B; // to B
-    DualVariableGadget transTokenID;
     DualVariableGadget feeTokenID;
-    DualVariableGadget transAmount;
     DualVariableGadget fee;
+    DualVariableGadget transTokenID;
+    DualVariableGadget transAmount;
 
     VariableT label;
 
@@ -37,17 +37,19 @@ public:
     // Operator state
     BalanceGadget balanceF_O_Before;
 
+    // fee payment related gadgets
     FloatGadget fFee;
+    RequireAccuracyGadget ensureAccuracyFee;
+    subadd_gadget feePayment;
+
+    // transfer payment related gadgets
     FloatGadget fTransAmount;
     MinGadget amountToTransfer;
-    RequireAccuracyGadget ensureAccuracyFee;
     RequireAccuracyGadget ensureAccuracyTransAmount;
+    subadd_gadget transferPayment;
 
     // Increase the nonce of the user by 1
     AddGadget nonce_A_after;
-
-    subadd_gadget feePayment;
-    subadd_gadget transferPayment;
 
     UpdateBalanceGadget updateBalanceF_A;
     UpdateBalanceGadget updateBalanceT_A;
@@ -73,37 +75,34 @@ public:
 
           accountID_A(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID_A")),
           accountID_B(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID_B")),
-
-          transTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".transTokenID")),
           feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
-          transAmount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".transAmount")),
           fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
+          transTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".transTokenID")),
+          transAmount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".transAmount")),
 
           label(make_variable(pb, FMT(prefix, ".label"))),
-
-          fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
-          ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFee")),
 
           balanceF_A_Before(pb, FMT(prefix, "balanceF_A_Before")), // A pays fee
           balanceT_A_Before(pb, FMT(prefix, "balanceT_A_Before")),
           balanceT_B_Before(pb, FMT(prefix, "balanceT_B_Before")),
           account_A_Before(pb, FMT(prefix, "account_A_Before")),
           account_B_Before(pb, FMT(prefix, "account_B_Before")),
+
           balanceF_O_Before(pb, FMT(prefix, "balanceBefore_O")),
 
-          // Calculate how much can be transferred
+          // Fee payment to the operator
+          fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
+          ensureAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyFee")),
+          feePayment(pb, NUM_BITS_AMOUNT, balanceF_A_Before.balance, balanceF_O_Before.balance, fFee.value(), FMT(prefix, ".feePayment")),
+
+          // Calculate how much can be transferred and transfer payment from A to B
           fTransAmount(pb, constants, Float28Encoding, FMT(prefix, ".fTansAmount")),
           amountToTransfer(pb, transAmount.packed, balanceT_A_Before.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(transAmount, balanceT_A_before)")),
           ensureAccuracyTransAmount(pb, fTransAmount.value(), amountToTransfer.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyTransAmount")),
+          transferPayment(pb, NUM_BITS_AMOUNT, balanceT_A_Before.balance, balanceT_B_Before.balance, fTransAmount.value(), FMT(prefix, ".transferPayment")),
 
           // Increase A nonce by 1
           nonce_A_after(pb, account_A_Before.nonce, constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_A_after")),
-
-          // Fee payment to the operator
-          feePayment(pb, NUM_BITS_AMOUNT, balanceF_A_Before.balance, balanceF_O_Before.balance, fFee.value(), FMT(prefix, ".feePayment")),
-
-          // Transfer payment from A to B
-          transferPayment(pb, NUM_BITS_AMOUNT, balanceT_A_Before.balance, balanceT_B_Before.balance, fTransAmount.value(), FMT(prefix, ".transferPayment")),
 
           // Balance
           updateBalanceF_A(pb, account_A_Before.balancesRoot, feeTokenID.bits,
@@ -168,34 +167,34 @@ public:
     {
         accountID_A.generate_r1cs_witness(pb, interTransfer.accountUpdate_A.accountID);
         accountID_B.generate_r1cs_witness(pb, interTransfer.accountUpdate_B.accountID);
-        transTokenID.generate_r1cs_witness(pb, interTransfer.balanceUpdateT_A.tokenID);
         feeTokenID.generate_r1cs_witness(pb, interTransfer.balanceUpdateF_A.tokenID);
         fee.generate_r1cs_witness(pb, interTransfer.fee);
+        transTokenID.generate_r1cs_witness(pb, interTransfer.balanceUpdateT_A.tokenID);
         transAmount.generate_r1cs_witness(pb, interTransfer.amount);
-        pb.val(label) = interTransfer.label;
 
-        fFee.generate_r1cs_witness(toFloat(interTransfer.fee, Float16Encoding));
-        ensureAccuracyFee.generate_r1cs_witness();
+        pb.val(label) = interTransfer.label;
 
         balanceF_A_Before.generate_r1cs_witness(interTransfer.balanceUpdateF_A.before); // A pays fee
         balanceT_A_Before.generate_r1cs_witness(interTransfer.balanceUpdateT_A.before);
         balanceT_B_Before.generate_r1cs_witness(interTransfer.balanceUpdateT_B.before);
-        balanceF_O_Before.generate_r1cs_witness(interTransfer.balanceUpdateF_O.before);
         account_A_Before.generate_r1cs_witness(interTransfer.accountUpdate_A.before);
         account_B_Before.generate_r1cs_witness(interTransfer.accountUpdate_B.before);
 
-        // nonce++
-        nonce_A_after.generate_r1cs_witness();
+        balanceF_O_Before.generate_r1cs_witness(interTransfer.balanceUpdateF_O.before);
+
+        // Fee payment calculations
+        fFee.generate_r1cs_witness(toFloat(interTransfer.fee, Float16Encoding));
+        ensureAccuracyFee.generate_r1cs_witness();
+        feePayment.generate_r1cs_witness();
 
         // transfer amount calculation
         amountToTransfer.generate_r1cs_witness();
         fTransAmount.generate_r1cs_witness(toFloat(pb.val(amountToTransfer.result()), Float28Encoding));
-
         ensureAccuracyTransAmount.generate_r1cs_witness();
-
-        // Fee payment calculations
-        feePayment.generate_r1cs_witness();
         transferPayment.generate_r1cs_witness();
+
+        // nonce++
+        nonce_A_after.generate_r1cs_witness();
 
         updateBalanceF_A.generate_r1cs_witness(interTransfer.balanceUpdateF_A.proof);
         updateBalanceT_A.generate_r1cs_witness(interTransfer.balanceUpdateT_A.proof);
@@ -253,26 +252,26 @@ public:
 class InternalTransferCircuit : public GadgetT
 {
 public:
-    jubjub::Params params;
-
-    bool onchainDataAvailability;
-    unsigned int numTrans;
-    std::vector<InternalTransferGadget> interTransferres;
-
     PublicDataGadget publicData;
 
     Constants constants;
 
-    libsnark::dual_variable_gadget<FieldT> exchangeID;
-    libsnark::dual_variable_gadget<FieldT> merkleRootBefore;
-    libsnark::dual_variable_gadget<FieldT> merkleRootAfter;
+    jubjub::Params params;
 
-    libsnark::dual_variable_gadget<FieldT> operatorAccountID;
-    const jubjub::VariablePointT publicKey;
-    VariableT nonce;
-    VariableT balancesRoot_O_before;
+    // State
+    AccountGadget accountBefore_O;
+
+    // Inputs
+    DualVariableGadget exchangeID;
+    DualVariableGadget merkleRootBefore;
+    DualVariableGadget merkleRootAfter;
+    DualVariableGadget operatorAccountID;
 
     RequireNotZeroGadget publicKeyX_notZero;
+
+    bool onchainDataAvailability;
+    unsigned int numTrans;
+    std::vector<InternalTransferGadget> interTransferres;
 
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
@@ -286,16 +285,16 @@ public:
 
           constants(pb, FMT(prefix, ".constants")),
 
-          exchangeID(pb, 32, FMT(prefix, ".exchangeID")),
+          // State
+          accountBefore_O(pb, FMT(prefix, ".accountBefore_O")),
 
+          // Inputs
+          exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
           merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
           merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
-
           operatorAccountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".operatorAccountID")),
-          publicKey(pb, FMT(prefix, ".publicKey")),
-          nonce(make_variable(pb, 0, FMT(prefix, ".nonce"))),
-          balancesRoot_O_before(make_variable(pb, 0, FMT(prefix, ".balancesRoot_O_before"))),
-          publicKeyX_notZero(pb, publicKey.x, FMT(prefix, ".publicKeyX_notZero"))
+
+          publicKeyX_notZero(pb, accountBefore_O.publicKey.x, FMT(prefix, ".publicKeyX_notZero"))
     {
     }
 
@@ -311,7 +310,7 @@ public:
         for (size_t j = 0; j < numTrans; j++)
         {
             VariableT transAccountsRoot = (j == 0) ? merkleRootBefore.packed : interTransferres.back().getNewAccountsRoot();
-            VariableT transOperatorBalancesRoot = (j == 0) ? balancesRoot_O_before : interTransferres.back().getNewOperatorBalancesRoot();
+            VariableT transOperatorBalancesRoot = (j == 0) ? accountBefore_O.balancesRoot : interTransferres.back().getNewOperatorBalancesRoot();
 
             interTransferres.emplace_back(
                 pb,
@@ -328,8 +327,8 @@ public:
         // Update operator account
         operatorAccountID.generate_r1cs_constraints(true);
         updateAccount_O.reset(new UpdateAccountGadget(pb, interTransferres.back().getNewAccountsRoot(), operatorAccountID.bits,
-                                                      {publicKey.x, publicKey.y, nonce, balancesRoot_O_before},
-                                                      {publicKey.x, publicKey.y, nonce, interTransferres.back().getNewOperatorBalancesRoot()},
+                                                      {accountBefore_O.publicKey.x, accountBefore_O.publicKey.y, accountBefore_O.nonce, accountBefore_O.balancesRoot},
+                                                      {accountBefore_O.publicKey.x, accountBefore_O.publicKey.y, accountBefore_O.nonce, interTransferres.back().getNewOperatorBalancesRoot()},
                                                       FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
@@ -369,6 +368,9 @@ public:
     {
         constants.generate_r1cs_witness();
 
+        // State
+        accountBefore_O.generate_r1cs_witness(block.accountUpdate_O.before);
+
         exchangeID.bits.fill_with_bits_of_field_element(pb, block.exchangeID);
         exchangeID.generate_r1cs_witness_from_bits();
 
@@ -377,20 +379,15 @@ public:
         merkleRootAfter.bits.fill_with_bits_of_field_element(pb, block.merkleRootAfter);
         merkleRootAfter.generate_r1cs_witness_from_bits();
 
-        pb.val(balancesRoot_O_before) = block.accountUpdate_O.before.balancesRoot;
+        operatorAccountID.bits.fill_with_bits_of_field_element(pb, block.operatorAccountID);
+        operatorAccountID.generate_r1cs_witness_from_bits();
+
+        publicKeyX_notZero.generate_r1cs_witness();
 
         for (unsigned int i = 0; i < block.interTransferres.size(); i++)
         {
             interTransferres[i].generate_r1cs_witness(block.interTransferres[i]);
         }
-
-        operatorAccountID.bits.fill_with_bits_of_field_element(pb, block.operatorAccountID);
-        operatorAccountID.generate_r1cs_witness_from_bits();
-        pb.val(publicKey.x) = block.accountUpdate_O.before.publicKey.x;
-        pb.val(publicKey.y) = block.accountUpdate_O.before.publicKey.y;
-        pb.val(nonce) = block.accountUpdate_O.before.nonce;
-
-        publicKeyX_notZero.generate_r1cs_witness();
 
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
 
