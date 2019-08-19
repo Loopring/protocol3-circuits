@@ -6,21 +6,21 @@
 
    之前优化的想法是这样的，中间状态不验证，而只有block出入的merkle tree root进行验证。
 
-   ![image-20190723091104776](/Users/yueawang/Documents/My_Reports/loopring/images/check-status-at-the-end.png)
+   ![image-20190723091104776](https://user-images.githubusercontent.com/26989346/63236800-c133c800-c271-11e9-9109-81c77a01af3d.png)
 
    该方案不可行是因为必须保证Merkle Path的一致性。如下图所示，本来Merkle Root验证电路本身比较简单，输入是path和leaf，输出是merkle root。
 
-   ![image-20190722192752108](/Users/yueawang/Documents/My_Reports/loopring/images/merkle gadget.png)
+   ![image-20190722192752108](https://user-images.githubusercontent.com/26989346/63237004-c2192980-c272-11e9-914b-0812fac36025.png)
 
    对于Loopring的电路设计，我们有before和after两个merkle tree需要被验证，于是有：
 
-   ![image-20190722205208609](/Users/yueawang/Documents/My_Reports/loopring/images/before and after mkl gadget.png)
+   ![image-20190722205208609](https://user-images.githubusercontent.com/26989346/63237034-e2e17f00-c272-11e9-919d-afae29917f99.png)
 
    
 
    这里有个问题，因为before和after完全没有联系，那么任意构造的merkle树都可以单独通过before或者after的验证，也就是说before和after可以来自完全不同的两颗merkle树，且各自符合merkle逻辑。所以为了保证内部的操作在同一棵merkle tree上完成，也就必须让before和after产生联系，目前看来只有这样一种方案，如下图所示：
 
-   ![image-20190722205053165](/Users/yueawang/Documents/My_Reports/loopring/images/current deposit gadget link.png)
+   ![image-20190722205053165](https://user-images.githubusercontent.com/26989346/63237047-f0970480-c272-11e9-8d9f-b1cf30a50198.png)
 
    即对before和after使用同一份merkle path做验证，这样保证了对节点状态的改动始终在同一棵merkle树上，但是此方案的副作用就是每次只能用来验证一个节点的一次改动，因为合并的多个节点的改动不可能有公用的merkle path。
 
@@ -28,7 +28,7 @@
 
    答案都是不行，或者说当前设计下不行。首先看看当前的设计：
 
-   ![image-20190722203724585](/Users/yueawang/Documents/My_Reports/loopring/images/circuit overview.png)
+   ![image-20190722203724585](https://user-images.githubusercontent.com/26989346/63237063-00aee400-c273-11e9-8685-8f7f8e80c223.png)
 
    基本上有两块，上面一行是对merkle树的验证，下面一行是以block为单位的一个hash。可以对比以太坊来理解这个模型，上面一行depositGadget是对eth stateDB的操作，将每一个request对应到一个eth的tx，而下面这个sha256hash就是对应到eth block hash。
 
@@ -48,9 +48,9 @@
 
    下面两张图是eth的block内部两个主要数据结构tx_root和state_root的组织方式
 
-   ![image-20190722231911683](/Users/yueawang/Documents/My_Reports/loopring/images/eth_tx_root.png)
+   ![image-20190722231911683](https://user-images.githubusercontent.com/26989346/63237087-13291d80-c273-11e9-8f9c-8951d9447c0c.png)
 
-   ![image-20190722232012755](/Users/yueawang/Documents/My_Reports/loopring/images/eth_state_root.png)
+   ![image-20190722232012755](https://user-images.githubusercontent.com/26989346/63237106-2cca6500-c273-11e9-8404-2a48766f326e.png)
 
 基本对应关系如下：
 
@@ -71,13 +71,13 @@
 
 ## 2. OrderCancel电路笔记
 
-![image-20190803160429976](/Users/yueawang/Documents/My_Reports/loopring/images/ordercancel character view.png)
+![image-20190803160429976](https://user-images.githubusercontent.com/26989346/63237118-3a7fea80-c273-11e9-88ba-cb482c303ea7.png)
 
 ###2.1 Input : output
 
 ​	基本设置和DepositCircuit相同，输入是Cancelled Order Block的描述，输出是全部相关变量的hash，其实全部5种电路的设计都是一样的（虚线需要开启onChainData）
 
-![image-20190803165832629](/Users/yueawang/Documents/My_Reports/loopring/images/ordercancel circuit top view.png)
+![image-20190803165832629](https://user-images.githubusercontent.com/26989346/63237549-11605980-c275-11e9-82ed-f016788b212d.png)
 
 具体到代码是这样的：
 
@@ -189,15 +189,15 @@ public:
 
 1. Merkle验证电路是一系列updateXXX电路的主要组成部分，一次验证一个节点的改动
 
-   ![image-20190731121508839](/Users/yueawang/Documents/My_Reports/loopring/images/merkle gadgets.png)
+   ![image-20190731121508839](https://user-images.githubusercontent.com/26989346/63238779-94d07980-c27a-11e9-963c-6591510ae323.png)
 
 2. Fee Calculation
 
-   ![image-20190731142721181](/Users/yueawang/Documents/My_Reports/loopring/images/fee calculation.png)
+   ![image-20190731142721181](https://user-images.githubusercontent.com/26989346/63238796-a6198600-c27a-11e9-885c-b9c07be597e8.png)
 
 3. Balance Check
 
-   ![image-20190731142036411](/Users/yueawang/Documents/My_Reports/loopring/images/balance check gadget.png)
+   ![image-20190731142036411](https://user-images.githubusercontent.com/26989346/63238834-d82ae800-c27a-11e9-9070-c51568d51468.png)
 
 4. Poseidon Hash Gadget
 
@@ -263,7 +263,7 @@ public:
 
    难以理解的地方在于1p和2p。下面用设计图来说明该选择算法：
 
-   ![image-20190803163045704](/Users/yueawang/Documents/My_Reports/loopring/images/4x path selector view.png)
+   ![image-20190803163045704](https://user-images.githubusercontent.com/26989346/63238850-f395f300-c27a-11e9-9df9-ea86c5a400cf.png)
 
    左边表示的是4x树的path selector算法，对于child0来说，他只有input和sibling0两个选择，由于input和sibling信息都是顺序排列的，所以child0不可能选择sibling1，因此1bit信息（这里用的bit0 | bit1）就可以区分。而对于child1来说，他有3个选择，因此需要2bit的信息才能区分，同样的，child2也存在这个问题，而child3和child0一样，1bit信息足够。所以代码里面child0和child3不需要额外的处理，而child1和child2分别需要child1p和child2p（各自包含1bit信息）来区分他们走的那一条path。基于这个设计思路，我们可以比较容易（理论上）的构造一个8x的merkle path selector，如右图所示，很显然，我们要做的就是通过3个bit的信息，构造出child0, child1/1p, child2/2p, ..., child6/6p和child7。
 
@@ -277,13 +277,13 @@ public:
 
 他们之间的关系基本如下，未来不同的fee model可能有区别。
 
-![image-20190802163217743](/Users/yueawang/Documents/My_Reports/loopring/images/ringsettlement characters view.png)
+![image-20190802163217743](https://user-images.githubusercontent.com/26989346/63238877-0c060d80-c27b-11e9-906b-82a62e4a4ed4.png)
 
 ### 3.2 基本逻辑
 
 电路的基本逻辑和之前的Deposit，OrderCancel一样，输入是RingSettlementBlock，输出是一批publicData的hash值，中间电路由若干RingSettlementGadget组成，加上一批外围验证的逻辑，top level框图如下，可以看到电路的基本设计是一致的：
 
-![image-20190801221206000](/Users/yueawang/Documents/My_Reports/loopring/images/ringsettlement_top_view.png)
+![image-20190801221206000](https://user-images.githubusercontent.com/26989346/63238893-1cb68380-c27b-11e9-9ee8-f78e10c2e626.png)
 
 中间有些value需要开启onchainDataAvailable才会加入到hash计算中，因此用虚线标注，但不影响整体逻辑。
 
@@ -377,7 +377,7 @@ class RingSettlementBlock
 
 关系如下：
 
-![image-20190801223937621](/Users/yueawang/Documents/My_Reports/loopring/images/ring_backend_class_view.png)
+![image-20190801223937621](https://user-images.githubusercontent.com/26989346/63239054-e62d3880-c27b-11e9-890e-22faa97f3659.png)
 
 其中RingSettlementBlock作为RingSettlementCircuit电路的输入，其中主要部分RingSettlementGadget就是在验证对RingSettlement的操作是否有效。RingSettleGadget的声明（部分）如下，显然是在验证RingSettlement的计算。
 
@@ -519,7 +519,7 @@ public:
 
    这里注意每一个transfer电路都会去拿这些balance的最新的值，即balanceX_X.back()，然后每个电路的输出会把输出（也就是新的值的variableT）push_back()到这个vector里面去。注意这里其实并不是动态的挑选variable，因为每个电路的输出都是预先定义好的，理论上只要仔细加上命名合理，全部用中间的out结果是没问题的。但是这样做在代码的组织上就比较好看了，是一个值得学习的小技巧。基本的逻辑如下所示：
 
-   ![image-20190802175614989](/Users/yueawang/Documents/My_Reports/loopring/images/dynamic_variables.png)
+   ![image-20190802175614989](https://user-images.githubusercontent.com/26989346/63238909-31931700-c27b-11e9-893d-efc6db991d9e.png)
 
    当然直接拿这些中间电路的out variable是一样的，比如OrderCancel电路里面计算fee的时候就没有用这个技巧，应该是因为那边计算的级数没有这里多，所以改善代码的意义不大。
 
@@ -539,6 +539,6 @@ public:
       9 TransferGadget ringFee_from_balanceOM_to_balanceO;
    ```
 
-   ![image-20190802163757644](/Users/yueawang/Documents/My_Reports/loopring/images/ring transfer sequence.png)
+   ![image-20190802163757644](https://user-images.githubusercontent.com/26989346/63238920-440d5080-c27b-11e9-8b13-def16e077235.png)
 
    
