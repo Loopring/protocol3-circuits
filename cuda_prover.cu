@@ -18,42 +18,39 @@ typename B::vector_Fr *compute_H(size_t d, typename B::vector_Fr *ca,
                                  typename B::vector_Fr *cc) {
   auto domain = B::get_evaluation_domain(d + 1);
 
-  auto cA = B::vector_Fr_zeros(B::get_domain_m(domain));
-  auto cB = B::vector_Fr_zeros(B::get_domain_m(domain));
-  auto cC = B::vector_Fr_zeros(B::get_domain_m(domain));
-  B::vector_Fr_copy_into(ca, cA, d + 1);
-  B::vector_Fr_copy_into(cb, cB, d + 1);
-  B::vector_Fr_copy_into(cc, cC, d + 1);
-
-  B::domain_iFFT(domain, cA);
-  B::domain_iFFT(domain, cB);
-
-  B::domain_cosetFFT(domain, cA);
-  B::domain_cosetFFT(domain, cB);
-
-  // Use ca to store H
-  auto H_tmp = cA;
+  B::domain_iFFT(domain, ca);
+  B::domain_iFFT(domain, cb);
 
   size_t m = B::domain_get_m(domain);
-  // for i in 0 to m: H_tmp[i] *= cb[i]
-  B::vector_Fr_muleq(H_tmp, cB, m);
+  typename B::vector_Fr *coefficients_for_H = B::vector_Fr_zeros(m + 1);
+  // coefficients_for_H[i] = ca[i] + cb[i];
+  B::vector_Fr_add(coefficients_for_H, ca, cb, m);
 
-  B::domain_iFFT(domain, cC);
-  B::domain_cosetFFT(domain, cC);
+  B::domain_cosetFFT(domain, ca);
+  B::domain_cosetFFT(domain, cb);
+
+  // Use ca to store H
+  auto H_tmp = ca;
+
+  // for i in 0 to m: H_tmp[i] = ca[i] * cb[i]
+  B::vector_Fr_muleq(H_tmp, ca, cb, m);
+
+  B::domain_iFFT(domain, cc);
+  B::domain_cosetFFT(domain, cc);
 
   m = B::domain_get_m(domain);
 
   // for i in 0 to m: H_tmp[i] -= cc[i]
-  B::vector_Fr_subeq(H_tmp, cC, m);
+  B::vector_Fr_subeq(H_tmp, cc, m);
 
   B::domain_divide_by_Z_on_coset(domain, H_tmp);
 
   B::domain_icosetFFT(domain, H_tmp);
 
-  m = B::domain_get_m(domain);
-  typename B::vector_Fr *H_res = B::vector_Fr_zeros(m + 1);
-  B::vector_Fr_copy_into(H_tmp, H_res, m);
-  return H_res;
+  // coefficients_for_H[i] += H_tmp[i];
+  B::vector_Fr_add(coefficients_for_H, coefficients_for_H, H_tmp, m);
+
+  return coefficients_for_H;
 }
 
 static size_t read_size_t(FILE* input) {
@@ -199,7 +196,8 @@ void run_prover(
 
     auto scaled_Bt1 = B::G1_scale(B::input_r(inputs), evaluation_Bt1);
     auto Lt1_plus_scaled_Bt1 = B::G1_add(evaluation_Lt, scaled_Bt1);
-    auto final_C = B::G1_add(evaluation_Ht, Lt1_plus_scaled_Bt1);
+ //   auto final_C = B::G1_add(evaluation_Ht, evaluation_Lt);
+    auto final_C = evaluation_Ht;
 
     print_time(t, "cpu 2");
 
