@@ -235,6 +235,7 @@ int main(int argc, char **argv)
         std::cerr << "-validate <block.json>: Validates a block" << std::endl;
         std::cerr << "-prove <block.json> <out_proof.json>: Proves a block" << std::endl;
         std::cerr << "-createkeys <protoBlock.json>: Creates prover/verifier keys" << std::endl;
+        std::cerr << "-verify <vk.json> <proof.json>: Verify a proof" << std::endl;
         return 1;
     }
 
@@ -268,6 +269,20 @@ int main(int argc, char **argv)
         }
         mode = Mode::CreateKeys;
         std::cout << "Creating keys for " << argv[2] << "..." << std::endl;
+    }
+    else if (strcmp(argv[1], "-verify") == 0)
+    {
+        if (argc != 4)
+        {
+            return 1;
+        }
+        std::cout << "Verify for " << argv[3] << " ..." << std::endl;
+        if (stub_main_verify(argv[0], argc - 1, (const char **)(argv + 1)))
+        {
+            return 1;
+        }
+        std::cout << "Proof is valid" << std::endl;
+        return 0;
     }
     else
     {
