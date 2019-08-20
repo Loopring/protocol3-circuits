@@ -16,7 +16,7 @@ template <typename B>
 typename B::vector_Fr *compute_H(size_t d, typename B::vector_Fr *ca,
                                  typename B::vector_Fr *cb,
                                  typename B::vector_Fr *cc) {
-  auto domain = B::get_evaluation_domain(d + 1);
+  auto domain = B::get_evaluation_domain(d + 1 + 1);
 
   B::domain_iFFT(domain, ca);
   B::domain_iFFT(domain, cb);
@@ -37,8 +37,6 @@ typename B::vector_Fr *compute_H(size_t d, typename B::vector_Fr *ca,
 
   B::domain_iFFT(domain, cc);
   B::domain_cosetFFT(domain, cc);
-
-  m = B::domain_get_m(domain);
 
   // for i in 0 to m: H_tmp[i] -= cc[i]
   B::vector_Fr_subeq(H_tmp, cc, m);
@@ -121,7 +119,7 @@ void run_prover(
     typedef typename B::G2 G2;
 
     static constexpr int R = 32;
-    static constexpr int C = 5;
+    static constexpr int C = 4;
     FILE *preprocessed_file = fopen(preprocessed_path, "r");
 
     size_t space = ((m + 1) + R - 1) / R;
@@ -175,7 +173,7 @@ void run_prover(
     // motion
     auto H = B::params_H(params);
     auto coefficients_for_H =
-        compute_H<B>(d, B::input_ca(inputs), B::input_cb(inputs), B::input_cc(inputs));
+        compute_H<B>(orig_d, B::input_ca(inputs), B::input_cb(inputs), B::input_cc(inputs));
     G1 *evaluation_Ht = B::multiexp_G1(coefficients_for_H, H, d);
 
     print_time(t, "cpu 1");
@@ -202,7 +200,6 @@ void run_prover(
     auto scaled_Bt1 = B::G1_scale(B::input_r(inputs), final_Bt1);
     auto Lt1_plus_scaled_Bt1 = B::G1_add(evaluation_Lt, scaled_Bt1);
     auto final_C = B::G1_add(evaluation_Ht, evaluation_Lt);
-    //auto final_C = evaluation_Ht;
 
     print_time(t, "cpu 2");
 
