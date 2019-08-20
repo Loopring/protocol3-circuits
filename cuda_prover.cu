@@ -23,8 +23,10 @@ typename B::vector_Fr *compute_H(size_t d, typename B::vector_Fr *ca,
 
   size_t m = B::domain_get_m(domain);
   typename B::vector_Fr *coefficients_for_H = B::vector_Fr_zeros(m + 1);
-  // coefficients_for_H[i] = ca[i] + cb[i];
-  B::vector_Fr_add(coefficients_for_H, ca, cb, m);
+
+  /* add coefficients of the polynomial (d2*A + d1*B - d3) + d1*d2*Z */
+  B::domain_mul_add_sub(coefficients_for_H, ca, cb, m);
+  B::domain_add_poly_Z(domain, coefficients_for_H);
 
   B::domain_cosetFFT(domain, ca);
   B::domain_cosetFFT(domain, cb);
