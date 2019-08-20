@@ -182,27 +182,31 @@ void run_prover(
 
     cudaDeviceSynchronize();
     cudaStreamSynchronize(sA);
+    G1 *alpha_g1 = B::alpha_g1(params);
     G1 *evaluation_At = B::read_pt_ECp(out_A.get());
+    auto final_At = B::G1_add(alpha_g1, evaluation_At);
 
     cudaStreamSynchronize(sB1);
     G1 *evaluation_Bt1 = B::read_pt_ECp(out_B1.get());
+    auto final_Bt1 = B::G1_add(B::beta_g1(params), evaluation_Bt1);
 
    // cudaStreamSynchronize(sB2);
    // G2 *evaluation_Bt2 = B::read_pt_ECpe(out_B2.get());
+    auto final_Bt2 = B::G2_add(B::beta_g2(params), evaluation_Bt2);
 
     cudaStreamSynchronize(sL);
     G1 *evaluation_Lt = B::read_pt_ECp(out_L.get());
 
     print_time(t_gpu, "gpu e2e");
 
-    auto scaled_Bt1 = B::G1_scale(B::input_r(inputs), evaluation_Bt1);
+    auto scaled_Bt1 = B::G1_scale(B::input_r(inputs), final_Bt1);
     auto Lt1_plus_scaled_Bt1 = B::G1_add(evaluation_Lt, scaled_Bt1);
     auto final_C = B::G1_add(evaluation_Ht, evaluation_Lt);
     //auto final_C = evaluation_Ht;
 
     print_time(t, "cpu 2");
 
-    B::groth16_output_write(evaluation_At, evaluation_Bt2, final_C, inputs, output_path);
+    B::groth16_output_write(final_At, final_Bt2, final_C, inputs, output_path);
 
     print_time(t, "store");
 
