@@ -218,7 +218,7 @@ struct ec_jac {
         FF::sub(R.z, t0, hh);   // Z3 = t11-HH
 #endif
 #if 1
-        FF Z1Z1, U1, U2, Z1_cubed, S1, S2;
+        FF Z1Z1, U2, Z1_cubed, S2;
         FF::sqr(Z1Z1, P.z);
         FF::mul(U2, Q.x, Z1Z1);
         FF::mul(Z1_cubed, P.z, Z1Z1);

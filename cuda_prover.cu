@@ -108,10 +108,11 @@ void run_prover(
 
     FILE *params_file = fopen(params_path, "r");
     size_t d = read_size_t(params_file);
+    size_t orig_d = read_size_t(params_file);
     size_t m = read_size_t(params_file);
     rewind(params_file);
 
-    printf("d = %zu, m = %zu\n", d, m);
+    printf("d = %zu, orig_d = %zu, m = %zu\n", d, orig_d, m);
 
     typedef typename ec_type<B>::ECp ECp;
     typedef typename ec_type<B>::ECpe ECpe;
@@ -150,7 +151,7 @@ void run_prover(
     FILE *inputs_file = fopen(input_path, "r");
     auto w_ = load_scalars(m + 1, inputs_file);
     rewind(inputs_file);
-    auto inputs = B::read_input(inputs_file, d, m);
+    auto inputs = B::read_input(inputs_file, d, orig_d + 1, m);
     fclose(inputs_file);
     print_time(t, "load inputs");
 
@@ -196,12 +197,12 @@ void run_prover(
 
     auto scaled_Bt1 = B::G1_scale(B::input_r(inputs), evaluation_Bt1);
     auto Lt1_plus_scaled_Bt1 = B::G1_add(evaluation_Lt, scaled_Bt1);
- //   auto final_C = B::G1_add(evaluation_Ht, evaluation_Lt);
-    auto final_C = evaluation_Ht;
+    auto final_C = B::G1_add(evaluation_Ht, evaluation_Lt);
+    //auto final_C = evaluation_Ht;
 
     print_time(t, "cpu 2");
 
-    B::groth16_output_write(evaluation_At, evaluation_Bt2, final_C, output_path);
+    B::groth16_output_write(evaluation_At, evaluation_Bt2, final_C, inputs, output_path);
 
     print_time(t, "store");
 
