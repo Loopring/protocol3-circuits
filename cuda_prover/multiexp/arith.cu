@@ -3,14 +3,17 @@
 #include "fixnum.cu"
 
 __device__ __constant__
+const var ALPHA_VALUE[BIG_WIDTH] = {
+    //0x3c208c16d87cfd46ULL, 0x97816a916871ca8dULL,
+    //0xb85045b68181585dULL, 0x30644e72e131a029ULL
+    0x68c3488912edefaaULL, 0x8d087f6872aabf4fULL,
+    0x51e1a24709081231ULL, 0x2259d6b14729c0faULL
+};
+
+__device__ __constant__
 const var MOD_Q[BIG_WIDTH] = {
     0x3c208c16d87cfd47ULL, 0x97816a916871ca8dULL,
     0xb85045b68181585dULL, 0x30644e72e131a029ULL
-#if 0
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-#endif
 };
 
 // -Q^{-1} (mod 2^64)
@@ -21,11 +24,6 @@ __device__ __constant__
 const var X_MOD_Q[BIG_WIDTH] = {
     0xd35d438dc58f0d9dULL, 0xa78eb28f5c70b3dULL,
     0x666ea36f7879462cULL, 0xe0a77c19a07df2fULL
-#if 0
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-#endif
 };
 
 //template< const var *mod_, const var ninv_mod_, const var *binpow_mod_ >
@@ -41,11 +39,6 @@ __device__ __constant__
 const var MOD_R[BIG_WIDTH] = {
     0x43e1f593f0000001ULL, 0x2833e84879b97091ULL,
     0xb85045b68181585dULL, 0x30644e72e131a029ULL
-#if 0
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-#endif
 };
 
 // -R^{-1} (mod 2^64)
@@ -56,11 +49,6 @@ __device__ __constant__
 const var X_MOD_R[BIG_WIDTH] = {
     0xac96341c4ffffffbULL, 0x36fc76959f60cd29ULL,
     0x666ea36f7879462eULL, 0xe0a77c19a07df2fULL
-#if 0
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-    , 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL
-#endif
 };
 
 //template< const var *mod_, const var ninv_mod_, const var *binpow_mod_ >
@@ -196,21 +184,6 @@ mul_<121>::x(G &z, const G &x) {
     G::add(z, z, t);  // z = 121x
 }
 
-// TODO: Bleughk! This is obviously specific to MNT6 curve over Fp3.
-template<>
-template< typename Fp3 >
-__device__ void
-mul_<-1>::x(Fp3 &z, const Fp3 &x) {
-    // multiply by (0, 0, 11) = 11 x^2  (where x^3 = alpha)
-    static constexpr int CRV_A = 11;
-    static constexpr int ALPHA = 11;
-    Fp3 y = x;
-    mul_<CRV_A * ALPHA>::x(z.a0, y.a1);
-    mul_<CRV_A * ALPHA>::x(z.a1, y.a2);
-    mul_<CRV_A>::x(z.a2, y.a0);
-}
-
-
 template< typename modulus_info >
 struct Fp {
     typedef Fp PrimeField;
@@ -224,6 +197,13 @@ struct Fp {
     load(Fp &x, const var *mem) {
         int t = fixnum::layout().thread_rank();
         x.a = (t < ELT_LIMBS) ? mem[t] : 0UL;
+    }
+
+    __device__
+    static void
+    load_alpha(Fp &x) {
+        int t = fixnum::layout().thread_rank();
+        x.a = (t < ELT_LIMBS) ? ALPHA_VALUE[t] : 0UL;
     }
 
     __device__
@@ -422,6 +402,7 @@ struct Fp2 {
     static void
     mul(Fp2 &p, const Fp2 &a, const Fp2 &b) {
         Fp a0_b0, a1_b1, a0_plus_a1, b0_plus_b1, c, t0, t1;
+        Fp xx;
 
         Fp::mul(a0_b0, a.a0, b.a0);
         Fp::mul(a1_b1, a.a1, b.a1);
@@ -430,7 +411,9 @@ struct Fp2 {
         Fp::add(b0_plus_b1, b.a0, b.a1);
         Fp::mul(c, a0_plus_a1, b0_plus_b1);
 
-        mul_<ALPHA>::x(t0, a1_b1);
+        //mul_<ALPHA>::x(t0, a1_b1);
+        Fp::load_alpha(xx);
+        Fp::mul(t0, xx, a1_b1);
         Fp::sub(t1, c, a0_b0);
 
         Fp::add(p.a0, a0_b0, t0);
@@ -442,168 +425,22 @@ struct Fp2 {
     static void
     sqr(Fp2 &s, const Fp2 &a) {
         Fp a0_a1, a0_plus_a1, a0_plus_13_a1, t0, t1, t2;
+        Fp xx;
 
         Fp::mul(a0_a1, a.a0, a.a1);
         Fp::add(a0_plus_a1, a.a0, a.a1);
-        mul_<ALPHA>::x(t0, a.a1);
+        //mul_<ALPHA>::x(t0, a.a1);
+        Fp::load_alpha(xx);
+        Fp::mul(t0, xx, a.a1);
         Fp::add(a0_plus_13_a1, a.a0, t0);
         Fp::mul(t0, a0_plus_a1, a0_plus_13_a1);
         // TODO: Could do mul_14 to save a sub?
         Fp::sub(t1, t0, a0_a1);
-        mul_<ALPHA>::x(t2, a0_a1);
+        //mul_<ALPHA>::x(t2, a0_a1);
+        Fp::load_alpha(xx);
+        Fp::mul(t2, xx, a0_a1);
         Fp::sub(s.a0, t1, t2);
         mul_<2>::x(s.a1, a0_a1);
-    }
-};
-
-
-template< typename Fp, int ALPHA >
-struct Fp3 {
-    typedef Fp PrimeField;
-
-    // TODO: Use __builtin_align__(8) or whatever they use for the
-    // builtin vector types.
-    Fp a0, a1, a2;
-
-    static constexpr int DEGREE = 3;
-
-    __device__
-    static void
-    load(Fp3 &x, const var *mem) {
-        Fp::load(x.a0, mem);
-        Fp::load(x.a1, mem + ELT_LIMBS);
-        Fp::load(x.a2, mem + 2*ELT_LIMBS);
-    }
-
-    __device__
-    static void
-    store(var *mem, const Fp3 &x) {
-        Fp::store(mem, x.a0);
-        Fp::store(mem + ELT_LIMBS, x.a1);
-        Fp::store(mem + 2*ELT_LIMBS, x.a2);
-    }
-
-    __device__
-    static int
-    are_equal(const Fp3 &x, const Fp3 &y) {
-        return Fp::are_equal(x.a0, y.a0)
-            && Fp::are_equal(x.a1, y.a1)
-            && Fp::are_equal(x.a2, y.a2);
-    }
-
-    __device__
-    static void
-    set_zero(Fp3 &x) {
-        Fp::set_zero(x.a0);
-        Fp::set_zero(x.a1);
-        Fp::set_zero(x.a2);
-    }
-
-    __device__
-    static int
-    is_zero(const Fp3 &x) {
-        return Fp::is_zero(x.a0)
-            && Fp::is_zero(x.a1)
-            && Fp::is_zero(x.a2);
-    }
-
-    __device__
-    static void
-    set_one(Fp3 &x) {
-        Fp::set_one(x.a0);
-        Fp::set_zero(x.a1);
-        Fp::set_zero(x.a2);
-    }
-
-    __device__
-    static void
-    add(Fp3 &s, const Fp3 &x, const Fp3 &y) {
-        Fp::add(s.a0, x.a0, y.a0);
-        Fp::add(s.a1, x.a1, y.a1);
-        Fp::add(s.a2, x.a2, y.a2);
-    }
-
-    __device__
-    static void
-    sub(Fp3 &s, const Fp3 &x, const Fp3 &y) {
-        Fp::sub(s.a0, x.a0, y.a0);
-        Fp::sub(s.a1, x.a1, y.a1);
-        Fp::sub(s.a2, x.a2, y.a2);
-    }
-
-    __device__
-    static void
-    mul(Fp3 &p, const Fp3 &a, const Fp3 &b) {
-        Fp a0_b0, a1_b1, a2_b2;
-        Fp a0_plus_a1, a1_plus_a2, a0_plus_a2, b0_plus_b1, b1_plus_b2, b0_plus_b2;
-        Fp t0, t1, t2;
-
-        Fp::mul(a0_b0, a.a0, b.a0);
-        Fp::mul(a1_b1, a.a1, b.a1);
-        Fp::mul(a2_b2, a.a2, b.a2);
-
-        // TODO: Consider interspersing these additions among the
-        // multiplications above.
-        Fp::add(a0_plus_a1, a.a0, a.a1);
-        Fp::add(a1_plus_a2, a.a1, a.a2);
-        Fp::add(a0_plus_a2, a.a0, a.a2);
-
-        Fp::add(b0_plus_b1, b.a0, b.a1);
-        Fp::add(b1_plus_b2, b.a1, b.a2);
-        Fp::add(b0_plus_b2, b.a0, b.a2);
-
-        Fp::mul(t0, a1_plus_a2, b1_plus_b2);
-        Fp::add(t1, a1_b1, a2_b2);
-        Fp::sub(t0, t0, t1);
-        mul_<ALPHA>::x(t0, t0);
-        Fp::add(p.a0, a0_b0, t0);
-
-        Fp::mul(t0, a0_plus_a1, b0_plus_b1);
-        Fp::add(t1, a0_b0, a1_b1);
-        mul_<ALPHA>::x(t2, a2_b2);
-        Fp::sub(t2, t2, t1);
-        Fp::add(p.a1, t0, t2);
-
-        Fp::mul(t0, a0_plus_a2, b0_plus_b2);
-        Fp::sub(t1, a1_b1, a0_b0);
-        Fp::sub(t1, t1, a2_b2);
-        Fp::add(p.a2, t0, t1);
-    }
-
-    __device__
-    static void
-    sqr(Fp3 &s, const Fp3 &a) {
-        Fp a0a0, a1a1, a2a2;
-        Fp a0_plus_a1, a1_plus_a2, a0_plus_a2;
-        Fp t0, t1;
-
-        Fp::sqr(a0a0, a.a0);
-        Fp::sqr(a1a1, a.a1);
-        Fp::sqr(a2a2, a.a2);
-
-        // TODO: Consider interspersing these additions among the
-        // squarings above.
-        Fp::add(a0_plus_a1, a.a0, a.a1);
-        Fp::add(a1_plus_a2, a.a1, a.a2);
-        Fp::add(a0_plus_a2, a.a0, a.a2);
-
-        Fp::sqr(t0, a1_plus_a2);
-        // TODO: Remove sequential data dependencies (here and elsewhere)
-        Fp::sub(t0, t0, a1a1);
-        Fp::sub(t0, t0, a2a2);
-        mul_<ALPHA>::x(t0, t0);
-        Fp::add(s.a0, a0a0, t0);
-
-        Fp::sqr(t0, a0_plus_a1);
-        Fp::sub(t0, t0, a0a0);
-        Fp::sub(t0, t0, a1a1);
-        mul_<ALPHA>::x(t1, a2a2);
-        Fp::add(s.a1, t0, t1);
-
-        Fp::sqr(t0, a0_plus_a2);
-        Fp::sub(t0, t0, a0a0);
-        Fp::add(t0, t0, a1a1);
-        Fp::sub(s.a2, t0, a2a2);
     }
 };
 

@@ -133,7 +133,7 @@ void run_prover(
     auto out_B1 = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
 
     auto B2_mults = load_points_affine<ECpe>(((1U << C) - 1)*(m + 1), preprocessed_file);
-    //auto out_B2 = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
+    auto out_B2 = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
 
     auto L_mults = load_points_affine<ECp>(((1U << C) - 1)*(m - 1), preprocessed_file);
     auto out_L = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
@@ -163,13 +163,13 @@ void run_prover(
 
     ec_reduce_straus<ECp, C, R>(sA, out_A.get(), A_mults.get(), w, m + 1);
     ec_reduce_straus<ECp, C, R>(sB1, out_B1.get(), B1_mults.get(), w, m + 1);
-    //ec_reduce_straus<ECpe, C, 2*R>(sB2, out_B2.get(), B2_mults.get(), w, m + 1);
+    ec_reduce_straus<ECpe, C, 2*R>(sB2, out_B2.get(), B2_mults.get(), w, m + 1);
     ec_reduce_straus<ECp, C, R>(sL, out_L.get(), L_mults.get(), w + (primary_input_size + 1) * ELT_LIMBS, m - 1);
     print_time(t, "gpu launch");
 
     //G1 *evaluation_At = B::multiexp_G1(B::input_w(inputs), B::params_A(params), m + 1);
     //G1 *evaluation_Bt1 = B::multiexp_G1(B::input_w(inputs), B::params_B1(params), m + 1);
-    G2 *evaluation_Bt2 = B::multiexp_G2(B::input_w(inputs), B::params_B2(params), m + 1);
+    //G2 *evaluation_Bt2 = B::multiexp_G2(B::input_w(inputs), B::params_B2(params), m + 1);
 
     // Do calculations relating to H on CPU after having set the GPU in
     // motion
@@ -190,8 +190,8 @@ void run_prover(
     G1 *evaluation_Bt1 = B::read_pt_ECp(out_B1.get());
     auto final_Bt1 = B::G1_add(B::beta_g1(params), evaluation_Bt1);
 
-   // cudaStreamSynchronize(sB2);
-   // G2 *evaluation_Bt2 = B::read_pt_ECpe(out_B2.get());
+    cudaStreamSynchronize(sB2);
+    G2 *evaluation_Bt2 = B::read_pt_ECpe(out_B2.get());
     auto final_Bt2 = B::G2_add(B::beta_g2(params), evaluation_Bt2);
 
     cudaStreamSynchronize(sL);
@@ -213,7 +213,7 @@ void run_prover(
 
     cudaStreamDestroy(sA);
     cudaStreamDestroy(sB1);
-    //cudaStreamDestroy(sB2);
+    cudaStreamDestroy(sB2);
     cudaStreamDestroy(sL);
 
     B::delete_vector_G1(H);

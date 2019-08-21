@@ -19,7 +19,6 @@ ec_multiexp_straus(var *out, const var *multiples_, const var *scalars_, size_t 
     int idx = elts_per_block * B + tileIdx;
 
     size_t n = (N + RR - 1) / RR;
-//    if (T < 4) return;
     if (idx < n) {
         // TODO: Treat remainder separately so R can remain a compile time constant
         size_t R = (idx < n - 1) ? RR : (N % RR);
@@ -48,8 +47,10 @@ ec_multiexp_straus(var *out, const var *multiples_, const var *scalars_, size_t 
 
         EC x;
         EC::set_zero(x);
+        size_t set_value = 0;
         while (i >= C) {
-            EC::mul_2exp<C>(T, x, x);
+            if (set_value)
+                EC::mul_2exp<C>(T, x, x);
             i -= C;
 
             int q = i / digit::BITS, r = i % digit::BITS;
@@ -65,9 +66,9 @@ ec_multiexp_straus(var *out, const var *multiples_, const var *scalars_, size_t 
                     s = g.shfl(scalars[j].a, q + 1);
                     win |= (s << bottom_bits) & C_MASK;
                 }
-                //printf("win %d\n", win);
                 if (win > 0) {
                     EC m;
+                    set_value = 1;
                     //EC::add(x, x, multiples[win - 1][j]);
                     EC::load_affine(m, multiples + ((win-1)*N + j)*AFF_POINT_LIMBS);
                     EC::mixed_add(T, x, x, m);

@@ -162,12 +162,18 @@ struct ec_jac {
     mixed_add(int t, ec_jac &R, const ec_jac &P, const ec_jac &Q) {
 #if 0
         printf("t %d mixed add\n", t);
-        printf("t %d P.x %llx\n", t, P.x);
-        printf("t %d P.y %llx\n", t, P.y);
-        printf("t %d P.z %llx\n", t, P.z);
-        printf("t %d Q.x %llx\n", t, Q.x);
-        printf("t %d Q.y %llx\n", t, Q.y);
-        printf("t %d Q.z %llx\n", t, Q.z);
+        printf("t %d P.x a0 %llx\n", t, P.x.a0);
+        printf("t %d P.x a1 %llx\n", t, P.x.a1);
+        printf("t %d P.y a0 %llx\n", t, P.y.a0);
+        printf("t %d P.y a1 %llx\n", t, P.y.a1);
+        printf("t %d P.z a0 %llx\n", t, P.z.a0);
+        printf("t %d P.z a1 %llx\n", t, P.z.a1);
+        printf("t %d Q.x a0 %llx\n", t, Q.x.a0);
+        printf("t %d Q.x a1 %llx\n", t, Q.x.a1);
+        printf("t %d Q.y a0 %llx\n", t, Q.y.a0);
+        printf("t %d Q.y a1 %llx\n", t, Q.y.a1);
+        printf("t %d Q.z a0 %llx\n", t, Q.z.a0);
+        printf("t %d Q.z a1 %llx\n", t, Q.z.a1);
 #endif
         // Would be better to know that Q != 0
         if (is_zero(Q)) {
@@ -261,9 +267,12 @@ struct ec_jac {
 #endif
 #if 0
         printf("t %d mixed add result\n", t);
-        printf("t %d R.x %llx\n", t, R.x);
-        printf("t %d R.y %llx\n", t, R.y);
-        printf("t %d R.z %llx\n", t, R.z);
+        printf("t %d R.x a0 %llx\n", t, R.x.a0);
+        printf("t %d R.x a1 %llx\n", t, R.x.a1);
+        printf("t %d R.y a0 %llx\n", t, R.y.a0);
+        printf("t %d R.y a1 %llx\n", t, R.y.a1);
+        printf("t %d R.z a0 %llx\n", t, R.z.a0);
+        printf("t %d R.z a1 %llx\n", t, R.z.a1);
 #endif
     }
 
@@ -271,6 +280,21 @@ struct ec_jac {
     __device__
     static void
     add_unsafe(int t, ec_jac &R, const ec_jac &P, const ec_jac &Q) {
+#if 0
+        printf("t %d add unsafe\n", t);
+        printf("t %d P.x a0 %llx\n", t, P.x.a0);
+        printf("t %d P.x a1 %llx\n", t, P.x.a1);
+        printf("t %d P.y a0 %llx\n", t, P.y.a0);
+        printf("t %d P.y a1 %llx\n", t, P.y.a1);
+        printf("t %d P.z a0 %llx\n", t, P.z.a0);
+        printf("t %d P.z a1 %llx\n", t, P.z.a1);
+        printf("t %d Q.x a0 %llx\n", t, Q.x.a0);
+        printf("t %d Q.x a1 %llx\n", t, Q.x.a1);
+        printf("t %d Q.y a0 %llx\n", t, Q.y.a0);
+        printf("t %d Q.y a1 %llx\n", t, Q.y.a1);
+        printf("t %d Q.z a0 %llx\n", t, Q.z.a0);
+        printf("t %d Q.z a1 %llx\n", t, Q.z.a1);
+#endif
 #if 0
         printf("t %d unsafe add\n", t);
         printf("t %d P.x %llx\n", t, P.x);
@@ -372,6 +396,15 @@ struct ec_jac {
         printf("t %d R.y %llx\n", t, R.y);
         printf("t %d R.z %llx\n", t, R.z);
 #endif
+#if 0
+        printf("t %d unsafe add result\n", t);
+        printf("t %d R.x a0 %llx\n", t, R.x.a0);
+        printf("t %d R.x a1 %llx\n", t, R.x.a1);
+        printf("t %d R.y a0 %llx\n", t, R.y.a0);
+        printf("t %d R.y a1 %llx\n", t, R.y.a1);
+        printf("t %d R.z a0 %llx\n", t, R.z.a0);
+        printf("t %d R.z a1 %llx\n", t, R.z.a1);
+#endif
 #endif
     }
 
@@ -405,6 +438,15 @@ struct ec_jac {
     dbl(int t, ec_jac &R, const ec_jac &P) {
         FF t0, t1;
 
+#if 0
+        printf("t %d dbl\n", t);
+        printf("t %d P.x a0 %llx\n", t, P.x.a0);
+        printf("t %d P.x a1 %llx\n", t, P.x.a1);
+        printf("t %d P.y a0 %llx\n", t, P.y.a0);
+        printf("t %d P.y a1 %llx\n", t, P.y.a1);
+        printf("t %d P.z a0 %llx\n", t, P.z.a0);
+        printf("t %d P.z a1 %llx\n", t, P.z.a1);
+#endif
 #if 0
         printf("t %d dbl\n", t);
         printf("T %d P.x %llx\n", t, P.x);
@@ -489,6 +531,15 @@ struct ec_jac {
         printf("t %d R.x %llx\n", t, R.x);
         printf("t %d R.y %llx\n", t, R.y);
         printf("t %d R.z %llx\n", t, R.z);
+#endif
+#if 0
+        printf("t %d dbl result\n", t);
+        printf("t %d R.x a0 %llx\n", t, R.x.a0);
+        printf("t %d R.x a1 %llx\n", t, R.x.a1);
+        printf("t %d R.y a0 %llx\n", t, R.y.a0);
+        printf("t %d R.y a1 %llx\n", t, R.y.a1);
+        printf("t %d R.z a0 %llx\n", t, R.z.a0);
+        printf("t %d R.z a1 %llx\n", t, R.z.a1);
 #endif
     }
 
