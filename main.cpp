@@ -407,11 +407,11 @@ int main(int argc, char **argv)
 
     if (mode == Mode::Prove)
     {
-#if GPU_PROVE
+#ifdef GPU_PROVE
         std::cout << "GPU Prove: Generate inputsFile." << std::endl;
         std::string inputsFilename = baseFilename + "_inputs.raw";
         auto begin = now();
-        stub_precompute_from_pb(pb,  (baseFilename + "_pk.raw").c_str(), inputsFilename.c_str());
+        stub_write_input_from_pb(pb,  (baseFilename + "_pk.raw").c_str(), inputsFilename.c_str());
         print_time(begin, "write input");
 #else
 
