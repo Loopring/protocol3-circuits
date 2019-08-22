@@ -176,7 +176,9 @@ void run_prover(
     auto H = B::params_H(params);
     auto coefficients_for_H =
         compute_H<B>(orig_d, B::input_ca(inputs), B::input_cb(inputs), B::input_cc(inputs));
+    print_time(t, "coefficients_for_H");
     G1 *evaluation_Ht = B::multiexp_G1(coefficients_for_H, H, d);
+    print_time(t, "evaluation_Ht");
 
     print_time(t, "cpu 1");
 
