@@ -65,14 +65,24 @@ bool generateKeyPair(ethsnarks::ProtoboardT& pb, std::string& baseFilename)
 {
     std::string provingKeyFilename = baseFilename + "_pk.raw";
     std::string verificationKeyFilename = baseFilename + "_vk.json";
+#ifdef GPU_PROVE
     std::string paramsFilename = baseFilename + "_params.raw";
-    if (fileExists(provingKeyFilename.c_str()) && fileExists(verificationKeyFilename.c_str()) &&
-        fileExists(paramsFilename.c_str()))
+#endif
+    if (fileExists(provingKeyFilename.c_str()) && fileExists(verificationKeyFilename.c_str())
+#ifdef GPU_PROVE
+        && fileExists(paramsFilename.c_str())
+#endif
+    )
     {
         return true;
     }
-    std::cout << "Generating keys..." << std::endl;
+#ifdef GPU_PROVE
+    std::cout << "Generating keys and params..." << std::endl;
     int result = stub_genkeys_params_from_pb(pb, provingKeyFilename.c_str(), verificationKeyFilename.c_str(), paramsFilename.c_str());
+#else
+    std::cout << "Generating keys..." << std::endl;
+    int result = stub_genkeys_from_pb(pb, provingKeyFilename.c_str(), verificationKeyFilename.c_str());
+#endif
     return (result == 0);
 }
 
@@ -414,7 +424,6 @@ int main(int argc, char **argv)
         stub_write_input_from_pb(pb,  (baseFilename + "_pk.raw").c_str(), inputsFilename.c_str());
         print_time(begin, "write input");
 #else
-
         if (!generateProof(pb, (baseFilename + "_pk.raw").c_str(), proofFilename))
         {
             return 1;
