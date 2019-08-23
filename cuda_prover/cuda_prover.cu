@@ -125,6 +125,7 @@ void run_prover(
     FILE *preprocessed_file = fopen(preprocessed_path, "r");
 
     size_t space = ((m + 1) + R - 1) / R;
+    size_t space_H = ((d) + R - 1) / R;
 
     auto A_mults = load_points_affine<ECp>(((1U << C) - 1)*(m + 1), preprocessed_file);
     auto out_A = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
@@ -137,6 +138,9 @@ void run_prover(
 
     auto L_mults = load_points_affine<ECp>(((1U << C) - 1)*(m - 1), preprocessed_file);
     auto out_L = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
+
+    auto H_mults = load_points_affine<ECp>(((1U << C) - 1)*(d), preprocessed_file);
+    auto out_H = allocate_memory(space_H * ECpe::NELTS * ELT_BYTES);
 
     fclose(preprocessed_file);
 
@@ -159,7 +163,7 @@ void run_prover(
 
     auto t_gpu = t;
 
-    cudaStream_t sA, sB1, sB2, sL;
+    cudaStream_t sA, sB1, sB2, sL, sH;
 
     ec_reduce_straus<ECp, C, R>(sA, out_A.get(), A_mults.get(), w, m + 1);
     ec_reduce_straus<ECp, C, R>(sB1, out_B1.get(), B1_mults.get(), w, m + 1);
@@ -173,12 +177,21 @@ void run_prover(
 
     // Do calculations relating to H on CPU after having set the GPU in
     // motion
-    auto H = B::params_H(params);
     auto coefficients_for_H =
         compute_H<B>(orig_d, B::input_ca(inputs), B::input_cb(inputs), B::input_cc(inputs));
     print_time(t, "coefficients_for_H");
+
+    auto H_coeff_mem = allocate_memory(d * ELT_BYTES);
+    B::coefficients_for_H_to_mem(coefficients_for_H, (uint8_t *)H_coeff_mem.get(), ELT_BYTES, d);
+    print_time(t, "coefficients_H_mem");
+#if 0
+    auto H = B::params_H(params);
     G1 *evaluation_Ht = B::multiexp_G1(coefficients_for_H, H, d);
+    B::delete_vector_G1(H);
     print_time(t, "evaluation_Ht");
+#else
+    ec_reduce_straus<ECp, C, R>(sH, out_H.get(), H_mults.get(), H_coeff_mem.get(), d);
+#endif
 
     print_time(t, "cpu 1");
 
@@ -199,7 +212,11 @@ void run_prover(
     cudaStreamSynchronize(sL);
     G1 *evaluation_Lt = B::read_pt_ECp(out_L.get());
 
+    cudaStreamSynchronize(sH);
+    G1 *evaluation_Ht = B::read_pt_ECp(out_H.get());
+
     print_time(t_gpu, "gpu e2e");
+
 
     auto scaled_Bt1 = B::G1_scale(B::input_r(inputs), final_Bt1);
     auto Lt1_plus_scaled_Bt1 = B::G1_add(evaluation_Lt, scaled_Bt1);
@@ -217,8 +234,7 @@ void run_prover(
     cudaStreamDestroy(sB1);
     cudaStreamDestroy(sB2);
     cudaStreamDestroy(sL);
-
-    B::delete_vector_G1(H);
+    cudaStreamDestroy(sH);
 
     B::delete_G1(evaluation_At);
     B::delete_G1(evaluation_Bt1);
