@@ -128,19 +128,19 @@ void run_prover(
     size_t space_H = ((d) + R - 1) / R;
 
     auto A_mults = load_points_affine<ECp>(((1U << C) - 1)*(m + 1), preprocessed_file);
-    auto out_A = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
+    auto out_A = allocate_memory(space * ECp::NELTS * ELT_BYTES);
 
     auto B1_mults = load_points_affine<ECp>(((1U << C) - 1)*(m + 1), preprocessed_file);
-    auto out_B1 = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
+    auto out_B1 = allocate_memory(space * ECp::NELTS * ELT_BYTES);
 
     auto B2_mults = load_points_affine<ECpe>(((1U << C) - 1)*(m + 1), preprocessed_file);
     auto out_B2 = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
 
     auto L_mults = load_points_affine<ECp>(((1U << C) - 1)*(m - 1), preprocessed_file);
-    auto out_L = allocate_memory(space * ECpe::NELTS * ELT_BYTES);
+    auto out_L = allocate_memory(space * ECp::NELTS * ELT_BYTES);
 
     auto H_mults = load_points_affine<ECp>(((1U << C) - 1)*(d), preprocessed_file);
-    auto out_H = allocate_memory(space_H * ECpe::NELTS * ELT_BYTES);
+    auto out_H = allocate_memory(space_H * ECp::NELTS * ELT_BYTES);
 
     fclose(preprocessed_file);
 
