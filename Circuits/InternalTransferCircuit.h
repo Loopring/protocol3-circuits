@@ -63,6 +63,9 @@ public:
     Poseidon_gadget_T<10, 1, 6, 53, 9, 1> hash;
     SignatureVerifier signatureVerifier;
 
+    // constants
+    const VariableArrayT& dataPadding_0000;
+
     InternalTransferGadget(
         ProtoboardT &pb,
         const jubjub::Params &params,
@@ -139,7 +142,9 @@ public:
 
           // Signature
           hash(pb, var_array({blockExchangeID, accountID_A.packed, accountID_B.packed, transTokenID.packed, transAmount.packed, feeTokenID.packed, fee.packed, label, account_A_Before.nonce}), FMT(this->annotation_prefix, ".hash")),
-          signatureVerifier(pb, params, account_A_Before.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
+          signatureVerifier(pb, params, account_A_Before.publicKey, hash.result(), FMT(prefix, ".signatureVerifier")),
+
+          dataPadding_0000(constants.padding_0000)
     {
     }
 
@@ -155,12 +160,16 @@ public:
 
     const std::vector<VariableArrayT> getPublicData() const
     {
-        return {accountID_A.bits,
-                accountID_B.bits,
-                transTokenID.bits,
-                fTransAmount.bits(),
-                feeTokenID.bits,
-                fFee.bits()};
+        return {
+            dataPadding_0000,
+            accountID_A.bits,
+            dataPadding_0000,
+            accountID_B.bits,
+            transTokenID.bits,
+            dataPadding_0000,
+            fTransAmount.bits(),
+            feeTokenID.bits,
+            fFee.bits()};
     }
 
     void generate_r1cs_witness(const InternalTransfer &interTransfer)

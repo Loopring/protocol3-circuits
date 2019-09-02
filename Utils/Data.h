@@ -571,7 +571,7 @@ public:
 void from_json(const json& j, InternalTransfer& interTrans)
 {
     interTrans.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
-    interTrans.amount = ethsnarks::FieldT(j["amount"].get<std::string>().c_str());
+    interTrans.amount = ethsnarks::FieldT(j["amountRequested"].get<std::string>().c_str());
     interTrans.label = ethsnarks::FieldT(j.at("label"));
     interTrans.signature = j.at("signature").get<Signature>();
 
