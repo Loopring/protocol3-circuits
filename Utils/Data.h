@@ -568,7 +568,7 @@ public:
     BalanceUpdate balanceUpdateF_O;	// recieve fee
 };
 
-void from_json(const json& j, InternalTransfer& interTrans)
+static void from_json(const json& j, InternalTransfer& interTrans)
 {
     interTrans.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
     interTrans.amount = ethsnarks::FieldT(j["amountRequested"].get<std::string>().c_str());
@@ -599,7 +599,7 @@ public:
     std::vector<Loopring::InternalTransfer> interTransferres;
 };
 
-void from_json(const json& j, InternalTransferBlock& block)
+static void from_json(const json& j, InternalTransferBlock& block)
 {
     block.exchangeID = ethsnarks::FieldT(j["exchangeID"].get<unsigned int>());
 
