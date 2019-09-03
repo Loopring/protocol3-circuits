@@ -44,7 +44,6 @@ public:
 
     // transfer payment related gadgets
     FloatGadget fTransAmount;
-    MinGadget amountToTransfer;
     RequireAccuracyGadget ensureAccuracyTransAmount;
     subadd_gadget transferPayment;
 
@@ -100,8 +99,7 @@ public:
 
           // Calculate how much can be transferred and transfer payment from A to B
           fTransAmount(pb, constants, Float28Encoding, FMT(prefix, ".fTansAmount")),
-          amountToTransfer(pb, transAmount.packed, balanceT_A_Before.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(transAmount, balanceT_A_before)")),
-          ensureAccuracyTransAmount(pb, fTransAmount.value(), amountToTransfer.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyTransAmount")),
+          ensureAccuracyTransAmount(pb, fTransAmount.value(), fTransAmount.value(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyTransAmount")),
           transferPayment(pb, NUM_BITS_AMOUNT, balanceT_A_Before.balance, balanceT_B_Before.balance, fTransAmount.value(), FMT(prefix, ".transferPayment")),
 
           // Increase A nonce by 1
@@ -197,8 +195,7 @@ public:
         feePayment.generate_r1cs_witness();
 
         // transfer amount calculation
-        amountToTransfer.generate_r1cs_witness();
-        fTransAmount.generate_r1cs_witness(toFloat(pb.val(amountToTransfer.result()), Float28Encoding));
+        fTransAmount.generate_r1cs_witness(toFloat(interTransfer.amount, Float28Encoding));
         ensureAccuracyTransAmount.generate_r1cs_witness();
         transferPayment.generate_r1cs_witness();
 
@@ -232,7 +229,6 @@ public:
         ensureAccuracyFee.generate_r1cs_constraints();
 
         fTransAmount.generate_r1cs_constraints();
-        amountToTransfer.generate_r1cs_constraints();
         ensureAccuracyTransAmount.generate_r1cs_constraints();
 
         nonce_A_after.generate_r1cs_constraints();
