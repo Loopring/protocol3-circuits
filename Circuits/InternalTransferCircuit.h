@@ -99,7 +99,7 @@ public:
 
           // Calculate how much can be transferred and transfer payment from A to B
           fTransAmount(pb, constants, Float28Encoding, FMT(prefix, ".fTansAmount")),
-          ensureAccuracyTransAmount(pb, fTransAmount.value(), fTransAmount.value(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyTransAmount")),
+          ensureAccuracyTransAmount(pb, fTransAmount.value(), transAmount.packed, Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyTransAmount")),
           transferPayment(pb, NUM_BITS_AMOUNT, balanceT_A_Before.balance, balanceT_B_Before.balance, fTransAmount.value(), FMT(prefix, ".transferPayment")),
 
           // Increase A nonce by 1
