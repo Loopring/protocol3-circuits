@@ -98,8 +98,8 @@ public:
           feePayment(pb, NUM_BITS_AMOUNT, balanceF_A_Before.balance, balanceF_O_Before.balance, fFee.value(), FMT(prefix, ".feePayment")),
 
           // Calculate how much can be transferred and transfer payment from A to B
-          fTransAmount(pb, constants, Float28Encoding, FMT(prefix, ".fTansAmount")),
-          ensureAccuracyTransAmount(pb, fTransAmount.value(), transAmount.packed, Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyTransAmount")),
+          fTransAmount(pb, constants, Float24Encoding, FMT(prefix, ".fTansAmount")),
+          ensureAccuracyTransAmount(pb, fTransAmount.value(), transAmount.packed, Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".ensureAccuracyTransAmount")),
           transferPayment(pb, NUM_BITS_AMOUNT, balanceT_A_Before.balance, balanceT_B_Before.balance, fTransAmount.value(), FMT(prefix, ".transferPayment")),
 
           // Increase A nonce by 1
@@ -159,12 +159,9 @@ public:
     const std::vector<VariableArrayT> getPublicData() const
     {
         return {
-            dataPadding_0000,
             accountID_A.bits,
-            dataPadding_0000,
             accountID_B.bits,
             transTokenID.bits,
-            dataPadding_0000,
             fTransAmount.bits(),
             feeTokenID.bits,
             fFee.bits()};
@@ -195,7 +192,7 @@ public:
         feePayment.generate_r1cs_witness();
 
         // transfer amount calculation
-        fTransAmount.generate_r1cs_witness(toFloat(interTransfer.amount, Float28Encoding));
+        fTransAmount.generate_r1cs_witness(toFloat(interTransfer.amount, Float24Encoding));
         ensureAccuracyTransAmount.generate_r1cs_witness();
         transferPayment.generate_r1cs_witness();
 
