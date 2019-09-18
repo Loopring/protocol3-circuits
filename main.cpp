@@ -226,19 +226,19 @@ bool cancel(Mode mode, bool onchainDataAvailability, unsigned int numCancels, co
     return true;
 }
 
-bool internalTransfer(Mode mode, bool onchainDataAvailability, unsigned int numTrans, const json& input, ethsnarks::ProtoboardT& outPb)
+bool internalTransfer(Mode mode, bool onchainDataAvailability, unsigned int numTransfers, const json& input, ethsnarks::ProtoboardT& outPb)
 {
     // Build the circuit
     Loopring::InternalTransferCircuit circuit(outPb, "circuit");
-    circuit.generate_r1cs_constraints(onchainDataAvailability, numTrans);
+    circuit.generate_r1cs_constraints(onchainDataAvailability, numTransfers);
     circuit.printInfo();
 
     if (mode == Mode::Validate || mode == Mode::Prove)
     {
-        json jTransferres = input["internalTransferres"];
-        if (jTransferres.size() != numTrans)
+        json jTransfers = input["transfers"];
+        if (jTransfers.size() != numTransfers)
         {
-            std::cerr << "Invalid number of cancels in input file: " << jTransferres.size() << std::endl;
+            std::cerr << "Invalid number of transfers in input file: " << jTransfers.size() << std::endl;
             return false;
         }
 

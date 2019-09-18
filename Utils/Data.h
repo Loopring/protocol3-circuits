@@ -558,14 +558,14 @@ public:
     ethsnarks::FieldT label;
     Signature signature;
 
-    BalanceUpdate balanceUpdateF_A; // pay fee step
-    BalanceUpdate balanceUpdateT_A; // trans step
-    AccountUpdate accountUpdate_A;
+    BalanceUpdate balanceUpdateF_From; // pay fee step
+    BalanceUpdate balanceUpdateT_From; // transfer step
+    AccountUpdate accountUpdate_From;
 
-    BalanceUpdate balanceUpdateT_B;	// recieve trans
-    AccountUpdate accountUpdate_B;
-        
-    BalanceUpdate balanceUpdateF_O;	// recieve fee
+    BalanceUpdate balanceUpdateT_To;   // receive transfer
+    AccountUpdate accountUpdate_To;
+
+    BalanceUpdate balanceUpdateF_O;	   // receive fee
 };
 
 static void from_json(const json& j, InternalTransfer& interTrans)
@@ -575,12 +575,12 @@ static void from_json(const json& j, InternalTransfer& interTrans)
     interTrans.label = ethsnarks::FieldT(j.at("label"));
     interTrans.signature = j.at("signature").get<Signature>();
 
-    interTrans.balanceUpdateF_A = j.at("balanceUpdateF_From").get<BalanceUpdate>();
-    interTrans.balanceUpdateT_A = j.at("balanceUpdateT_From").get<BalanceUpdate>();
-    interTrans.accountUpdate_A = j.at("accountUpdate_From").get<AccountUpdate>();
+    interTrans.balanceUpdateF_From = j.at("balanceUpdateF_From").get<BalanceUpdate>();
+    interTrans.balanceUpdateT_From = j.at("balanceUpdateT_From").get<BalanceUpdate>();
+    interTrans.accountUpdate_From = j.at("accountUpdate_From").get<AccountUpdate>();
 
-    interTrans.balanceUpdateT_B = j.at("balanceUpdateT_To").get<BalanceUpdate>();
-    interTrans.accountUpdate_B = j.at("accountUpdate_To").get<AccountUpdate>();
+    interTrans.balanceUpdateT_To = j.at("balanceUpdateT_To").get<BalanceUpdate>();
+    interTrans.accountUpdate_To = j.at("accountUpdate_To").get<AccountUpdate>();
 
     interTrans.balanceUpdateF_O = j.at("balanceUpdateF_O").get<BalanceUpdate>();
 }
@@ -596,7 +596,7 @@ public:
     ethsnarks::FieldT operatorAccountID;
     AccountUpdate accountUpdate_O;
 
-    std::vector<Loopring::InternalTransfer> interTransferres;
+    std::vector<Loopring::InternalTransfer> transfers;
 };
 
 static void from_json(const json& j, InternalTransferBlock& block)
@@ -609,11 +609,11 @@ static void from_json(const json& j, InternalTransferBlock& block)
     block.operatorAccountID = ethsnarks::FieldT(j.at("operatorAccountID"));
     block.accountUpdate_O = j.at("accountUpdate_O").get<AccountUpdate>();
 
-    // Read internal transferres
-    json jInterTranferres = j["internalTransferres"];
-    for(unsigned int i = 0; i < jInterTranferres.size(); i++)
+    // Read internal transfers
+    json jTransfers = j["transfers"];
+    for(unsigned int i = 0; i < jTransfers.size(); i++)
     {
-        block.interTransferres.emplace_back(jInterTranferres[i].get<Loopring::InternalTransfer>());
+        block.transfers.emplace_back(jTransfers[i].get<Loopring::InternalTransfer>());
     }
 }
 
