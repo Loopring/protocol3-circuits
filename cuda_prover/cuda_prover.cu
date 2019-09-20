@@ -55,7 +55,11 @@ typename B::vector_Fr *compute_H(size_t d, typename B::vector_Fr *ca,
 
 static size_t read_size_t(FILE* input) {
   size_t n;
-  fread((void *) &n, sizeof(size_t), 1, input);
+  size_t readSize = fread((void *) &n, sizeof(size_t), 1, input);
+  if (readSize != 1) {
+    fprintf(stderr, "fread error");
+    abort();
+  }
   return n;
 }
 
