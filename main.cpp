@@ -11,6 +11,7 @@
 #include "ethsnarks.hpp"
 #include "stubs.hpp"
 #include <fstream>
+#include <chrono>
 
 #ifdef MULTICORE
 #include <omp.h>
@@ -24,6 +25,19 @@ enum class Mode
     Validate,
     Prove
 };
+
+static inline auto now() -> decltype(std::chrono::high_resolution_clock::now()) {
+    return std::chrono::high_resolution_clock::now();
+}
+
+template<typename T>
+void
+print_time(T &t1, const char *str) {
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto tim = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    printf("%s: %ld ms\n", str, tim);
+    t1 = t2;
+}
 
 timespec diff(timespec start, timespec end)
 {
@@ -51,12 +65,24 @@ bool generateKeyPair(ethsnarks::ProtoboardT& pb, std::string& baseFilename)
 {
     std::string provingKeyFilename = baseFilename + "_pk.raw";
     std::string verificationKeyFilename = baseFilename + "_vk.json";
-    if (fileExists(provingKeyFilename.c_str()) && fileExists(verificationKeyFilename.c_str()))
+#ifdef GPU_PROVE
+    std::string paramsFilename = baseFilename + "_params.raw";
+#endif
+    if (fileExists(provingKeyFilename.c_str()) && fileExists(verificationKeyFilename.c_str())
+#ifdef GPU_PROVE
+        && fileExists(paramsFilename.c_str())
+#endif
+    )
     {
         return true;
     }
+#ifdef GPU_PROVE
+    std::cout << "Generating keys and params..." << std::endl;
+    int result = stub_genkeys_params_from_pb(pb, provingKeyFilename.c_str(), verificationKeyFilename.c_str(), paramsFilename.c_str());
+#else
     std::cout << "Generating keys..." << std::endl;
     int result = stub_genkeys_from_pb(pb, provingKeyFilename.c_str(), verificationKeyFilename.c_str());
+#endif
     return (result == 0);
 }
 
@@ -66,7 +92,9 @@ bool generateProof(ethsnarks::ProtoboardT& pb, const char *provingKeyFilename, c
     timespec time1, time2;
     clock_gettime(CLOCK_MONOTONIC, &time1);
 
+    auto begin = now();
     std::string jProof = stub_prove_from_pb(pb, provingKeyFilename);
+    print_time(begin, "Generated proof");
 
     clock_gettime(CLOCK_MONOTONIC, &time2);
     timespec duration = diff(time1,time2);
@@ -386,12 +414,21 @@ int main(int argc, char **argv)
         }
     }
 
+
     if (mode == Mode::Prove)
     {
+#ifdef GPU_PROVE
+        std::cout << "GPU Prove: Generate inputsFile." << std::endl;
+        std::string inputsFilename = baseFilename + "_inputs.raw";
+        auto begin = now();
+        stub_write_input_from_pb(pb,  (baseFilename + "_pk.raw").c_str(), inputsFilename.c_str());
+        print_time(begin, "write input");
+#else
         if (!generateProof(pb, (baseFilename + "_pk.raw").c_str(), proofFilename))
         {
             return 1;
         }
+#endif
     }
 
     return 0;
