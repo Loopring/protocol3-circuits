@@ -6,6 +6,7 @@
 #include "Circuits/OnchainWithdrawalCircuit.h"
 #include "Circuits/OffchainWithdrawalCircuit.h"
 #include "Circuits/OrderCancellationCircuit.h"
+#include "Circuits/InternalTransferCircuit.h"
 
 #include "ThirdParty/json.hpp"
 #include "ethsnarks.hpp"
@@ -253,7 +254,35 @@ bool cancel(Mode mode, bool onchainDataAvailability, unsigned int numCancels, co
     return true;
 }
 
-int main(int argc, char **argv)
+bool internalTransfer(Mode mode, bool onchainDataAvailability, unsigned int numTransfers, const json& input, ethsnarks::ProtoboardT& outPb)
+{
+    // Build the circuit
+    Loopring::InternalTransferCircuit circuit(outPb, "circuit");
+    circuit.generate_r1cs_constraints(onchainDataAvailability, numTransfers);
+    circuit.printInfo();
+
+    if (mode == Mode::Validate || mode == Mode::Prove)
+    {
+        json jTransfers = input["transfers"];
+        if (jTransfers.size() != numTransfers)
+        {
+            std::cerr << "Invalid number of transfers in input file: " << jTransfers.size() << std::endl;
+            return false;
+        }
+
+        Loopring::InternalTransferBlock block = input.get<Loopring::InternalTransferBlock>();
+
+        // Generate witness values for the given input values
+        if (!circuit.generateWitness(block))
+        {
+            std::cerr << "Could not generate witness!" << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+
+int main (int argc, char **argv)
 {
     ethsnarks::ppT::init_public_params();
 
@@ -382,6 +411,15 @@ int main(int argc, char **argv)
         {
             baseFilename += "cancel" + postFix;
             if (!cancel(mode, onchainDataAvailability, blockSize, input, pb))
+            {
+                return 1;
+            }
+            break;
+        }
+        case 5:
+        {
+            baseFilename += "internal_transfer" + postFix;
+            if (!internalTransfer(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
             }
