@@ -36,7 +36,7 @@ void
 print_time(T &t1, const char *str) {
     auto t2 = std::chrono::high_resolution_clock::now();
     auto tim = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    printf("%s: %ld ms\n", str, tim);
+    printf("%s: %lld ms\n", str, tim);
     t1 = t2;
 }
 
@@ -303,6 +303,7 @@ int main (int argc, char **argv)
 
     const char* proofFilename = NULL;
     Mode mode = Mode::Validate;
+    std::string baseFilename = "keys/";
     if (strcmp(argv[1], "-validate") == 0)
     {
         mode = Mode::Validate;
@@ -366,14 +367,61 @@ int main (int argc, char **argv)
     std::string strOnchainDataAvailability = onchainDataAvailability ? "_DA_" : "_";
     std::string postFix = strOnchainDataAvailability + std::to_string(blockSize);
 
-    std::cout << "Building circuit... " << std::endl;
-    std::string baseFilename = "keys/";
-    ethsnarks::ProtoboardT pb;
     switch(blockType)
     {
         case 0:
         {
             baseFilename += "trade" + postFix;
+            break;
+        }
+        case 1:
+        {
+            baseFilename += "deposit" + postFix;
+            break;
+        }
+        case 2:
+        {
+            baseFilename += "withdraw_onchain" + postFix;
+            break;
+        }
+        case 3:
+        {
+            baseFilename += "withdraw_offchain" + postFix;
+            break;
+        }
+        case 4:
+        {
+            baseFilename += "cancel" + postFix;
+            break;
+        }
+        case 5:
+        {
+            baseFilename += "internal_transfer" + postFix;
+            break;
+        }
+        default:
+        {
+            std::cerr << "Unknown block type: " << blockType << std::endl;
+            return 1;
+        }
+    }
+
+    if (mode == Mode::Prove)
+    {
+        std::string pkFileName = baseFilename + "_pk.raw";
+        if (!fileExists(pkFileName.c_str())) {
+            std::cerr << "Failed to find pk!" << std::endl;
+            return 1;
+        }
+    }
+
+    std::cout << "Building circuit... " << std::endl;
+
+    ethsnarks::ProtoboardT pb;
+    switch(blockType)
+    {
+        case 0:
+        {
             if (!trade(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
@@ -382,7 +430,6 @@ int main (int argc, char **argv)
         }
         case 1:
         {
-            baseFilename += "deposit" + postFix;
             if (!deposit(mode, blockSize, input, pb))
             {
                 return 1;
@@ -391,7 +438,6 @@ int main (int argc, char **argv)
         }
         case 2:
         {
-            baseFilename += "withdraw_onchain" + postFix;
             if (!onchainWithdraw(mode, blockSize, input, pb))
             {
                 return 1;
@@ -400,7 +446,6 @@ int main (int argc, char **argv)
         }
         case 3:
         {
-            baseFilename += "withdraw_offchain" + postFix;
             if (!offchainWithdraw(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
@@ -409,7 +454,6 @@ int main (int argc, char **argv)
         }
         case 4:
         {
-            baseFilename += "cancel" + postFix;
             if (!cancel(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
@@ -418,7 +462,6 @@ int main (int argc, char **argv)
         }
         case 5:
         {
-            baseFilename += "internal_transfer" + postFix;
             if (!internalTransfer(mode, onchainDataAvailability, blockSize, input, pb))
             {
                 return 1;
@@ -443,7 +486,7 @@ int main (int argc, char **argv)
         std::cout << "Block is valid." << std::endl;
     }
 
-    if (mode == Mode::CreateKeys || mode == Mode::Prove)
+    if (mode == Mode::CreateKeys)
     {
         if (!generateKeyPair(pb, baseFilename))
         {
