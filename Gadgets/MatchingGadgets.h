@@ -264,7 +264,6 @@ public:
 class MaxFillAmountsGadget : public GadgetT
 {
 public:
-
     TernaryGadget limit;
     MinGadget filledLimited;
     UnsafeSubGadget remainingBeforeCancelled;
@@ -273,11 +272,15 @@ public:
     TernaryGadget remainingS;
     MinGadget fillAmountS;
     MulDivGadget fillAmountB;
+    MinGadget limitedFillAmountS;
+    MinGadget limitedFillAmountB;
 
     MaxFillAmountsGadget(
         ProtoboardT& pb,
         const Constants& constants,
         const OrderGadget& order,
+        const FloatGadget& maxFillS,
+        const FloatGadget& maxFillB,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
@@ -287,6 +290,8 @@ public:
         // `remainingS_buy` has a maximum value of order.amountB, so needs NUM_BITS_AMOUNT max.
         // `fillAmountB = fillAmountS * order.amountB // order.amountS`
         // `fillAmountS` has a maximum value of order.amountS, so needs NUM_BITS_AMOUNT max.
+        // 'limitedFillAmountS' = min(fillAmountS, maxFillS)
+        // 'limitedFillAmountB' = min(fillAmountB, maxFillB)
 
         limit(pb, order.buy.packed, order.amountB.packed, order.amountS.packed, FMT(prefix, ".limit")),
         filledLimited(pb, limit.result(), order.tradeHistory.getFilled(), NUM_BITS_AMOUNT, FMT(prefix, ".filledLimited")),
@@ -295,7 +300,9 @@ public:
         remainingS_buy(pb, constants, remaining.result(), order.amountS.packed, order.amountB.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".remainingS_buy")),
         remainingS(pb, order.buy.packed, remainingS_buy.result(), remaining.result(), FMT(prefix, ".remainingS")),
         fillAmountS(pb, order.balanceSBefore.balance, remainingS.result(), NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountS")),
-        fillAmountB(pb, constants, fillAmountS.result(), order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB"))
+        fillAmountB(pb, constants, fillAmountS.result(), order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB")),
+        limitedFillAmountS(pb, fillAmountS.result(), maxFillS.value(), NUM_BITS_AMOUNT, FMT(prefix, ".limitedFillAmountS")),
+        limitedFillAmountB(pb, fillAmountB.result(), maxFillB.value(), NUM_BITS_AMOUNT, FMT(prefix, ".limitedFillAmountB"))
     {
 
     }
@@ -310,6 +317,8 @@ public:
         remainingS.generate_r1cs_witness();
         fillAmountS.generate_r1cs_witness();
         fillAmountB.generate_r1cs_witness();
+        limitedFillAmountS.generate_r1cs_witness();
+        limitedFillAmountB.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
@@ -322,18 +331,20 @@ public:
         remainingS.generate_r1cs_constraints();
         fillAmountS.generate_r1cs_constraints();
         fillAmountB.generate_r1cs_constraints();
+        limitedFillAmountS.generate_r1cs_constraints();
+        limitedFillAmountB.generate_r1cs_constraints();
     }
 
     // fillAmountS uses NUM_BITS_AMOUNT bits max
     const VariableT& getFillAmountS()
     {
-        return fillAmountS.result();
+        return limitedFillAmountS.result();
     }
 
     // fillAmountB uses NUM_BITS_AMOUNT bits max
     const VariableT& getFillAmountB()
     {
-        return fillAmountB.result();
+        return limitedFillAmountB.result();
     }
 };
 
@@ -608,13 +619,15 @@ public:
         const VariableT& timestamp,
         const OrderGadget& orderA,
         const OrderGadget& orderB,
+        const FloatGadget& fillS_A,
+        const FloatGadget& fillS_B,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
         // Get the max amount the orders can be filled
-        maxFillAmountA(pb, constants, orderA, FMT(prefix, ".maxFillAmountA")),
-        maxFillAmountB(pb, constants, orderB, FMT(prefix, ".maxFillAmountB")),
+        maxFillAmountA(pb, constants, orderA, fillS_A, fillS_B, FMT(prefix, ".maxFillAmountA")),
+        maxFillAmountB(pb, constants, orderB, fillS_B, fillS_A, FMT(prefix, ".maxFillAmountB")),
 
         // Match the orders
         matchingGadget(pb, constants,

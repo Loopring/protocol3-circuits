@@ -212,14 +212,16 @@ public:
         tradingHistoryRootA_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootA_O"))),
         tradingHistoryRootB_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_O"))),
 
+        // Max tradable balance
+        fillS_A(pb, constants, Float24Encoding, FMT(prefix, ".fillS_A")),
+        fillS_B(pb, constants, Float24Encoding, FMT(prefix, ".fillS_B")),
+
         // Match orders
-        orderMatching(pb, constants, timestamp, orderA, orderB, FMT(prefix, ".orderMatching")),
+        orderMatching(pb, constants, timestamp, orderA, orderB, fillS_A, fillS_B, FMT(prefix, ".orderMatching")),
 
         // Fill amounts
         uFillS_A(pb, orderMatching.isValid(), orderMatching.getFillA_S(), constants.zero, FMT(prefix, ".uFillS_A")),
         uFillS_B(pb, orderMatching.isValid(), orderMatching.getFillB_S(), constants.zero, FMT(prefix, ".uFillS_B")),
-        fillS_A(pb, constants, Float24Encoding, FMT(prefix, ".fillS_A")),
-        fillS_B(pb, constants, Float24Encoding, FMT(prefix, ".fillS_B")),
         requireAccuracyFillS_A(pb, fillS_A.value(), uFillS_A.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFillS_A")),
         requireAccuracyFillS_B(pb, fillS_B.value(), uFillS_B.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFillS_B")),
 
@@ -335,8 +337,8 @@ public:
         // Fill amounts
         uFillS_A.generate_r1cs_witness();
         uFillS_B.generate_r1cs_witness();
-        fillS_A.generate_r1cs_witness(toFloat(pb.val(uFillS_A.result()), Float24Encoding));
-        fillS_B.generate_r1cs_witness(toFloat(pb.val(uFillS_B.result()), Float24Encoding));
+        fillS_A.generate_r1cs_witness(ringSettlement.ring.fillS_A);
+        fillS_B.generate_r1cs_witness(ringSettlement.ring.fillS_B);
         requireAccuracyFillS_A.generate_r1cs_witness();
         requireAccuracyFillS_B.generate_r1cs_witness();
 

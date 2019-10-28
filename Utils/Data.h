@@ -210,12 +210,16 @@ class Ring
 public:
     Order orderA;
     Order orderB;
+    ethsnarks::FieldT fillS_A;
+    ethsnarks::FieldT fillS_B;
 };
 
 static void from_json(const json& j, Ring& ring)
 {
     ring.orderA = j.at("orderA").get<Order>();
     ring.orderB = j.at("orderB").get<Order>();
+    ring.fillS_A = ethsnarks::FieldT(j["fFillS_A"]);
+    ring.fillS_B = ethsnarks::FieldT(j["fFillS_B"]);
 }
 
 class RingSettlement

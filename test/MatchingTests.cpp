@@ -270,7 +270,7 @@ namespace Simulator
         return {filled, cancelled};
     }
 
-    Fill getMaxFillAmounts(const OrderState& orderState)
+    Fill getMaxFillAmounts(const OrderState& orderState, const FieldT& maxFillS, const FieldT& maxFillB)
     {
         TradeHistory tradeHistory = getTradeHistory(orderState);
         FieldT remainingS = 0;
@@ -282,11 +282,13 @@ namespace Simulator
         }
         else
         {
-        FieldT filled = lt(orderState.order.amountS, tradeHistory.filled) ? orderState.order.amountS : tradeHistory.filled;
-        remainingS = (tradeHistory.cancelled == FieldT::one()) ? 0 : orderState.order.amountS - filled;
+            FieldT filled = lt(orderState.order.amountS, tradeHistory.filled) ? orderState.order.amountS : tradeHistory.filled;
+            remainingS = (tradeHistory.cancelled == FieldT::one()) ? 0 : orderState.order.amountS - filled;
         }
         FieldT fillAmountS = lt(orderState.balanceLeafS.balance, remainingS) ? orderState.balanceLeafS.balance : remainingS;
         FieldT fillAmountB = muldiv(fillAmountS, orderState.order.amountB, orderState.order.amountS);
+        fillAmountS = lt(fillAmountS, maxFillS) ? fillAmountS : maxFillS;
+        fillAmountB = lt(fillAmountB, maxFillB) ? fillAmountB : maxFillB;
         return {fillAmountS, fillAmountB};
     }
 
@@ -326,10 +328,10 @@ namespace Simulator
         return valid;
     }
 
-    Settlement settle(const FieldT& timestamp, const OrderState& orderStateA, const OrderState& orderStateB)
+    Settlement settle(const FieldT& timestamp, const OrderState& orderStateA, const OrderState& orderStateB, const FieldT& maxFillS_A, const FieldT& maxFillS_B)
     {
-        Fill fillA = getMaxFillAmounts(orderStateA);
-        Fill fillB = getMaxFillAmounts(orderStateB);
+        Fill fillA = getMaxFillAmounts(orderStateA, maxFillS_A, maxFillS_B);
+        Fill fillB = getMaxFillAmounts(orderStateB, maxFillS_B, maxFillS_A);
 
         bool matchable;
         if (orderStateA.order.buy == FieldT::one())
@@ -404,14 +406,31 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
         OrderGadget orderB(pb, params, constants, exchangeID, ".orderB");
         orderB.generate_r1cs_witness(orderStateB.order, orderStateB.account, orderStateB.balanceLeafS, orderStateB.balanceLeafB, orderStateB.tradeHistoryLeaf);
 
-        OrderMatchingGadget orderMatching(pb, constants, timestamp, orderA, orderB, "orderMatching");
+        unsigned int fFillS_A = toFloat(orderStateA.order.amountS, Float24Encoding);
+        unsigned int fFillS_B = toFloat(orderStateB.order.amountS, Float24Encoding);
+        if (expectedFill != ExpectedFill::Automatic)
+        {
+            fFillS_A = toFloat(expectedFillS_A, Float24Encoding);
+            fFillS_B = toFloat(expectedFillS_B, Float24Encoding);
+        }
+
+        FloatGadget floatGadgetfillS_A(pb, constants, Float24Encoding, ".floatGadgetfillS_A");
+        FloatGadget floatGadgetfillS_B(pb, constants, Float24Encoding, ".floatGadgetfillS_B");
+        floatGadgetfillS_A.generate_r1cs_constraints();
+        floatGadgetfillS_B.generate_r1cs_constraints();
+        floatGadgetfillS_A.generate_r1cs_witness(fFillS_A);
+        floatGadgetfillS_B.generate_r1cs_witness(fFillS_B);
+
+        OrderMatchingGadget orderMatching(pb, constants, timestamp, orderA, orderB, floatGadgetfillS_A, floatGadgetfillS_B, "orderMatching");
         orderMatching.generate_r1cs_constraints();
         orderMatching.generate_r1cs_witness();
 
         REQUIRE(pb.is_satisfied() == expectedSatisfied);
         if (expectedSatisfied)
         {
-            Simulator::Settlement settlement = Simulator::settle(_timestamp, orderStateA, orderStateB);
+            FieldT settleFillS(fromFloat(fFillS_A, Float24Encoding).to_string().c_str());
+            FieldT settleFillB(fromFloat(fFillS_B, Float24Encoding).to_string().c_str());
+            Simulator::Settlement settlement = Simulator::settle(_timestamp, orderStateA, orderStateB, settleFillS, settleFillB);
 
             bool expectedValidValue = settlement.valid;
             if (expectedValid != ExpectedValid::Automatic)
@@ -427,8 +446,8 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
                 FieldT fillS_B = settlement.fillS_B;
                 if (expectedFill == ExpectedFill::Manual)
                 {
-                    fillS_A = expectedFillS_A;
-                    fillS_B = expectedFillS_B;
+                    fillS_A = roundToFloatValue(expectedFillS_A, Float24Encoding);
+                    fillS_B = roundToFloatValue(expectedFillS_B, Float24Encoding);
                 }
                 REQUIRE((fillS_A == settlement.fillS_A));
                 REQUIRE((fillS_B == settlement.fillS_B));

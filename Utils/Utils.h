@@ -156,6 +156,12 @@ static BigInt fromFloat(unsigned int f, const FloatEncoding& encoding)
     return value;
 }
 
+static FieldT roundToFloatValue(const FieldT& value, const FloatEncoding& encoding) {
+  auto f = toFloat(value, encoding);
+  auto floatValue = fromFloat(f, encoding);
+  return FieldT(floatValue.to_string().c_str());
+}
+
 }
 
 #endif
