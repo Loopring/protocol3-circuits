@@ -383,7 +383,7 @@ int main (int argc, char **argv)
     }
     else
     {
-        std::cerr << "Unknown option: " << argv[4] << std::endl;
+        std::cerr << "Unknown option: " << argv[1] << std::endl;
         return 1;
     }
 
