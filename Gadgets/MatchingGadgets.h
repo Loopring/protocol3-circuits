@@ -390,7 +390,7 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        takerFillB_lt_makerFillS(pb, takerFill.B, makerFill.S, NUM_BITS_AMOUNT, FMT(prefix, ".takerFill.B < makerFill.B")),
+        takerFillB_lt_makerFillS(pb, takerFill.B, makerFill.S, NUM_BITS_AMOUNT, FMT(prefix, ".takerFill.B < makerFill.S")),
 
         // Do a single MulDiv for both case:
         // - if takerFill.B < makerFill.S: takerFill.B * makerOrder.amountB // makerOrder.amountS
