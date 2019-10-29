@@ -124,14 +124,16 @@ public:
     const VariableT tradingHistoryRootA_O;
     const VariableT tradingHistoryRootB_O;
 
+    // input Fill amounts
+    FloatGadget fillS_A;
+    FloatGadget fillS_B;
+
     // Match orders
     OrderMatchingGadget orderMatching;
 
     // Fill amounts
     TernaryGadget uFillS_A;
     TernaryGadget uFillS_B;
-    FloatGadget fillS_A;
-    FloatGadget fillS_B;
     RequireAccuracyGadget requireAccuracyFillS_A;
     RequireAccuracyGadget requireAccuracyFillS_B;
 
@@ -331,14 +333,17 @@ public:
         pb.val(tradingHistoryRootA_O) = ringSettlement.balanceUpdateA_O.before.tradingHistoryRoot;
         pb.val(tradingHistoryRootB_O) = ringSettlement.balanceUpdateB_O.before.tradingHistoryRoot;
 
+        // input fillS_A/B
+        fillS_A.generate_r1cs_witness(ringSettlement.ring.fillS_A);
+        fillS_B.generate_r1cs_witness(ringSettlement.ring.fillS_B);
+
         // Match orders
         orderMatching.generate_r1cs_witness();
 
         // Fill amounts
         uFillS_A.generate_r1cs_witness();
         uFillS_B.generate_r1cs_witness();
-        fillS_A.generate_r1cs_witness(ringSettlement.ring.fillS_A);
-        fillS_B.generate_r1cs_witness(ringSettlement.ring.fillS_B);
+
         requireAccuracyFillS_A.generate_r1cs_witness();
         requireAccuracyFillS_B.generate_r1cs_witness();
 
@@ -394,14 +399,16 @@ public:
         orderA.generate_r1cs_constraints();
         orderB.generate_r1cs_constraints();
 
+        // input fillS_A/B
+        fillS_A.generate_r1cs_constraints();
+        fillS_B.generate_r1cs_constraints();
+
         // Match orders
         orderMatching.generate_r1cs_constraints();
 
         // Fill amounts
         uFillS_A.generate_r1cs_constraints();
         uFillS_B.generate_r1cs_constraints();
-        fillS_A.generate_r1cs_constraints();
-        fillS_B.generate_r1cs_constraints();
         requireAccuracyFillS_A.generate_r1cs_constraints();
         requireAccuracyFillS_B.generate_r1cs_constraints();
 
