@@ -304,6 +304,7 @@ namespace Simulator
             takerFill.B = makerFill.S;
             takerFill.S = muldiv(takerFill.B, takerOrder.amountS, takerOrder.amountB);
         }
+
         bool matchable = lte(makerFill.B, takerFill.S);
         return matchable;
     }
@@ -318,13 +319,11 @@ namespace Simulator
         bool valid = true;
         valid = valid && lte(order.validSince, timestamp);
         valid = valid && lte(timestamp, order.validUntil);
-
         valid = valid && !((order.buy == FieldT::zero()) && (order.allOrNone == FieldT::one()) && lt(fillAmountS, order.amountS));
         valid = valid && !((order.buy == FieldT::one()) && (order.allOrNone == FieldT::one()) && lt(fillAmountB, order.amountB));
         valid = valid && checkFillRate(order.amountS, order.amountB, fillAmountS, fillAmountB);
         valid = valid && (fillAmountS != FieldT::zero());
         valid = valid && (fillAmountB != FieldT::zero());
-
         return valid;
     }
 
@@ -336,19 +335,20 @@ namespace Simulator
         bool matchable;
         if (orderStateA.order.buy == FieldT::one())
         {
+            // maker.B < taker.S ==> B.B < A.S
             matchable = match(orderStateA.order, fillA, orderStateB.order, fillB);
             fillA.S = fillB.B;
         }
         else
         {
+            // maker.B < taker.S ==> A.B < B.S
             matchable = match(orderStateB.order, fillB, orderStateA.order, fillA);
-            fillA.B = fillB.S;
+            fillB.S = fillA.B;
         }
 
         bool valid = matchable;
         valid = valid && checkValid(orderStateA.order, fillA.S, fillA.B, timestamp);
         valid = valid && checkValid(orderStateB.order, fillB.S, fillB.B, timestamp);
-
         return {fillA.S, fillB.S, valid};
     }
 }
@@ -1025,5 +1025,31 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
                 ExpectedFill::Automatic
             );
         }
+    }
+
+    SECTION("Regression Case 1, expectedFill as maxFill causes order mismatch")
+    {
+        OrderState orderStateA_mod = setOrderState(
+            orderStateA,
+            A_orderID,
+            FieldT("74437628000000000000000"), FieldT("63821764000000000000000"), false,
+            FieldT("89266748000000000000000"),
+            0, false, A_orderID
+        );
+        OrderState orderStateB_mod = setOrderState(
+            orderStateB,
+            B_orderID,
+            FieldT("42719051000000000000000"), FieldT("2883176000000000000000"), true,
+            FieldT("42719180000000000000000"),
+            0, false, B_orderID
+        );
+        FieldT expectedFillS_A("2883170000000000000000");
+        FieldT expectedFillS_B("42719000000000000000000");
+        orderMatchingChecked(
+            exchangeID, timestamp,
+            orderStateA_mod, orderStateB_mod,
+            true, ExpectedValid::Valid,
+            ExpectedFill::Manual, expectedFillS_A, expectedFillS_B
+        );
     }
 }
