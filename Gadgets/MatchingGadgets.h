@@ -75,7 +75,7 @@ public:
         valid.generate_r1cs_constraints();
     }
 
-    const VariableT& isValid()
+    const VariableT& isValid() const
     {
         return valid.lt();
     }
@@ -195,7 +195,7 @@ public:
         valid.generate_r1cs_constraints();
     }
 
-    const VariableT& isValid()
+    const VariableT& isValid() const
     {
         return valid.result();
     }
@@ -272,15 +272,11 @@ public:
     TernaryGadget remainingS;
     MinGadget fillAmountS;
     MulDivGadget fillAmountB;
-    MinGadget limitedFillAmountS;
-    MinGadget limitedFillAmountB;
 
     MaxFillAmountsGadget(
         ProtoboardT& pb,
         const Constants& constants,
         const OrderGadget& order,
-        const FloatGadget& maxFillS,
-        const FloatGadget& maxFillB,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
@@ -290,8 +286,6 @@ public:
         // `remainingS_buy` has a maximum value of order.amountB, so needs NUM_BITS_AMOUNT max.
         // `fillAmountB = fillAmountS * order.amountB // order.amountS`
         // `fillAmountS` has a maximum value of order.amountS, so needs NUM_BITS_AMOUNT max.
-        // 'limitedFillAmountS' = min(fillAmountS, maxFillS)
-        // 'limitedFillAmountB' = min(fillAmountB, maxFillB)
 
         limit(pb, order.buy.packed, order.amountB.packed, order.amountS.packed, FMT(prefix, ".limit")),
         filledLimited(pb, limit.result(), order.tradeHistory.getFilled(), NUM_BITS_AMOUNT, FMT(prefix, ".filledLimited")),
@@ -300,9 +294,7 @@ public:
         remainingS_buy(pb, constants, remaining.result(), order.amountS.packed, order.amountB.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".remainingS_buy")),
         remainingS(pb, order.buy.packed, remainingS_buy.result(), remaining.result(), FMT(prefix, ".remainingS")),
         fillAmountS(pb, order.balanceSBefore.balance, remainingS.result(), NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountS")),
-        fillAmountB(pb, constants, fillAmountS.result(), order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB")),
-        limitedFillAmountS(pb, fillAmountS.result(), maxFillS.value(), NUM_BITS_AMOUNT, FMT(prefix, ".limitedFillAmountS")),
-        limitedFillAmountB(pb, fillAmountB.result(), maxFillB.value(), NUM_BITS_AMOUNT, FMT(prefix, ".limitedFillAmountB"))
+        fillAmountB(pb, constants, fillAmountS.result(), order.amountB.packed, order.amountS.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".fillAmountB"))
     {
 
     }
@@ -317,8 +309,6 @@ public:
         remainingS.generate_r1cs_witness();
         fillAmountS.generate_r1cs_witness();
         fillAmountB.generate_r1cs_witness();
-        limitedFillAmountS.generate_r1cs_witness();
-        limitedFillAmountB.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
@@ -331,20 +321,18 @@ public:
         remainingS.generate_r1cs_constraints();
         fillAmountS.generate_r1cs_constraints();
         fillAmountB.generate_r1cs_constraints();
-        limitedFillAmountS.generate_r1cs_constraints();
-        limitedFillAmountB.generate_r1cs_constraints();
     }
 
     // fillAmountS uses NUM_BITS_AMOUNT bits max
     const VariableT& getFillAmountS()
     {
-        return limitedFillAmountS.result();
+        return fillAmountS.result();
     }
 
     // fillAmountB uses NUM_BITS_AMOUNT bits max
     const VariableT& getFillAmountB()
     {
-        return limitedFillAmountB.result();
+        return fillAmountB.result();
     }
 };
 
@@ -592,6 +580,93 @@ public:
     }
 };
 
+// LimitFillCalculationGadget use FillS_A(taker_sale) and maker's price to calculate FillS_B(maker sale)
+// which should equal to input fillS_B.
+// 1. check iff inFillS_A <= maxFillS_A
+// 2. use maker's price to calc FillS_B
+// 3. make sure newFillS_B == inFillS_B
+class LimitFillCalculationGadget : public GadgetT
+{
+public:
+    const FloatGadget& fillS_A;
+    const FloatGadget& fillS_B;
+
+    LeqGadget       validFillS_A;
+    MulDivGadget    newFillS_B;
+    FloatGadget     uFillS_B;
+    EqualGadget     uFillS_B_eq_inFillS_B;
+    AndGadget       valid;
+
+    LimitFillCalculationGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const VariableT& maxFillS_A,
+        const FloatGadget& inFillS_A,
+        const FloatGadget& inFillS_B,
+        const OrderGadget& orderB,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        fillS_A(inFillS_A),
+        fillS_B(inFillS_B),
+
+        validFillS_A(pb, inFillS_A.value(), maxFillS_A, NUM_BITS_AMOUNT, FMT(prefix, ".validFillS_A(inputFillS_A <= maxFillS_A")),
+
+        newFillS_B(pb, constants, fillS_A.value(), orderB.amountS.packed, orderB.amountB.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".newFillS_B")),
+
+        uFillS_B(pb, constants, Float24Encoding, FMT(prefix, ".uFillS_B")),
+
+        uFillS_B_eq_inFillS_B(pb, uFillS_B.value(), fillS_B.value(), FMT(prefix, ".uFillS_B_eq_inFillS_B")),
+
+        valid(pb, {validFillS_A.leq(), uFillS_B_eq_inFillS_B.result()}, FMT(prefix, ".valid"))
+    {
+    }
+
+    void generate_r1cs_witness()
+    {
+        validFillS_A.generate_r1cs_witness();
+        newFillS_B.generate_r1cs_witness();
+        uFillS_B.generate_r1cs_witness(toFloat(pb.val(newFillS_B.result()), Float24Encoding));
+        uFillS_B_eq_inFillS_B.generate_r1cs_witness();
+        valid.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        validFillS_A.generate_r1cs_constraints();
+        newFillS_B.generate_r1cs_constraints();
+        uFillS_B.generate_r1cs_constraints();
+        uFillS_B_eq_inFillS_B.generate_r1cs_constraints();
+        valid.generate_r1cs_constraints();
+    }
+
+    const VariableT& getFillA_S() const
+    {
+        return fillS_A.value();
+    }
+
+    const VariableT& getFillA_B() const
+    {
+        return uFillS_B.value();
+    }
+
+    const VariableT& getFillB_S() const
+    {
+        return uFillS_B.value();
+    }
+
+    const VariableT& getFillB_B() const
+    {
+        return fillS_A.value();
+    }
+
+    const VariableT& isValid() const
+    {
+        return valid.result();
+    }
+};
+
 // Matches 2 orders
 class OrderMatchingGadget : public GadgetT
 {
@@ -603,6 +678,9 @@ public:
 
     // Match the orders
     MatchingGadget matchingGadget;
+
+    // 2-pass match to clamp S/B amount.
+    LimitFillCalculationGadget limitFillCalculationGadget;
 
     // Check if tokenS/tokenB match
     RequireEqualGadget orderA_tokenS_eq_orderB_tokenB;
@@ -626,8 +704,8 @@ public:
         GadgetT(pb, prefix),
 
         // Get the max amount the orders can be filled
-        maxFillAmountA(pb, constants, orderA, fillS_A, fillS_B, FMT(prefix, ".maxFillAmountA")),
-        maxFillAmountB(pb, constants, orderB, fillS_B, fillS_A, FMT(prefix, ".maxFillAmountB")),
+        maxFillAmountA(pb, constants, orderA, FMT(prefix, ".maxFillAmountA")),
+        maxFillAmountB(pb, constants, orderB, FMT(prefix, ".maxFillAmountB")),
 
         // Match the orders
         matchingGadget(pb, constants,
@@ -635,14 +713,17 @@ public:
                        orderB, {maxFillAmountB.getFillAmountS(), maxFillAmountB.getFillAmountB()},
                        FMT(prefix, ".matchingGadget")),
 
+        // use input fillS_A to calculate order fillS_B and which should eq input fillS_B
+        limitFillCalculationGadget(pb, constants, maxFillAmountA.getFillAmountS(), fillS_A, fillS_B, orderB, FMT(prefix, ".limitFillCalculationGadget")),
+
         // Check if tokenS/tokenB match
         orderA_tokenS_eq_orderB_tokenB(pb, orderA.tokenS.packed, orderB.tokenB.packed, FMT(prefix, ".orderA_tokenS_eq_orderB_tokenB")),
         orderA_tokenB_eq_orderB_tokenS(pb, orderA.tokenB.packed, orderB.tokenS.packed, FMT(prefix, ".orderA_tokenB_eq_orderB_tokenS")),
 
         // Check if the orders in the settlement are correctly filled
-        checkValidA(pb, constants, timestamp, orderA, matchingGadget.getFillA_S(), matchingGadget.getFillA_B(), FMT(prefix, ".checkValidA")),
-        checkValidB(pb, constants, timestamp, orderB, matchingGadget.getFillB_S(), matchingGadget.getFillB_B(), FMT(prefix, ".checkValidB")),
-        valid(pb, {matchingGadget.isMatchable(), checkValidA.isValid(), checkValidB.isValid()}, FMT(prefix, ".valid"))
+        checkValidA(pb, constants, timestamp, orderA, limitFillCalculationGadget.getFillA_S(), limitFillCalculationGadget.getFillA_B(), FMT(prefix, ".checkValidA")),
+        checkValidB(pb, constants, timestamp, orderB, limitFillCalculationGadget.getFillB_S(), limitFillCalculationGadget.getFillB_B(), FMT(prefix, ".checkValidB")),
+        valid(pb, {matchingGadget.isMatchable(), limitFillCalculationGadget.isValid(), checkValidA.isValid(), checkValidB.isValid()}, FMT(prefix, ".valid"))
     {
 
     }
@@ -655,6 +736,9 @@ public:
 
         // Match the orders
         matchingGadget.generate_r1cs_witness();
+
+        // 2 pass to calc the fillS/B
+        limitFillCalculationGadget.generate_r1cs_witness();
 
         // Check if tokenS/tokenB match
         orderA_tokenS_eq_orderB_tokenB.generate_r1cs_witness();
@@ -675,6 +759,9 @@ public:
         // Match the orders
         matchingGadget.generate_r1cs_constraints();
 
+        // 2 pass to calc the fillS/B
+        limitFillCalculationGadget.generate_r1cs_constraints();
+
         // Check if tokenS/tokenB match
         orderA_tokenS_eq_orderB_tokenB.generate_r1cs_constraints();
         orderA_tokenB_eq_orderB_tokenS.generate_r1cs_constraints();
@@ -687,22 +774,22 @@ public:
 
     const VariableT& getFillA_S() const
     {
-        return matchingGadget.getFillA_S();
+        return limitFillCalculationGadget.getFillA_S();
     }
 
     const VariableT& getFillA_B() const
     {
-        return matchingGadget.getFillA_B();
+        return limitFillCalculationGadget.getFillA_B();
     }
 
     const VariableT& getFillB_S() const
     {
-        return matchingGadget.getFillB_S();
+        return limitFillCalculationGadget.getFillB_S();
     }
 
     const VariableT& getFillB_B() const
     {
-        return matchingGadget.getFillB_B();
+        return limitFillCalculationGadget.getFillB_B();
     }
 
     const VariableT& isValid() const
