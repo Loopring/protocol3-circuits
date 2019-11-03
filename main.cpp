@@ -24,7 +24,10 @@ enum class Mode
 {
     CreateKeys = 0,
     Validate,
-    Prove
+    Prove,
+    ExportCircuit,
+    ExportWitness,
+    CreatePk
 };
 
 static inline auto now() -> decltype(std::chrono::high_resolution_clock::now()) {
@@ -99,7 +102,7 @@ bool generateProof(ethsnarks::ProtoboardT& pb, const char *provingKeyFilename, c
 
     clock_gettime(CLOCK_MONOTONIC, &time2);
     timespec duration = diff(time1,time2);
-    std::cout << "Generated proof in " << duration.tv_sec << " seconds (" << pb.num_constraints() / duration.tv_sec << " constraints/second)" << std::endl;
+    std::cout << "Generated proof in " << duration.tv_sec << " seconds (" << pb.num_constraints() / (duration.tv_sec + 1) << " constraints/second)" << std::endl;
 
     std::ofstream fproof(proofFilename);
     if (!fproof.is_open())
@@ -293,6 +296,9 @@ int main (int argc, char **argv)
         std::cerr << "-prove <block.json> <out_proof.json>: Proves a block" << std::endl;
         std::cerr << "-createkeys <protoBlock.json>: Creates prover/verifier keys" << std::endl;
         std::cerr << "-verify <vk.json> <proof.json>: Verify a proof" << std::endl;
+        std::cerr << "-exportcircuit <block.json> <circuit.json>: Exports the rc1s circuit to json (circom - not all fields)" << std::endl;
+        std::cerr << "-exportwitness <block.json> <witness.json>: Exports the witness to json (circom)" << std::endl;
+        std::cerr << "-createpk <block.json> <pk.json>: Creates the proving key using a bellman pk" << std::endl;
         return 1;
     }
 
@@ -313,6 +319,7 @@ int main (int argc, char **argv)
     {
         if (argc != 4)
         {
+            std::cout << "Invalid number of arguments!"<< std::endl;
             return 1;
         }
         mode = Mode::Prove;
@@ -323,6 +330,7 @@ int main (int argc, char **argv)
     {
         if (argc != 3)
         {
+            std::cout << "Invalid number of arguments!"<< std::endl;
             return 1;
         }
         mode = Mode::CreateKeys;
@@ -332,6 +340,7 @@ int main (int argc, char **argv)
     {
         if (argc != 4)
         {
+            std::cout << "Invalid number of arguments!"<< std::endl;
             return 1;
         }
         std::cout << "Verify for " << argv[3] << " ..." << std::endl;
@@ -341,6 +350,36 @@ int main (int argc, char **argv)
         }
         std::cout << "Proof is valid" << std::endl;
         return 0;
+    }
+    else if (strcmp(argv[1], "-exportcircuit") == 0)
+    {
+        if (argc != 4)
+        {
+            std::cout << "Invalid number of arguments!"<< std::endl;
+            return 1;
+        }
+        mode = Mode::ExportCircuit;
+        std::cout << "Exporting circuit for " << argv[2] << "..." << std::endl;
+    }
+    else if (strcmp(argv[1], "-exportwitness") == 0)
+    {
+        if (argc != 4)
+        {
+            std::cout << "Invalid number of arguments!"<< std::endl;
+            return 1;
+        }
+        mode = Mode::ExportWitness;
+        std::cout << "Exporting witness for " << argv[2] << "..." << std::endl;
+    }
+    else if (strcmp(argv[1], "-createpk") == 0)
+    {
+        if (argc != 4)
+        {
+            std::cout << "Invalid number of arguments!"<< std::endl;
+            return 1;
+        }
+        mode = Mode::CreatePk;
+        std::cout << "Creating pk for " << argv[2] << " using " << argv[3] << " ..." << std::endl;
     }
     else
     {
@@ -495,7 +534,6 @@ int main (int argc, char **argv)
         }
     }
 
-
     if (mode == Mode::Prove)
     {
 #ifdef GPU_PROVE
@@ -510,6 +548,34 @@ int main (int argc, char **argv)
             return 1;
         }
 #endif
+
+    }
+
+    if (mode == Mode::ExportCircuit)
+    {
+        if (!r1cs2json(pb, argv[3]))
+        {
+            std::cerr << "Failed to export circuit!" << std::endl;
+            return 1;
+        }
+    }
+
+    if (mode == Mode::ExportWitness)
+    {
+        if (!witness2json(pb, argv[3]))
+        {
+            std::cerr << "Failed to export witness!" << std::endl;
+            return 1;
+        }
+    }
+
+    if (mode == Mode::CreatePk)
+    {
+        if (!pk_bellman2ethsnarks(pb, argv[3], (baseFilename + "_pk.raw").c_str()))
+        {
+            return 1;
+        }
+        std::cout << "pk file created: " << (baseFilename + "_pk.raw").c_str() << std::endl;
     }
 
     return 0;
