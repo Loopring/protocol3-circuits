@@ -270,7 +270,7 @@ namespace Simulator
         return {filled, cancelled};
     }
 
-    Fill getMaxFillAmounts(const OrderState& orderState, const FieldT& maxFillS, const FieldT& maxFillB)
+    Fill getMaxFillAmounts(const OrderState& orderState)
     {
         TradeHistory tradeHistory = getTradeHistory(orderState);
         FieldT remainingS = 0;
@@ -287,8 +287,6 @@ namespace Simulator
         }
         FieldT fillAmountS = lt(orderState.balanceLeafS.balance, remainingS) ? orderState.balanceLeafS.balance : remainingS;
         FieldT fillAmountB = muldiv(fillAmountS, orderState.order.amountB, orderState.order.amountS);
-        fillAmountS = lt(fillAmountS, maxFillS) ? fillAmountS : maxFillS;
-        fillAmountB = lt(fillAmountB, maxFillB) ? fillAmountB : maxFillB;
         return {fillAmountS, fillAmountB};
     }
 
@@ -327,29 +325,36 @@ namespace Simulator
         return valid;
     }
 
-    Settlement settle(const FieldT& timestamp, const OrderState& orderStateA, const OrderState& orderStateB, const FieldT& maxFillS_A, const FieldT& maxFillS_B)
+    Settlement settle(const FieldT& timestamp, const OrderState& orderStateA, const OrderState& orderStateB, const FieldT& inFillS_A, const FieldT& inFillS_B)
     {
-        Fill fillA = getMaxFillAmounts(orderStateA, maxFillS_A, maxFillS_B);
-        Fill fillB = getMaxFillAmounts(orderStateB, maxFillS_B, maxFillS_A);
+        Fill fillA = getMaxFillAmounts(orderStateA);
+        Fill fillB = getMaxFillAmounts(orderStateB);
 
         bool matchable;
         if (orderStateA.order.buy == FieldT::one())
         {
-            // maker.B < taker.S ==> B.B < A.S
             matchable = match(orderStateA.order, fillA, orderStateB.order, fillB);
             fillA.S = fillB.B;
         }
         else
         {
-            // maker.B < taker.S ==> A.B < B.S
             matchable = match(orderStateB.order, fillB, orderStateA.order, fillA);
-            fillB.S = fillA.B;
+            fillA.B = fillB.S;
         }
 
         bool valid = matchable;
-        valid = valid && checkValid(orderStateA.order, fillA.S, fillA.B, timestamp);
-        valid = valid && checkValid(orderStateB.order, fillB.S, fillB.B, timestamp);
-        return {fillA.S, fillB.S, valid};
+        valid = valid && Simulator::lte(inFillS_A, fillA.S);
+        valid = valid && Simulator::lte(inFillS_B, fillB.S);
+
+        // check if encoded roundNewFillS_B(24bit) calculated from fillS_A equals to inFillS_B(24bit)
+        FieldT newFillS_B = muldiv(inFillS_A, orderStateB.order.amountS, orderStateB.order.amountB);
+        auto floatNewFillS_B = toFloat(newFillS_B, Float24Encoding);
+        FieldT roundNewFillS_B(fromFloat(floatNewFillS_B, Float24Encoding).to_string().c_str());
+
+        valid = valid && (roundNewFillS_B == inFillS_B);
+        valid = valid && checkValid(orderStateA.order, inFillS_A, roundNewFillS_B, timestamp);
+        valid = valid && checkValid(orderStateB.order, roundNewFillS_B, inFillS_A, timestamp);
+        return {inFillS_A, roundNewFillS_B, valid};
     }
 }
 
@@ -438,7 +443,6 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
                 expectedValidValue = (expectedValid == ExpectedValid::Valid) ? true : false;
             }
             REQUIRE(expectedValidValue == settlement.valid);
-
             REQUIRE((pb.val(orderMatching.isValid()) == (expectedValidValue ? 1 : 0)));
             if (expectedValidValue)
             {
@@ -471,6 +475,7 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
     const BalanceLeaf& A_balanceLeafB = ringSettlement.balanceUpdateB_A.before;
     const TradeHistoryLeaf& A_tradeHistoryLeaf = ringSettlement.tradeHistoryUpdate_A.before;
     const OrderState orderStateA = {A_order, A_account, A_balanceLeafS, A_balanceLeafB, A_tradeHistoryLeaf};
+    const FieldT expectFillS_A(fromFloat(ringSettlement.ring.fillS_A.as_ulong(), Float24Encoding).to_string().c_str());
 
     const Order& B_order = ringSettlement.ring.orderB;
     const Account& B_account = ringSettlement.accountUpdate_B.before;
@@ -478,19 +483,22 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
     const BalanceLeaf& B_balanceLeafB = ringSettlement.balanceUpdateB_B.before;
     const TradeHistoryLeaf& B_tradeHistoryLeaf = ringSettlement.tradeHistoryUpdate_B.before;
     const OrderState orderStateB = {B_order, B_account, B_balanceLeafS, B_balanceLeafB, B_tradeHistoryLeaf};
+    const FieldT expectFillS_B(fromFloat(ringSettlement.ring.fillS_B.as_ulong(), Float24Encoding).to_string().c_str());
 
     unsigned int numTradeHistoryLeafs = pow(2, NUM_BITS_TRADING_HISTORY);
     const FieldT A_orderID = rand() % numTradeHistoryLeafs;
     const FieldT B_orderID = rand() % numTradeHistoryLeafs;
 
     FieldT maxAmount = getMaxFieldElement(NUM_BITS_AMOUNT);
+    FieldT maxAmountFill = roundToFloatValue(maxAmount, Float24Encoding);
 
     SECTION("Valid order match")
     {
         orderMatchingChecked(
             exchangeID, timestamp,
             orderStateA, orderStateB,
-            true
+            true, ExpectedValid::Automatic,
+            ExpectedFill::Manual, expectFillS_A, expectFillS_B
         );
     }
 
@@ -522,7 +530,8 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
         orderMatchingChecked(
             exchangeID, timestamp_mod,
             orderStateA, orderStateB,
-            true, ExpectedValid::Invalid
+            true, ExpectedValid::Invalid,
+            ExpectedFill::Manual, expectFillS_A, expectFillS_B
         );
     }
 
@@ -532,7 +541,8 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
         orderMatchingChecked(
             exchangeID, timestamp_mod,
             orderStateA, orderStateB,
-            true, ExpectedValid::Invalid
+            true, ExpectedValid::Invalid,
+            ExpectedFill::Manual, expectFillS_A, expectFillS_B
         );
     }
 
@@ -560,7 +570,7 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
                 exchangeID, timestamp,
                 orderStateA_mod, orderStateB_mod,
                 true, ExpectedValid::Valid,
-                ExpectedFill::Manual, maxAmount, maxAmount
+                ExpectedFill::Manual, maxAmountFill, maxAmountFill
             );
         }
     }
@@ -705,7 +715,7 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
                 exchangeID, timestamp,
                 orderStateA_mod, orderStateB_mod,
                 true, ExpectedValid::Invalid,
-                ExpectedFill::Automatic
+                ExpectedFill::Manual, buyA ? maxAmountFill : 1, maxAmountFill
             );
         }
     }
@@ -740,11 +750,13 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
                     B_balance,
                     0, false, B_orderID
                 );
+                FieldT fillS_A = roundToFloatValue(A_amountS, Float24Encoding);
+                FieldT fillS_B = roundToFloatValue(Simulator::muldiv(fillS_A, B_amountS, B_amountB), Float24Encoding);
                 orderMatchingChecked(
                     exchangeID, timestamp,
                     orderStateA_mod, orderStateB_mod,
                     true, ExpectedValid::Automatic,
-                    ExpectedFill::Automatic
+                    ExpectedFill::Manual, fillS_A, fillS_B
                 );
             }
         }
@@ -1048,7 +1060,7 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
         orderMatchingChecked(
             exchangeID, timestamp,
             orderStateA_mod, orderStateB_mod,
-            true, ExpectedValid::Valid,
+            true, ExpectedValid::Invalid,
             ExpectedFill::Manual, expectedFillS_A, expectedFillS_B
         );
     }
