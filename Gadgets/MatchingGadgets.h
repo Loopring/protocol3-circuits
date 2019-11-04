@@ -582,7 +582,7 @@ public:
 
 // LimitFillCalculationGadget use FillS_A(taker_sale) and maker's price to calculate FillS_B(maker sale)
 // which should equal to input fillS_B.
-// 1. check iff inFillS_A <= maxFillS_A
+// 1. check iff inFillS_A <= maxFillS_A & inFillS_B <= maxFillS_B
 // 2. use maker's price to calc FillS_B
 // 3. make sure newFillS_B == inFillS_B
 class LimitFillCalculationGadget : public GadgetT
@@ -592,6 +592,7 @@ public:
     const FloatGadget& fillS_B;
 
     LeqGadget       validFillS_A;
+    LeqGadget       validFillS_B;
     MulDivGadget    newFillS_B;
     FloatGadget     uFillS_B;
     EqualGadget     uFillS_B_eq_inFillS_B;
@@ -601,6 +602,7 @@ public:
         ProtoboardT& pb,
         const Constants& constants,
         const VariableT& maxFillS_A,
+        const VariableT& maxFillS_B,
         const FloatGadget& inFillS_A,
         const FloatGadget& inFillS_B,
         const OrderGadget& orderB,
@@ -612,6 +614,7 @@ public:
         fillS_B(inFillS_B),
 
         validFillS_A(pb, inFillS_A.value(), maxFillS_A, NUM_BITS_AMOUNT, FMT(prefix, ".validFillS_A(inputFillS_A <= maxFillS_A")),
+        validFillS_B(pb, inFillS_B.value(), maxFillS_B, NUM_BITS_AMOUNT, FMT(prefix, ".validFillS_B(inputFillS_B <= maxFillS_B")),
 
         newFillS_B(pb, constants, fillS_A.value(), orderB.amountS.packed, orderB.amountB.packed, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".newFillS_B")),
 
@@ -619,13 +622,14 @@ public:
 
         uFillS_B_eq_inFillS_B(pb, uFillS_B.value(), fillS_B.value(), FMT(prefix, ".uFillS_B_eq_inFillS_B")),
 
-        valid(pb, {validFillS_A.leq(), uFillS_B_eq_inFillS_B.result()}, FMT(prefix, ".valid"))
+        valid(pb, {validFillS_A.leq(), validFillS_B.leq(), uFillS_B_eq_inFillS_B.result()}, FMT(prefix, ".valid"))
     {
     }
 
     void generate_r1cs_witness()
     {
         validFillS_A.generate_r1cs_witness();
+        validFillS_B.generate_r1cs_witness();
         newFillS_B.generate_r1cs_witness();
         uFillS_B.generate_r1cs_witness(toFloat(pb.val(newFillS_B.result()), Float24Encoding));
         uFillS_B_eq_inFillS_B.generate_r1cs_witness();
@@ -635,6 +639,7 @@ public:
     void generate_r1cs_constraints()
     {
         validFillS_A.generate_r1cs_constraints();
+        validFillS_B.generate_r1cs_constraints();
         newFillS_B.generate_r1cs_constraints();
         uFillS_B.generate_r1cs_constraints();
         uFillS_B_eq_inFillS_B.generate_r1cs_constraints();
@@ -714,7 +719,7 @@ public:
                        FMT(prefix, ".matchingGadget")),
 
         // use input fillS_A to calculate order fillS_B and which should eq input fillS_B
-        limitFillCalculationGadget(pb, constants, maxFillAmountA.getFillAmountS(), fillS_A, fillS_B, orderB, FMT(prefix, ".limitFillCalculationGadget")),
+        limitFillCalculationGadget(pb, constants, matchingGadget.getFillA_S(), matchingGadget.getFillB_S(), fillS_A, fillS_B, orderB, FMT(prefix, ".limitFillCalculationGadget")),
 
         // Check if tokenS/tokenB match
         orderA_tokenS_eq_orderB_tokenB(pb, orderA.tokenS.packed, orderB.tokenB.packed, FMT(prefix, ".orderA_tokenS_eq_orderB_tokenB")),
