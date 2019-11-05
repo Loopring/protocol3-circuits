@@ -298,7 +298,7 @@ int main (int argc, char **argv)
         std::cerr << "-verify <vk.json> <proof.json>: Verify a proof" << std::endl;
         std::cerr << "-exportcircuit <block.json> <circuit.json>: Exports the rc1s circuit to json (circom - not all fields)" << std::endl;
         std::cerr << "-exportwitness <block.json> <witness.json>: Exports the witness to json (circom)" << std::endl;
-        std::cerr << "-createpk <block.json> <pk.json>: Creates the proving key using a bellman pk" << std::endl;
+        std::cerr << "-createpk <block.json> <pk.json> <pk.raw>: Creates the proving key using a bellman pk" << std::endl;
         return 1;
     }
 
@@ -373,7 +373,7 @@ int main (int argc, char **argv)
     }
     else if (strcmp(argv[1], "-createpk") == 0)
     {
-        if (argc != 4)
+        if (argc != 5)
         {
             std::cout << "Invalid number of arguments!"<< std::endl;
             return 1;
@@ -571,11 +571,11 @@ int main (int argc, char **argv)
 
     if (mode == Mode::CreatePk)
     {
-        if (!pk_bellman2ethsnarks(pb, argv[3], (baseFilename + "_pk.raw").c_str()))
+        if (!pk_bellman2ethsnarks(pb, argv[3], argv[4]))
         {
             return 1;
         }
-        std::cout << "pk file created: " << (baseFilename + "_pk.raw").c_str() << std::endl;
+        std::cout << "pk file created: " << argv[4] << std::endl;
     }
 
     return 0;
