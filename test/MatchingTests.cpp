@@ -3,7 +3,7 @@
 
 #include "../Gadgets/MatchingGadgets.h"
 
-TEST_CASE("CheckFillRate", "[CheckFillRateGadget]")
+TEST_CASE("RequireFillRate", "[RequireFillRateGadget]")
 {
     unsigned int maxLength = NUM_BITS_AMOUNT;
     unsigned int numIterations = 8;
@@ -28,11 +28,11 @@ TEST_CASE("CheckFillRate", "[CheckFillRateGadget]")
             VariableT fillAmountB = make_variable(pb, toFieldElement(_fillAmountB), "fillAmountB");
 
             Constants constants(pb, "constants");
-            CheckFillRateGadget checkFillRateGadget(pb, constants, amountS, amountB, fillAmountS, fillAmountB, n, "checkFillRateGadget");
-            checkFillRateGadget.generate_r1cs_constraints();
-            checkFillRateGadget.generate_r1cs_witness();
+            RequireFillRateGadget requireFillRateGadget(pb, constants, amountS, amountB, fillAmountS, fillAmountB, n, "requireFillRateGadget");
+            requireFillRateGadget.generate_r1cs_constraints();
+            requireFillRateGadget.generate_r1cs_witness();
 
-            bool expectedAutomaticValid = (_fillAmountS * _amountB * 100) < (_fillAmountB * _amountS * 101);
+            bool expectedAutomaticValid = (_fillAmountS * _amountB * 1000) < (_fillAmountB * _amountS * 1001);
             bool expectedValid = false;
             if (expected == Expected::Automatic)
             {
@@ -44,8 +44,7 @@ TEST_CASE("CheckFillRate", "[CheckFillRateGadget]")
             }
             REQUIRE(expectedAutomaticValid == expectedValid);
 
-            REQUIRE(pb.is_satisfied());
-            REQUIRE((pb.val(checkFillRateGadget.isValid()) == (expectedValid ? 1 : 0)));
+            REQUIRE(pb.is_satisfied() == expectedValid);
         };
 
         BigInt max = getMaxFieldElementAsBigInt(n);
@@ -115,14 +114,14 @@ TEST_CASE("CheckFillRate", "[CheckFillRateGadget]")
                 // Change fillAmountS
                 for(unsigned int fillS = 1; fillS < targetFillS * 2; fillS++)
                 {
-                    bool expectedValid = fillS < targetFillS + targetFillS / 100;
+                    bool expectedValid = fillS < targetFillS + targetFillS / 1000;
                     checkFillRateChecked(20000, 2000, fillS, targetFillB, expectedValid ? Expected::Valid : Expected::Invalid);
                 }
 
                 // Change fillAmountB
                 for(unsigned int fillB = 1; fillB < targetFillB * 2; fillB++)
                 {
-                    bool expectedValid = fillB > targetFillB - targetFillB / 100;
+                    bool expectedValid = fillB > targetFillB - targetFillB / 1000;
                     checkFillRateChecked(20000, 2000, targetFillS, fillB, expectedValid ? Expected::Valid : Expected::Invalid);
                 }
             }
@@ -309,7 +308,7 @@ namespace Simulator
 
     bool checkFillRate(const FieldT& amountS, const FieldT& amountB, const FieldT& fillAmountS, const FieldT& fillAmountB)
     {
-        return lt(fillAmountS * amountB * FieldT(100), fillAmountB * amountS * FieldT(101));
+        return lt(fillAmountS * amountB * FieldT(1000), fillAmountB * amountS * FieldT(1001));
     }
 
     bool checkValid(const Order& order, const FieldT& fillAmountS, const FieldT& fillAmountB, const FieldT& timestamp)
@@ -325,7 +324,7 @@ namespace Simulator
         return valid;
     }
 
-    Settlement settle(const FieldT& timestamp, const OrderState& orderStateA, const OrderState& orderStateB, const FieldT& inFillS_A, const FieldT& inFillS_B)
+    Settlement settle(const FieldT& timestamp, const OrderState& orderStateA, const OrderState& orderStateB)
     {
         Fill fillA = getMaxFillAmounts(orderStateA);
         Fill fillB = getMaxFillAmounts(orderStateB);
@@ -343,18 +342,10 @@ namespace Simulator
         }
 
         bool valid = matchable;
-        valid = valid && Simulator::lte(inFillS_A, fillA.S);
-        valid = valid && Simulator::lte(inFillS_B, fillB.S);
+        valid = valid && checkValid(orderStateA.order, fillA.S, fillA.B, timestamp);
+        valid = valid && checkValid(orderStateB.order, fillB.S, fillB.B, timestamp);
 
-        // check if encoded roundNewFillS_B(24bit) calculated from fillS_A equals to inFillS_B(24bit)
-        FieldT newFillS_B = muldiv(inFillS_A, orderStateB.order.amountS, orderStateB.order.amountB);
-        auto floatNewFillS_B = toFloat(newFillS_B, Float24Encoding);
-        FieldT roundNewFillS_B(fromFloat(floatNewFillS_B, Float24Encoding).to_string().c_str());
-
-        valid = valid && (roundNewFillS_B == inFillS_B);
-        valid = valid && checkValid(orderStateA.order, inFillS_A, roundNewFillS_B, timestamp);
-        valid = valid && checkValid(orderStateB.order, roundNewFillS_B, inFillS_A, timestamp);
-        return {inFillS_A, roundNewFillS_B, valid};
+        return {fillA.S, fillB.S, valid};
     }
 }
 
@@ -395,7 +386,7 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
     auto orderMatchingChecked = [](const FieldT& _exchangeID, const FieldT& _timestamp,
                                    const OrderState& orderStateA, const OrderState& orderStateB,
                                    bool expectedSatisfied, ExpectedValid expectedValid = ExpectedValid::Valid,
-                                   ExpectedFill expectedFill = ExpectedFill::Automatic, const FieldT& expectedFillS_A = 0, const FieldT& expectedFillS_B = 0)
+                                   ExpectedFill expectedFill = ExpectedFill::Automatic, FieldT _expectedFillS_A = 0, FieldT _expectedFillS_B = 0)
     {
         protoboard<FieldT> pb;
 
@@ -413,52 +404,33 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
 
         unsigned int fFillS_A = toFloat(orderStateA.order.amountS, Float24Encoding);
         unsigned int fFillS_B = toFloat(orderStateB.order.amountS, Float24Encoding);
-        if (expectedFill != ExpectedFill::Automatic)
+
+        Simulator::Settlement settlement = Simulator::settle(_timestamp, orderStateA, orderStateB);
+        bool expectedValidValue = settlement.valid;
+        if (expectedValid != ExpectedValid::Automatic)
         {
-            fFillS_A = toFloat(expectedFillS_A, Float24Encoding);
-            fFillS_B = toFloat(expectedFillS_B, Float24Encoding);
+            expectedValidValue = (expectedValid == ExpectedValid::Valid) ? true : false;
         }
 
-        FloatGadget floatGadgetfillS_A(pb, constants, Float24Encoding, ".floatGadgetfillS_A");
-        FloatGadget floatGadgetfillS_B(pb, constants, Float24Encoding, ".floatGadgetfillS_B");
-        floatGadgetfillS_A.generate_r1cs_constraints();
-        floatGadgetfillS_B.generate_r1cs_constraints();
-        floatGadgetfillS_A.generate_r1cs_witness(fFillS_A);
-        floatGadgetfillS_B.generate_r1cs_witness(fFillS_B);
+        if (expectedFill == ExpectedFill::Automatic)
+        {
+            _expectedFillS_A = settlement.fillS_A;
+            _expectedFillS_B = settlement.fillS_B;
+        }
+        VariableT expectedFillS_A = make_variable(pb, roundToFloatValue(_expectedFillS_A, Float24Encoding), "expectedFillS_A");
+        VariableT expectedFillS_B = make_variable(pb, roundToFloatValue(_expectedFillS_B, Float24Encoding), "expectedFillS_B");
 
-        OrderMatchingGadget orderMatching(pb, constants, timestamp, orderA, orderB, floatGadgetfillS_A, floatGadgetfillS_B, "orderMatching");
+        OrderMatchingGadget orderMatching(pb, constants, timestamp, orderA, orderB, expectedFillS_A, expectedFillS_B, "orderMatching");
         orderMatching.generate_r1cs_constraints();
         orderMatching.generate_r1cs_witness();
 
-        REQUIRE(pb.is_satisfied() == expectedSatisfied);
-        if (expectedSatisfied)
+        REQUIRE(pb.is_satisfied() == (expectedSatisfied && expectedValidValue));
+        if (expectedSatisfied && expectedValidValue)
         {
-            FieldT settleFillS(fromFloat(fFillS_A, Float24Encoding).to_string().c_str());
-            FieldT settleFillB(fromFloat(fFillS_B, Float24Encoding).to_string().c_str());
-            Simulator::Settlement settlement = Simulator::settle(_timestamp, orderStateA, orderStateB, settleFillS, settleFillB);
-
-            bool expectedValidValue = settlement.valid;
-            if (expectedValid != ExpectedValid::Automatic)
-            {
-                expectedValidValue = (expectedValid == ExpectedValid::Valid) ? true : false;
-            }
-            REQUIRE(expectedValidValue == settlement.valid);
-            REQUIRE((pb.val(orderMatching.isValid()) == (expectedValidValue ? 1 : 0)));
-            if (expectedValidValue)
-            {
-                FieldT fillS_A = settlement.fillS_A;
-                FieldT fillS_B = settlement.fillS_B;
-                if (expectedFill == ExpectedFill::Manual)
-                {
-                    fillS_A = roundToFloatValue(expectedFillS_A, Float24Encoding);
-                    fillS_B = roundToFloatValue(expectedFillS_B, Float24Encoding);
-                }
-                REQUIRE((fillS_A == settlement.fillS_A));
-                REQUIRE((fillS_B == settlement.fillS_B));
-
-                REQUIRE((pb.val(orderMatching.getFillA_S()) == fillS_A));
-                REQUIRE((pb.val(orderMatching.getFillB_S()) == fillS_B));
-            }
+            REQUIRE((pb.val(orderMatching.getFillA_S()) == pb.val(expectedFillS_A)));
+            REQUIRE((pb.val(orderMatching.getFillA_B()) == pb.val(expectedFillS_B)));
+            REQUIRE((pb.val(orderMatching.getFillB_S()) == pb.val(expectedFillS_B)));
+            REQUIRE((pb.val(orderMatching.getFillB_B()) == pb.val(expectedFillS_A)));
         }
     };
 
@@ -750,13 +722,11 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
                     B_balance,
                     0, false, B_orderID
                 );
-                FieldT fillS_A = roundToFloatValue(A_amountS, Float24Encoding);
-                FieldT fillS_B = roundToFloatValue(Simulator::muldiv(fillS_A, B_amountS, B_amountB), Float24Encoding);
                 orderMatchingChecked(
                     exchangeID, timestamp,
                     orderStateA_mod, orderStateB_mod,
                     true, ExpectedValid::Automatic,
-                    ExpectedFill::Manual, fillS_A, fillS_B
+                    ExpectedFill::Automatic
                 );
             }
         }
@@ -910,7 +880,7 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
                 0, false, B_orderID
             );
 
-            ExpectedValid expectedValid = (i >= 100) ? ExpectedValid::Valid : ExpectedValid::Invalid;
+            ExpectedValid expectedValid = (i >= 50) ? ExpectedValid::Valid : ExpectedValid::Invalid;
             FieldT expectedFill = (i >= 100) ? 100 : 100;
             orderMatchingChecked(
                 exchangeID, timestamp,
@@ -1060,7 +1030,7 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
         orderMatchingChecked(
             exchangeID, timestamp,
             orderStateA_mod, orderStateB_mod,
-            true, ExpectedValid::Invalid,
+            true, ExpectedValid::Valid,
             ExpectedFill::Manual, expectedFillS_A, expectedFillS_B
         );
     }
