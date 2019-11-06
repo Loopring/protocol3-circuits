@@ -124,22 +124,12 @@ public:
     const VariableT tradingHistoryRootA_O;
     const VariableT tradingHistoryRootB_O;
 
-    // Match orders
-    OrderMatchingGadget orderMatching;
-
-    // Fill amounts
-    TernaryGadget uFillS_A;
-    TernaryGadget uFillS_B;
+    // Order fills
     FloatGadget fillS_A;
     FloatGadget fillS_B;
-    RequireAccuracyGadget requireAccuracyFillS_A;
-    RequireAccuracyGadget requireAccuracyFillS_B;
 
-    // Filled amounts
-    TernaryGadget filledA;
-    TernaryGadget filledB;
-    AddGadget filledAfterA;
-    AddGadget filledAfterB;
+    // Match orders
+    OrderMatchingGadget orderMatching;
 
     // Calculate fees
     FeeCalculatorGadget feeCalculatorA;
@@ -212,22 +202,12 @@ public:
         tradingHistoryRootA_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootA_O"))),
         tradingHistoryRootB_O(make_variable(pb, FMT(prefix, ".tradingHistoryRootB_O"))),
 
-        // Match orders
-        orderMatching(pb, constants, timestamp, orderA, orderB, FMT(prefix, ".orderMatching")),
-
-        // Fill amounts
-        uFillS_A(pb, orderMatching.isValid(), orderMatching.getFillA_S(), constants.zero, FMT(prefix, ".uFillS_A")),
-        uFillS_B(pb, orderMatching.isValid(), orderMatching.getFillB_S(), constants.zero, FMT(prefix, ".uFillS_B")),
+        // Order fills
         fillS_A(pb, constants, Float24Encoding, FMT(prefix, ".fillS_A")),
         fillS_B(pb, constants, Float24Encoding, FMT(prefix, ".fillS_B")),
-        requireAccuracyFillS_A(pb, fillS_A.value(), uFillS_A.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFillS_A")),
-        requireAccuracyFillS_B(pb, fillS_B.value(), uFillS_B.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFillS_B")),
 
-        // Filled amounts
-        filledA(pb, orderA.buy.packed, fillS_B.value(), fillS_A.value(), FMT(prefix, ".filledA")),
-        filledB(pb, orderB.buy.packed, fillS_A.value(), fillS_B.value(), FMT(prefix, ".filledB")),
-        filledAfterA(pb, orderA.tradeHistory.getFilled(), filledA.result(), NUM_BITS_AMOUNT, FMT(prefix, ".filledAfterA")),
-        filledAfterB(pb, orderB.tradeHistory.getFilled(), filledB.result(), NUM_BITS_AMOUNT, FMT(prefix, ".filledAfterB")),
+        // Match orders
+        orderMatching(pb, constants, timestamp, orderA, orderB, fillS_A.value(), fillS_B.value(), FMT(prefix, ".orderMatching")),
 
         // Calculate fees
         feeCalculatorA(pb, constants, fillS_B.value(), protocolTakerFeeBips, orderA.feeBips.packed, orderA.rebateBips.packed, FMT(prefix, ".feeCalculatorA")),
@@ -250,7 +230,7 @@ public:
         // Update UserA
         updateTradeHistory_A(pb, orderA.balanceSBefore.tradingHistory, subArray(orderA.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
                              {orderA.tradeHistoryBefore.filled, orderA.tradeHistoryBefore.cancelled, orderA.tradeHistoryBefore.orderID},
-                             {filledAfterA.result(), orderA.tradeHistory.getCancelledToStore(), orderA.tradeHistory.getOrderIDToStore()},
+                             {orderMatching.getFilledAfter_A(), orderA.tradeHistory.getCancelledToStore(), orderA.tradeHistory.getOrderIDToStore()},
                              FMT(prefix, ".updateTradeHistory_A")),
         updateBalanceS_A(pb, orderA.accountBefore.balancesRoot, orderA.tokenS.bits,
                          {balanceS_A.front(), orderA.balanceSBefore.tradingHistory},
@@ -268,7 +248,7 @@ public:
         // Update UserB
         updateTradeHistory_B(pb, orderB.balanceSBefore.tradingHistory, subArray(orderB.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
                              {orderB.tradeHistoryBefore.filled, orderB.tradeHistoryBefore.cancelled, orderB.tradeHistoryBefore.orderID},
-                             {filledAfterB.result(), orderB.tradeHistory.getCancelledToStore(), orderB.tradeHistory.getOrderIDToStore()},
+                             {orderMatching.getFilledAfter_B(), orderB.tradeHistory.getCancelledToStore(), orderB.tradeHistory.getOrderIDToStore()},
                              FMT(prefix, ".updateTradeHistory_B")),
         updateBalanceS_B(pb, orderB.accountBefore.balancesRoot, orderB.tokenS.bits,
                          {balanceS_B.front(), orderB.balanceSBefore.tradingHistory},
@@ -329,22 +309,12 @@ public:
         pb.val(tradingHistoryRootA_O) = ringSettlement.balanceUpdateA_O.before.tradingHistoryRoot;
         pb.val(tradingHistoryRootB_O) = ringSettlement.balanceUpdateB_O.before.tradingHistoryRoot;
 
+        // Order fills
+        fillS_A.generate_r1cs_witness(ringSettlement.ring.fillS_A);
+        fillS_B.generate_r1cs_witness(ringSettlement.ring.fillS_B);
+
         // Match orders
         orderMatching.generate_r1cs_witness();
-
-        // Fill amounts
-        uFillS_A.generate_r1cs_witness();
-        uFillS_B.generate_r1cs_witness();
-        fillS_A.generate_r1cs_witness(toFloat(pb.val(uFillS_A.result()), Float24Encoding));
-        fillS_B.generate_r1cs_witness(toFloat(pb.val(uFillS_B.result()), Float24Encoding));
-        requireAccuracyFillS_A.generate_r1cs_witness();
-        requireAccuracyFillS_B.generate_r1cs_witness();
-
-        // Filled amounts
-        filledA.generate_r1cs_witness();
-        filledB.generate_r1cs_witness();
-        filledAfterA.generate_r1cs_witness();
-        filledAfterB.generate_r1cs_witness();
 
         // Calculate fees
         feeCalculatorA.generate_r1cs_witness();
@@ -392,22 +362,12 @@ public:
         orderA.generate_r1cs_constraints();
         orderB.generate_r1cs_constraints();
 
-        // Match orders
-        orderMatching.generate_r1cs_constraints();
-
-        // Fill amounts
-        uFillS_A.generate_r1cs_constraints();
-        uFillS_B.generate_r1cs_constraints();
+        // Order fills
         fillS_A.generate_r1cs_constraints();
         fillS_B.generate_r1cs_constraints();
-        requireAccuracyFillS_A.generate_r1cs_constraints();
-        requireAccuracyFillS_B.generate_r1cs_constraints();
 
-        // Filled amounts
-        filledA.generate_r1cs_constraints();
-        filledB.generate_r1cs_constraints();
-        filledAfterA.generate_r1cs_constraints();
-        filledAfterB.generate_r1cs_constraints();
+        // Match orders
+        orderMatching.generate_r1cs_constraints();
 
         // Calculate fees
         feeCalculatorA.generate_r1cs_constraints();

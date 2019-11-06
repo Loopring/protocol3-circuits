@@ -29,8 +29,8 @@ class Constants : public GadgetT
 public:
     const VariableT zero;
     const VariableT one;
-    const VariableT _100;
-    const VariableT _101;
+    const VariableT _1000;
+    const VariableT _1001;
     const VariableT _10000;
     const VariableT _100000;
     const VariableT emptyTradeHistory;
@@ -47,8 +47,8 @@ public:
 
         zero(make_variable(pb, FieldT::zero(), FMT(prefix, ".zero"))),
         one(make_variable(pb, FieldT::one(), FMT(prefix, ".one"))),
-        _100(make_variable(pb, ethsnarks::FieldT(100), FMT(prefix, "._100"))),
-        _101(make_variable(pb, ethsnarks::FieldT(101), FMT(prefix, "._101"))),
+        _1000(make_variable(pb, ethsnarks::FieldT(1000), FMT(prefix, "._1000"))),
+        _1001(make_variable(pb, ethsnarks::FieldT(1001), FMT(prefix, "._1001"))),
         _10000(make_variable(pb, ethsnarks::FieldT(10000), FMT(prefix, "._10000"))),
         _100000(make_variable(pb, ethsnarks::FieldT(100000), FMT(prefix, "._100000"))),
         emptyTradeHistory(make_variable(pb, ethsnarks::FieldT(EMPTY_TRADE_HISTORY), FMT(prefix, ".emptyTradeHistory"))),
@@ -69,8 +69,8 @@ public:
     {
         pb.add_r1cs_constraint(ConstraintT(zero, FieldT::one(), FieldT::zero()), ".zero");
         pb.add_r1cs_constraint(ConstraintT(one, FieldT::one(), FieldT::one()), ".one");
-        pb.add_r1cs_constraint(ConstraintT(_100, FieldT::one(), ethsnarks::FieldT(100)), "._100");
-        pb.add_r1cs_constraint(ConstraintT(_101, FieldT::one(), ethsnarks::FieldT(101)), "._101");
+        pb.add_r1cs_constraint(ConstraintT(_1000, FieldT::one(), ethsnarks::FieldT(1000)), "._1000");
+        pb.add_r1cs_constraint(ConstraintT(_1001, FieldT::one(), ethsnarks::FieldT(1001)), "._1001");
         pb.add_r1cs_constraint(ConstraintT(_10000, FieldT::one(), ethsnarks::FieldT(10000)), "._10000");
         pb.add_r1cs_constraint(ConstraintT(_100000, FieldT::one(), ethsnarks::FieldT(100000)), "._100000");
         pb.add_r1cs_constraint(ConstraintT(emptyTradeHistory, FieldT::one(), ethsnarks::FieldT(EMPTY_TRADE_HISTORY)), ".emptyTradeHistory");
