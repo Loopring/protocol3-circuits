@@ -3,6 +3,51 @@
 
 #include "../Gadgets/MatchingGadgets.h"
 
+struct OrderState
+{
+    Order order;
+    Account account;
+    BalanceLeaf balanceLeafS;
+    BalanceLeaf balanceLeafB;
+    TradeHistoryLeaf tradeHistoryLeaf;
+};
+
+OrderState setOrderState(const OrderState& orderState,
+                         const FieldT& orderID,
+                         const FieldT& amountS, const FieldT& amountB, bool buy,
+                         const FieldT& balanceS,
+                         const FieldT& filled, bool cancelled, const FieldT& tradeHistoryOrderID,
+                         bool allOrNone = false)
+{
+    OrderState newOrderState(orderState);
+    newOrderState.order.orderID = orderID;
+    newOrderState.order.amountS = amountS;
+    newOrderState.order.amountB = amountB;
+    newOrderState.order.buy = buy ? 1 : 0;
+    newOrderState.order.allOrNone = allOrNone ? 1 : 0;
+    newOrderState.balanceLeafS.balance = balanceS;
+    newOrderState.balanceLeafB.balance = 0;
+    newOrderState.tradeHistoryLeaf.filled = filled;
+    newOrderState.tradeHistoryLeaf.cancelled = cancelled ? 1 : 0;
+    newOrderState.tradeHistoryLeaf.orderID = tradeHistoryOrderID;
+    return newOrderState;
+};
+
+bool lt(const FieldT& A, const FieldT& B)
+{
+    return toBigInt(A) < toBigInt(B);
+}
+
+bool lte(const FieldT& A, const FieldT& B)
+{
+    return toBigInt(A) <= toBigInt(B);
+}
+
+FieldT muldiv(const FieldT& V, const FieldT& N, const FieldT& D)
+{
+    return toFieldElement(validate(toBigInt(V) * toBigInt(N)) / toBigInt(D));
+}
+
 TEST_CASE("RequireFillRate", "[RequireFillRateGadget]")
 {
     unsigned int maxLength = NUM_BITS_AMOUNT;
@@ -129,6 +174,212 @@ TEST_CASE("RequireFillRate", "[RequireFillRateGadget]")
     }}
 }
 
+TEST_CASE("RequireFillLimit", "[RequireFillLimitGadget]")
+{
+    unsigned int numIterations = 1024;
+
+    RingSettlementBlock block = getRingSettlementBlock();
+    REQUIRE(block.ringSettlements.size() > 0);
+    const RingSettlement& ringSettlement = block.ringSettlements[0];
+
+    const Order& order = ringSettlement.ring.orderA;
+    const Account& account = ringSettlement.accountUpdate_A.before;
+    const BalanceLeaf& balanceLeafS = ringSettlement.balanceUpdateS_A.before;
+    const BalanceLeaf& balanceLeafB = ringSettlement.balanceUpdateB_A.before;
+    const TradeHistoryLeaf& tradeHistoryLeaf = ringSettlement.tradeHistoryUpdate_A.before;
+    const OrderState _orderState = {order, account, balanceLeafS, balanceLeafB, tradeHistoryLeaf};
+
+    unsigned int numTradeHistoryLeafs = pow(2, NUM_BITS_TRADING_HISTORY);
+    const FieldT orderID = rand() % numTradeHistoryLeafs;
+
+    enum class Expected
+    {
+        Valid,
+        Invalid,
+        Automatic
+    };
+    auto checkFillLimitChecked = [_orderState](const FieldT& _amountS, const FieldT& _amountB, bool _buy, unsigned int _orderID,
+                                               unsigned int  _tradeHistoryOrderID, const FieldT& _filled, bool _cancelled,
+                                               const FieldT& _fillAmountS, const FieldT& _fillAmountB,
+                                               Expected expected = Expected::Automatic)
+    {
+        protoboard<FieldT> pb;
+
+        OrderState orderState = setOrderState(
+            _orderState,
+            _orderID,
+            _amountS, _amountB, _buy,
+            getMaxFieldElement(NUM_BITS_AMOUNT),
+            _filled, _cancelled, _tradeHistoryOrderID
+        );
+
+        VariableT fillAmountS = make_variable(pb, _fillAmountS, "fillAmountS");
+        VariableT fillAmountB = make_variable(pb, _fillAmountB, "fillAmountB");
+
+        Constants constants(pb, "constants");
+
+        VariableT exchangeID = make_variable(pb, 0, "exchangeID");
+        VariableT timestamp = make_variable(pb, 0, "timestamp");
+
+        jubjub::Params params;
+        OrderGadget order(pb, params, constants, exchangeID, ".order");
+        order.generate_r1cs_witness(orderState.order, orderState.account, orderState.balanceLeafS, orderState.balanceLeafB, orderState.tradeHistoryLeaf);
+
+        RequireFillLimitGadget requireFillLimit(pb, constants, order, fillAmountS, fillAmountB, "requireFillRateGadget");
+        requireFillLimit.generate_r1cs_constraints();
+        requireFillLimit.generate_r1cs_witness();
+
+        // Simulate
+        FieldT limit;
+        FieldT filledAfter;
+        if (_buy)
+        {
+            limit = (pb.val(order.tradeHistory.getCancelled()) == 1) ? pb.val(order.tradeHistory.getFilled()) : _amountB;
+            filledAfter = pb.val(order.tradeHistory.getFilled()) + _fillAmountB;
+        }
+        else
+        {
+            limit = (pb.val(order.tradeHistory.getCancelled()) == 1) ? pb.val(order.tradeHistory.getFilled()) : _amountS;
+            filledAfter = pb.val(order.tradeHistory.getFilled()) + _fillAmountS;
+        }
+        bool expectedAutomaticValid = lte(filledAfter, limit);
+
+        bool expectedValid = false;
+        if (expected == Expected::Automatic)
+        {
+            expectedValid = expectedAutomaticValid;
+        }
+        else
+        {
+            expectedValid = (expected == Expected::Valid) ? true : false;
+        }
+        REQUIRE(expectedAutomaticValid == expectedValid);
+
+        REQUIRE(pb.is_satisfied() == expectedValid);
+        if (expectedValid)
+        {
+            REQUIRE((pb.val(requireFillLimit.getFilledAfter()) == filledAfter));
+        }
+    };
+
+    unsigned int n = NUM_BITS_AMOUNT;
+    FieldT maxAmount = getMaxFieldElement(NUM_BITS_AMOUNT);
+
+    SECTION("order: 1/1, fill: 1/1")
+    {
+        checkFillLimitChecked(1, 1, true, 0,
+                              0, 0, false,
+                              1, 1, Expected::Valid);
+    }
+
+    SECTION("order: max/max, fill: max/max")
+    {
+        checkFillLimitChecked(maxAmount, maxAmount, true, 0,
+                              0, 0, false,
+                              1, 1, Expected::Valid);
+    }
+
+    SECTION("order: 1/1, fill: max/max")
+    {
+        checkFillLimitChecked(1, 1, true, 0,
+                              0, 0, false,
+                              maxAmount, maxAmount, Expected::Invalid);
+    }
+
+    SECTION("order: max/max, fill: 1/1")
+    {
+        checkFillLimitChecked(maxAmount, maxAmount, true, 0,
+                              0, 0, false,
+                              1, 1, Expected::Valid);
+    }
+
+    SECTION("order: max/1, fill: max/1")
+    {
+        checkFillLimitChecked(maxAmount, 1, true, 0,
+                              0, 0, false,
+                              maxAmount, 1, Expected::Valid);
+    }
+
+    SECTION("order: 1/max, fill: 1/max")
+    {
+        checkFillLimitChecked(1, maxAmount, true, 0,
+                              0, 0, false,
+                              1, maxAmount, Expected::Valid);
+    }
+
+    SECTION("cancelled")
+    {
+        unsigned int orderID = rand() % NUM_BITS_ORDERID;
+        checkFillLimitChecked(1, 1, true, orderID,
+                              orderID, 0, true,
+                              1, 1, Expected::Invalid);
+    }
+
+    SECTION("reused")
+    {
+        unsigned int orderID = rand() % NUM_BITS_TRADING_HISTORY;
+        for (unsigned int i = 0; i < 2; i++)
+        {
+            checkFillLimitChecked(maxAmount, maxAmount, true, orderID + numTradeHistoryLeafs,
+                                  orderID, maxAmount, i % 2,
+                                  maxAmount, maxAmount, Expected::Valid);
+        }
+    }
+
+    SECTION("trimmed")
+    {
+        unsigned int orderID = rand() % NUM_BITS_TRADING_HISTORY;
+        checkFillLimitChecked(1, 1, true, orderID,
+                              orderID + numTradeHistoryLeafs, maxAmount, false,
+                              1, 1, Expected::Invalid);
+    }
+
+    SECTION("Fill limits")
+    {
+        unsigned int orderID = rand() % NUM_BITS_TRADING_HISTORY;
+        unsigned int amountS = 1000;
+        unsigned int amountB = 100;
+
+        // buy order
+        for(unsigned int filled = 0; filled < amountB * 2; filled += 10)
+        {
+            for(unsigned int fillB = 0; fillB < amountB * 2; fillB += 10)
+            {
+                bool expectedValid = (filled + fillB <= amountB);
+                checkFillLimitChecked(amountS, amountB, true, orderID,
+                                      orderID, filled, false,
+                                      fillB * 9, fillB,
+                                      expectedValid ? Expected::Valid : Expected::Invalid);
+            }
+        }
+
+        // sell order
+        for(unsigned int filled = 0; filled < amountS * 2; filled += 100)
+        {
+            for(unsigned int fillS = 0; fillS < amountS * 2; fillS += 100)
+            {
+                bool expectedValid = (filled + fillS <= amountS);
+                checkFillLimitChecked(amountS, amountB, false, orderID,
+                                      orderID, filled, false,
+                                      fillS, fillS / 9,
+                                      expectedValid ? Expected::Valid : Expected::Invalid);
+            }
+        }
+    }
+
+    SECTION("Random")
+    {
+        for (unsigned int i = 0; i < numIterations; i++)
+        {
+            bool buy = i % 2;
+            bool cancelled = i % 5;
+            checkFillLimitChecked(getRandomFieldElement(n), getRandomFieldElement(n), buy, rand() % NUM_BITS_ORDERID,
+                                  rand() % NUM_BITS_ORDERID, getRandomFieldElement(n), cancelled,
+                                  getRandomFieldElement(n), getRandomFieldElement(n));
+        }
+    }
+}
+
 TEST_CASE("FeeCalculator", "[FeeCalculatorGadget]")
 {
     unsigned int maxLength = NUM_BITS_AMOUNT;
@@ -216,14 +467,6 @@ TEST_CASE("FeeCalculator", "[FeeCalculatorGadget]")
     }
 }
 
-struct OrderState
-{
-    Order order;
-    Account account;
-    BalanceLeaf balanceLeafS;
-    BalanceLeaf balanceLeafB;
-    TradeHistoryLeaf tradeHistoryLeaf;
-};
 
 namespace Simulator
 {
@@ -245,21 +488,6 @@ namespace Simulator
         FieldT fillS_B;
         bool valid;
     };
-
-    bool lt(const FieldT& A, const FieldT& B)
-    {
-        return toBigInt(A) < toBigInt(B);
-    }
-
-    bool lte(const FieldT& A, const FieldT& B)
-    {
-        return toBigInt(A) <= toBigInt(B);
-    }
-
-    FieldT muldiv(const FieldT& V, const FieldT& N, const FieldT& D)
-    {
-        return toFieldElement(validate(toBigInt(V) * toBigInt(N)) / toBigInt(D));
-    }
 
     TradeHistory getTradeHistory(const OrderState& orderState)
     {
@@ -351,27 +579,6 @@ namespace Simulator
 
 TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
 {
-    auto setOrderState = [](const OrderState& orderState,
-                            const FieldT& orderID,
-                            const FieldT& amountS, const FieldT& amountB, bool buy,
-                            const FieldT& balanceS,
-                            const FieldT& filled, bool cancelled, const FieldT& tradeHistoryOrderID,
-                            bool allOrNone = false)
-    {
-        OrderState newOrderState(orderState);
-        newOrderState.order.orderID = orderID;
-        newOrderState.order.amountS = amountS;
-        newOrderState.order.amountB = amountB;
-        newOrderState.order.buy = buy ? 1 : 0;
-        newOrderState.order.allOrNone = allOrNone ? 1 : 0;
-        newOrderState.balanceLeafS.balance = balanceS;
-        newOrderState.balanceLeafB.balance = 0;
-        newOrderState.tradeHistoryLeaf.filled = filled;
-        newOrderState.tradeHistoryLeaf.cancelled = cancelled ? 1 : 0;
-        newOrderState.tradeHistoryLeaf.orderID = tradeHistoryOrderID;
-        return newOrderState;
-    };
-
     enum class ExpectedValid
     {
         Valid,
@@ -427,10 +634,10 @@ TEST_CASE("OrderMatching", "[OrderMatchingGadget]")
         REQUIRE(pb.is_satisfied() == (expectedSatisfied && expectedValidValue));
         if (expectedSatisfied && expectedValidValue)
         {
-            REQUIRE((pb.val(orderMatching.getFillA_S()) == pb.val(expectedFillS_A)));
-            REQUIRE((pb.val(orderMatching.getFillA_B()) == pb.val(expectedFillS_B)));
-            REQUIRE((pb.val(orderMatching.getFillB_S()) == pb.val(expectedFillS_B)));
-            REQUIRE((pb.val(orderMatching.getFillB_B()) == pb.val(expectedFillS_A)));
+            auto tradeHistory_A = Simulator::getTradeHistory(orderStateA);
+            REQUIRE((pb.val(orderMatching.getFilledAfter_A()) == (tradeHistory_A.filled + (orderStateA.order.buy == 1 ? pb.val(expectedFillS_B) : pb.val(expectedFillS_A)))));
+            auto tradeHistory_B = Simulator::getTradeHistory(orderStateB);
+            REQUIRE((pb.val(orderMatching.getFilledAfter_B()) == (tradeHistory_B.filled + (orderStateB.order.buy == 1 ? pb.val(expectedFillS_A) : pb.val(expectedFillS_B)))));
         }
     };
 

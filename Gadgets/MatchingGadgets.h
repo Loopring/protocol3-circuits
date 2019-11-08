@@ -437,26 +437,6 @@ public:
         requireValid.generate_r1cs_constraints();
     }
 
-    const VariableT& getFillA_S() const
-    {
-        return fillS_A;
-    }
-
-    const VariableT& getFillA_B() const
-    {
-        return fillS_B;
-    }
-
-    const VariableT& getFillB_S() const
-    {
-        return fillS_B;
-    }
-
-    const VariableT& getFillB_B() const
-    {
-        return fillS_A;
-    }
-
     const VariableT& getFilledAfter_A() const
     {
         return requireOrderFillsA.getFilledAfter();
