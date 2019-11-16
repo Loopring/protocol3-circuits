@@ -464,9 +464,6 @@ public:
 
     libff::bigint<libff::alt_bn128_r_limbs> startHash;
 
-    ethsnarks::FieldT startIndex;
-    ethsnarks::FieldT count;
-
     ethsnarks::FieldT operatorAccountID;
     AccountUpdate accountUpdate_O;
 
