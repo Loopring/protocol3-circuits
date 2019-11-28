@@ -514,7 +514,7 @@ int main (int argc, char **argv)
         }
     }
 
-    if (mode == Mode::Validate)
+    if (mode == Mode::Validate || mode == Mode::Prove)
     {
         // Check if the inputs are valid for the circuit
         if (!pb.is_satisfied())
