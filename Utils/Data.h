@@ -345,7 +345,7 @@ public:
     ethsnarks::FieldT merkleRootBefore;
     ethsnarks::FieldT merkleRootAfter;
 
-    libff::bigint<libff::alt_bn128_r_limbs> startHash;
+    ethsnarks::LimbT startHash;
 
     ethsnarks::FieldT startIndex;
     ethsnarks::FieldT count;
@@ -360,7 +360,7 @@ static void from_json(const json& j, DepositBlock& block)
     block.merkleRootBefore = ethsnarks::FieldT(j["merkleRootBefore"].get<std::string>().c_str());
     block.merkleRootAfter = ethsnarks::FieldT(j["merkleRootAfter"].get<std::string>().c_str());
 
-    block.startHash = libff::bigint<libff::alt_bn128_r_limbs>(j["startHash"].get<std::string>().c_str());
+    block.startHash = ethsnarks::LimbT(j["startHash"].get<std::string>().c_str());
 
     block.startIndex = ethsnarks::FieldT(j["startIndex"].get<std::string>().c_str());
     block.count = ethsnarks::FieldT(j["count"].get<std::string>().c_str());
@@ -397,7 +397,7 @@ public:
     ethsnarks::FieldT merkleRootBefore;
     ethsnarks::FieldT merkleRootAfter;
 
-    libff::bigint<libff::alt_bn128_r_limbs> startHash;
+    ethsnarks::LimbT startHash;
 
     ethsnarks::FieldT startIndex;
     ethsnarks::FieldT count;
@@ -412,7 +412,7 @@ static void from_json(const json& j, OnchainWithdrawalBlock& block)
     block.merkleRootBefore = ethsnarks::FieldT(j["merkleRootBefore"].get<std::string>().c_str());
     block.merkleRootAfter = ethsnarks::FieldT(j["merkleRootAfter"].get<std::string>().c_str());
 
-    block.startHash = libff::bigint<libff::alt_bn128_r_limbs>(j["startHash"].get<std::string>().c_str());
+    block.startHash = ethsnarks::LimbT(j["startHash"].get<std::string>().c_str());
 
     block.startIndex = ethsnarks::FieldT(j["startIndex"].get<std::string>().c_str());
     block.count = ethsnarks::FieldT(j["count"].get<std::string>().c_str());
@@ -462,7 +462,7 @@ public:
     ethsnarks::FieldT merkleRootBefore;
     ethsnarks::FieldT merkleRootAfter;
 
-    libff::bigint<libff::alt_bn128_r_limbs> startHash;
+    ethsnarks::LimbT startHash;
 
     ethsnarks::FieldT startIndex;
     ethsnarks::FieldT count;

@@ -27,7 +27,8 @@ enum class Mode
     Prove,
     ExportCircuit,
     ExportWitness,
-    CreatePk
+    CreatePk,
+    Pk_alt2mcl,
 };
 
 static inline auto now() -> decltype(std::chrono::high_resolution_clock::now()) {
@@ -126,6 +127,7 @@ bool trade(Mode mode, bool onchainDataAvailability, unsigned int numRings,
 
     if (mode == Mode::Validate || mode == Mode::Prove)
     {
+        std::cout << "Generating witness... " << std::endl;
         json jRingSettlements = input["ringSettlements"];
         if (jRingSettlements.size() != numRings)
         {
@@ -154,6 +156,7 @@ bool deposit(Mode mode, unsigned int numDeposits, const json& input, ethsnarks::
 
     if (mode == Mode::Validate || mode == Mode::Prove)
     {
+        std::cout << "Generating witness... " << std::endl;
         json jDeposits = input["deposits"];
         if (jDeposits.size() != numDeposits)
         {
@@ -182,6 +185,7 @@ bool onchainWithdraw(Mode mode, unsigned int numWithdrawals, const json& input, 
 
     if (mode == Mode::Validate || mode == Mode::Prove)
     {
+        std::cout << "Generating witness... " << std::endl;
         json jWithdrawals = input["withdrawals"];
         if (jWithdrawals.size() != numWithdrawals)
         {
@@ -210,6 +214,7 @@ bool offchainWithdraw(Mode mode, bool onchainDataAvailability, unsigned int numW
 
     if (mode == Mode::Validate || mode == Mode::Prove)
     {
+        std::cout << "Generating witness... " << std::endl;
         json jWithdrawals = input["withdrawals"];
         if (jWithdrawals.size() != numWithdrawals)
         {
@@ -238,6 +243,7 @@ bool cancel(Mode mode, bool onchainDataAvailability, unsigned int numCancels, co
 
     if (mode == Mode::Validate || mode == Mode::Prove)
     {
+        std::cout << "Generating witness... " << std::endl;
         json jCancels = input["cancels"];
         if (jCancels.size() != numCancels)
         {
@@ -266,6 +272,7 @@ bool internalTransfer(Mode mode, bool onchainDataAvailability, unsigned int numT
 
     if (mode == Mode::Validate || mode == Mode::Prove)
     {
+        std::cout << "Generating witness... " << std::endl;
         json jTransfers = input["transfers"];
         if (jTransfers.size() != numTransfers)
         {
@@ -299,6 +306,7 @@ int main (int argc, char **argv)
         std::cerr << "-exportcircuit <block.json> <circuit.json>: Exports the rc1s circuit to json (circom - not all fields)" << std::endl;
         std::cerr << "-exportwitness <block.json> <witness.json>: Exports the witness to json (circom)" << std::endl;
         std::cerr << "-createpk <block.json> <pk.json> <pk.raw>: Creates the proving key using a bellman pk" << std::endl;
+        std::cerr << "-pk_alt2mcl <block.json> <pk_alt.raw> <pk_mlc.raw>: Converts the proving key from the alt format to the mcl format" << std::endl;
         return 1;
     }
 
@@ -380,6 +388,16 @@ int main (int argc, char **argv)
         }
         mode = Mode::CreatePk;
         std::cout << "Creating pk for " << argv[2] << " using " << argv[3] << " ..." << std::endl;
+    }
+    else if (strcmp(argv[1], "-pk_alt2mcl") == 0)
+    {
+        if (argc != 5)
+        {
+            std::cout << "Invalid number of arguments!"<< std::endl;
+            return 1;
+        }
+        mode = Mode::Pk_alt2mcl;
+        std::cout << "Converting pk for " << argv[2] << " from " << argv[3] << " to " << argv[4] << " ..." << std::endl;
     }
     else
     {
@@ -573,6 +591,16 @@ int main (int argc, char **argv)
     {
         if (!pk_bellman2ethsnarks(pb, argv[3], argv[4]))
         {
+            return 1;
+        }
+        std::cout << "pk file created: " << argv[4] << std::endl;
+    }
+
+    if (mode == Mode::Pk_alt2mcl)
+    {
+        if (!pk_alt2mcl(pb, argv[3], argv[4]))
+        {
+            std::cout << "Could not convert pk. Incorrect active curve?" << std::endl;
             return 1;
         }
         std::cout << "pk file created: " << argv[4] << std::endl;

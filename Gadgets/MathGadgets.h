@@ -1442,7 +1442,7 @@ public:
         generate_r1cs_witness_from_packed();
     }
 
-    void generate_r1cs_witness(ProtoboardT& pb, const libff::bigint<libff::alt_bn128_r_limbs>& value)
+    void generate_r1cs_witness(ProtoboardT& pb, const LimbT& value)
     {
         assert(value.max_bits() == 256);
         for (unsigned int i = 0; i < 256; i++)
