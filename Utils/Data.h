@@ -464,9 +464,6 @@ public:
 
     ethsnarks::LimbT startHash;
 
-    ethsnarks::FieldT startIndex;
-    ethsnarks::FieldT count;
-
     ethsnarks::FieldT operatorAccountID;
     AccountUpdate accountUpdate_O;
 
