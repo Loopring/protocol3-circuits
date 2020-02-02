@@ -534,6 +534,7 @@ int main (int argc, char **argv)
 
     if (mode == Mode::Validate || mode == Mode::Prove)
     {
+        std::cout << "Validating..."<< std::endl;
         // Check if the inputs are valid for the circuit
         if (!pb.is_satisfied())
         {
