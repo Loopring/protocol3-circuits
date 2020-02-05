@@ -14,6 +14,18 @@ using json = nlohmann::json;
 namespace Loopring
 {
 
+enum class BlockType
+{
+    RingSettlement = 0,
+    Deposit,
+    OnchainWithdrawal,
+    OffchainWithdrawal,
+    OrderCancellation,
+    InternalTransfer,
+
+    COUNT
+};
+
 class Proof
 {
 public:

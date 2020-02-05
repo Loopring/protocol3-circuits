@@ -1,6 +1,7 @@
 #ifndef _RINGSETTLEMENTCIRCUIT_H_
 #define _RINGSETTLEMENTCIRCUIT_H_
 
+#include "Circuit.h"
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
 #include "../Utils/Utils.h"
@@ -441,7 +442,7 @@ public:
     }
 };
 
-class RingSettlementCircuit : public GadgetT
+class RingSettlementCircuit : public Circuit
 {
 public:
 
@@ -489,7 +490,7 @@ public:
     std::unique_ptr<LabelHasher> labelHasher;
 
     RingSettlementCircuit(ProtoboardT& pb, const std::string& prefix) :
-        GadgetT(pb, prefix),
+        Circuit(pb, prefix),
 
         publicData(pb, FMT(prefix, ".publicData")),
         constants(pb, FMT(prefix, ".constants")),
@@ -523,10 +524,10 @@ public:
 
     }
 
-    void generate_r1cs_constraints(bool onchainDataAvailability, int numRings)
+    void generateConstraints(bool onchainDataAvailability, unsigned int blockSize) override
     {
         this->onchainDataAvailability = onchainDataAvailability;
-        this->numRings = numRings;
+        this->numRings = blockSize;
 
         constants.generate_r1cs_constraints();
 
@@ -644,6 +645,9 @@ public:
         nonce_after.generate_r1cs_witness();
 
         // Ring settlements
+#ifdef MULTICORE
+        #pragma omp parallel for
+#endif
         for(unsigned int i = 0; i < block.ringSettlements.size(); i++)
         {
             ringSettlements[i].generate_r1cs_witness(block.ringSettlements[i]);
@@ -673,7 +677,22 @@ public:
         return true;
     }
 
-    void printInfo()
+    bool generateWitness(const json& input) override
+    {
+        return generateWitness(input.get<Loopring::RingSettlementBlock>());
+    }
+
+    BlockType getBlockType() override
+    {
+        return BlockType::RingSettlement;
+    }
+
+    unsigned int getBlockSize() override
+    {
+        return numRings;
+    }
+
+    void printInfo() override
     {
         std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numRings) << "/ring)" << std::endl;
     }

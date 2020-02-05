@@ -8,11 +8,13 @@
 #include "Circuits/OrderCancellationCircuit.h"
 #include "Circuits/InternalTransferCircuit.h"
 
+#include "ThirdParty/httplib.h"
 #include "ThirdParty/json.hpp"
 #include "ethsnarks.hpp"
 #include "stubs.hpp"
 #include <fstream>
 #include <chrono>
+#include <mutex>
 
 #ifdef MULTICORE
 #include <omp.h>
@@ -29,6 +31,7 @@ enum class Mode
     ExportWitness,
     CreatePk,
     Pk_alt2mcl,
+    Server
 };
 
 static inline auto now() -> decltype(std::chrono::high_resolution_clock::now()) {
@@ -36,33 +39,22 @@ static inline auto now() -> decltype(std::chrono::high_resolution_clock::now()) 
 }
 
 template<typename T>
-void
-print_time(T &t1, const char *str) {
+unsigned int elapsed_time_ms(const T& t1)
+{
     auto t2 = std::chrono::high_resolution_clock::now();
-    auto tim = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
-    printf("%s: %lld ms\n", str, tim);
-    t1 = t2;
+    auto time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
+    return time_ms;
 }
 
-timespec diff(timespec start, timespec end)
+template<typename T>
+void print_time(const T& t1, const char* str)
 {
-    timespec temp;
-    if ((end.tv_nsec-start.tv_nsec) < 0)
-    {
-        temp.tv_sec = end.tv_sec - start.tv_sec - 1;
-        temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
-    }
-    else
-    {
-        temp.tv_sec = end.tv_sec - start.tv_sec;
-        temp.tv_nsec = end.tv_nsec - start.tv_nsec;
-    }
-    return temp;
+    printf("%s (%dms)\n", str, elapsed_time_ms(t1));
 }
 
-bool fileExists(const char *fileName)
+bool fileExists(const std::string& fileName)
 {
-    std::ifstream infile(fileName);
+    std::ifstream infile(fileName.c_str());
     return infile.good();
 }
 
@@ -91,205 +83,268 @@ bool generateKeyPair(ethsnarks::ProtoboardT& pb, std::string& baseFilename)
     return (result == 0);
 }
 
-bool generateProof(ethsnarks::ProtoboardT& pb, const char *provingKeyFilename, const char* proofFilename)
+json loadBlock(const std::string& filename)
+{
+    // Read the JSON file
+    std::ifstream file(filename.c_str());
+    if (!file.is_open())
+    {
+        std::cerr << "Cannot open block file: " << filename << std::endl;
+        return json();
+    }
+    json input;
+    file >> input;
+    file.close();
+    return input;
+}
+
+ethsnarks::ProvingKeyT loadProvingKey(const std::string& pk_file)
+{
+    std::cout << "Loading proving key " << pk_file << "..." << std::endl;
+    auto begin = now();
+    auto proving_key = ethsnarks::load_proving_key(pk_file.c_str());
+    print_time(begin, "Proving key loaded");
+    return proving_key;
+}
+
+std::string proveCircuit(Loopring::Circuit* circuit, const ethsnarks::ProvingKeyT& proving_key)
 {
     std::cout << "Generating proof..." << std::endl;
-    timespec time1, time2;
-    clock_gettime(CLOCK_MONOTONIC, &time1);
-
     auto begin = now();
-    std::string jProof = stub_prove_from_pb(pb, provingKeyFilename);
-    print_time(begin, "Generated proof");
+    std::string jProof = ethsnarks::prove(circuit->getPb(), proving_key);
+    unsigned int elapsed_ms = elapsed_time_ms(begin);
+    elapsed_ms = elapsed_ms == 0 ? 1 : elapsed_ms;
+    std::cout << "Proof generated in " << float(elapsed_ms) / 1000.0f << " seconds ("
+        << (circuit->getPb().num_constraints() * 10) / (elapsed_ms / 100) << " constraints/second)" << std::endl;
+    return jProof;
+}
 
-    clock_gettime(CLOCK_MONOTONIC, &time2);
-    timespec duration = diff(time1,time2);
-    std::cout << "Generated proof in " << duration.tv_sec << " seconds (" << pb.num_constraints() / (duration.tv_sec + 1) << " constraints/second)" << std::endl;
-
+bool writeProof(const std::string& jProof, const std::string& proofFilename)
+{
     std::ofstream fproof(proofFilename);
     if (!fproof.is_open())
     {
         std::cerr << "Cannot create proof file: " << proofFilename << std::endl;
-        return 1;
+        return false;
     }
     fproof << jProof;
     fproof.close();
-
+    std::cout << "Proof written to: " << proofFilename << std::endl;
     return true;
 }
 
-bool trade(Mode mode, bool onchainDataAvailability, unsigned int numRings,
-           const json& input, ethsnarks::ProtoboardT& outPb)
+Loopring::Circuit* newCircuit(Loopring::BlockType blockType, ethsnarks::ProtoboardT& outPb)
 {
-    // Build the circuit
-    Loopring::RingSettlementCircuit circuit(outPb, "circuit");
-    circuit.generate_r1cs_constraints(onchainDataAvailability, numRings);
-    circuit.printInfo();
-
-    if (mode == Mode::Validate || mode == Mode::Prove)
+    switch(blockType)
     {
-        std::cout << "Generating witness... " << std::endl;
-        json jRingSettlements = input["ringSettlements"];
-        if (jRingSettlements.size() != numRings)
+        case Loopring::BlockType::RingSettlement: return new Loopring::RingSettlementCircuit(outPb, "circuit");
+        case Loopring::BlockType::Deposit: return new Loopring::DepositCircuit(outPb, "circuit");
+        case Loopring::BlockType::OnchainWithdrawal: return new Loopring::OnchainWithdrawalCircuit(outPb, "circuit");
+        case Loopring::BlockType::OffchainWithdrawal: return new Loopring::OffchainWithdrawalCircuit(outPb, "circuit");
+        case Loopring::BlockType::OrderCancellation: return new Loopring::OrderCancellationCircuit(outPb, "circuit");
+        case Loopring::BlockType::InternalTransfer: return new Loopring::InternalTransferCircuit(outPb, "circuit");
+        default:
         {
-            std::cerr << "Invalid number of rings in input file: " << jRingSettlements.size() << std::endl;
-            return false;
-        }
-
-        Loopring::RingSettlementBlock block = input.get<Loopring::RingSettlementBlock>();
-
-        // Generate witness values for the given input values
-        if (!circuit.generateWitness(block))
-        {
-            std::cerr << "Could not generate witness!" << std::endl;
-            return false;
+            std::cerr << "Cannot create circuit for unknown block type: " << int(blockType) << std::endl;
+            return nullptr;
         }
     }
+}
+
+Loopring::Circuit* createCircuit(Loopring::BlockType blockType, unsigned int blockSize, bool onchainDataAvailability, ethsnarks::ProtoboardT& outPb)
+{
+    std::cout << "Creating circuit... " << std::endl;
+    auto begin = now();
+    Loopring::Circuit* circuit = newCircuit(blockType, outPb);
+    circuit->generateConstraints(onchainDataAvailability, blockSize);
+    circuit->printInfo();
+    print_time(begin, "Circuit created");
+    return circuit;
+}
+
+bool generateWitness(Loopring::Circuit* circuit, const json& input)
+{
+    std::cout << "Generating witness... " << std::endl;
+    auto begin = now();
+    if (!circuit->generateWitness(input))
+    {
+        std::cerr << "Could not generate witness!" << std::endl;
+        return false;
+    }
+    print_time(begin, "Witness generated");
     return true;
 }
 
-bool deposit(Mode mode, unsigned int numDeposits, const json& input, ethsnarks::ProtoboardT& outPb)
+bool validateCircuit(Loopring::Circuit* circuit)
 {
-    // Build the circuit
-    Loopring::DepositCircuit circuit(outPb, "circuit");
-    circuit.generate_r1cs_constraints(numDeposits);
-    circuit.printInfo();
-
-    if (mode == Mode::Validate || mode == Mode::Prove)
+    std::cout << "Validating block..."<< std::endl;
+    auto begin = now();
+    // Check if the inputs are valid for the circuit
+    if (!circuit->getPb().is_satisfied())
     {
-        std::cout << "Generating witness... " << std::endl;
-        json jDeposits = input["deposits"];
-        if (jDeposits.size() != numDeposits)
-        {
-            std::cerr << "Invalid number of deposits in input file: " << jDeposits.size() << std::endl;
-            return false;
-        }
-
-        Loopring::DepositBlock block = input.get<Loopring::DepositBlock>();
-
-        // Generate witness values for the given input values
-        if (!circuit.generateWitness(block))
-        {
-            std::cerr << "Could not generate witness!" << std::endl;
-            return false;
-        }
+        std::cerr << "Block is not valid!" << std::endl;
+        return false;
     }
+    print_time(begin, "Block is valid");
     return true;
 }
 
-bool onchainWithdraw(Mode mode, unsigned int numWithdrawals, const json& input, ethsnarks::ProtoboardT& outPb)
+std::string getBaseName(Loopring::BlockType blockType)
 {
-    // Build the circuit
-    Loopring::OnchainWithdrawalCircuit circuit(outPb, "circuit");
-    circuit.generate_r1cs_constraints(numWithdrawals);
-    circuit.printInfo();
-
-    if (mode == Mode::Validate || mode == Mode::Prove)
+    switch(blockType)
     {
-        std::cout << "Generating witness... " << std::endl;
-        json jWithdrawals = input["withdrawals"];
-        if (jWithdrawals.size() != numWithdrawals)
-        {
-            std::cerr << "Invalid number of withdrawals in input file: " << jWithdrawals.size() << std::endl;
-            return false;
-        }
-
-        Loopring::OnchainWithdrawalBlock block = input.get<Loopring::OnchainWithdrawalBlock>();
-
-        // Generate witness values for the given input values
-        if (!circuit.generateWitness(block))
-        {
-            std::cerr << "Could not generate witness!" << std::endl;
-            return false;
-        }
+        case Loopring::BlockType::RingSettlement: return "trade";
+        case Loopring::BlockType::Deposit: return "deposit";
+        case Loopring::BlockType::OnchainWithdrawal: return "withdraw_onchain";
+        case Loopring::BlockType::OffchainWithdrawal: return "withdraw_offchain";
+        case Loopring::BlockType::OrderCancellation: return "cancel";
+        case Loopring::BlockType::InternalTransfer: return "internal_transfer";
+        default: return "unknown";
     }
-    return true;
 }
 
-bool offchainWithdraw(Mode mode, bool onchainDataAvailability, unsigned int numWithdrawals, const json& input, ethsnarks::ProtoboardT& outPb)
+std::string getProvingKeyFilename(const std::string& baseFilename)
 {
-    // Build the circuit
-    Loopring::OffchainWithdrawalCircuit circuit(outPb, "circuit");
-    circuit.generate_r1cs_constraints(onchainDataAvailability, numWithdrawals);
-    circuit.printInfo();
-
-    if (mode == Mode::Validate || mode == Mode::Prove)
-    {
-        std::cout << "Generating witness... " << std::endl;
-        json jWithdrawals = input["withdrawals"];
-        if (jWithdrawals.size() != numWithdrawals)
-        {
-            std::cerr << "Invalid number of withdrawals in input file: " << jWithdrawals.size() << std::endl;
-            return false;
-        }
-
-        Loopring::OffchainWithdrawalBlock block = input.get<Loopring::OffchainWithdrawalBlock>();
-
-        // Generate witness values for the given input values
-        if (!circuit.generateWitness(block))
-        {
-            std::cerr << "Could not generate witness!" << std::endl;
-            return false;
-        }
-    }
-    return true;
+    return baseFilename + "_pk.raw";
 }
 
-bool cancel(Mode mode, bool onchainDataAvailability, unsigned int numCancels, const json& input, ethsnarks::ProtoboardT& outPb)
+void runServer(Loopring::Circuit* circuit, const std::string& provingKeyFilename, unsigned int port)
 {
-    // Build the circuit
-    Loopring::OrderCancellationCircuit circuit(outPb, "circuit");
-    circuit.generate_r1cs_constraints(onchainDataAvailability, numCancels);
-    circuit.printInfo();
+    using namespace httplib;
 
-    if (mode == Mode::Validate || mode == Mode::Prove)
+    struct ProverStatus
     {
-        std::cout << "Generating witness... " << std::endl;
-        json jCancels = input["cancels"];
-        if (jCancels.size() != numCancels)
-        {
-            std::cerr << "Invalid number of cancels in input file: " << jCancels.size() << std::endl;
-            return false;
-        }
+        bool proving = false;
+        std::string blockFilename;
+        std::string proofFilename;
+    };
 
-        Loopring::OrderCancellationBlock block = input.get<Loopring::OrderCancellationBlock>();
-
-        // Generate witness values for the given input values
-        if (!circuit.generateWitness(block))
-        {
-            std::cerr << "Could not generate witness!" << std::endl;
-            return false;
-        }
-    }
-    return true;
-}
-
-bool internalTransfer(Mode mode, bool onchainDataAvailability, unsigned int numTransfers, const json& input, ethsnarks::ProtoboardT& outPb)
-{
-    // Build the circuit
-    Loopring::InternalTransferCircuit circuit(outPb, "circuit");
-    circuit.generate_r1cs_constraints(onchainDataAvailability, numTransfers);
-    circuit.printInfo();
-
-    if (mode == Mode::Validate || mode == Mode::Prove)
+    struct ProverStatusRAII
     {
-        std::cout << "Generating witness... " << std::endl;
-        json jTransfers = input["transfers"];
-        if (jTransfers.size() != numTransfers)
+        ProverStatus& proverStatus;
+        ProverStatusRAII(ProverStatus& _proverStatus, const std::string& blockFilename, const std::string& proofFilename) : proverStatus(_proverStatus)
         {
-            std::cerr << "Invalid number of transfers in input file: " << jTransfers.size() << std::endl;
-            return false;
+            proverStatus.proving = true;
+            proverStatus.blockFilename = blockFilename;
+            proverStatus.proofFilename = proofFilename;
         }
 
-        Loopring::InternalTransferBlock block = input.get<Loopring::InternalTransferBlock>();
-
-        // Generate witness values for the given input values
-        if (!circuit.generateWitness(block))
+        ~ProverStatusRAII()
         {
-            std::cerr << "Could not generate witness!" << std::endl;
-            return false;
+            proverStatus.proving = false;
         }
-    }
-    return true;
+    };
+
+    // Load the proving key a single time
+    auto proving_key = loadProvingKey(provingKeyFilename);
+
+    // Prover status info
+    ProverStatus proverStatus;
+    // Lock for the prover
+    std::mutex mtx;
+    // Setup the server
+    Server svr;
+    // Called to prove blocks
+    svr.Get("/prove", [&](const Request& req, Response& res) {
+        const std::lock_guard<std::mutex> lock(mtx);
+
+        // Parse the parameters
+        std::string blockFilename = req.get_param_value("block_filename");
+        std::string proofFilename = req.get_param_value("proof_filename");
+        std::string strValidate = req.get_param_value("validate");
+        bool validate = (strValidate.compare("true") == 0) ? true : false;
+        if (blockFilename.length() == 0)
+        {
+            res.set_content("Error: block_filename missing!\n", "text/plain");
+            return;
+        }
+
+        // Set the prover status for this session
+        ProverStatusRAII statusRAII(proverStatus, blockFilename, proofFilename);
+
+        // Prove the block
+        json input = loadBlock(blockFilename);
+        if (input == json())
+        {
+            res.set_content("Error: Failed to load block!\n", "text/plain");
+            return;
+        }
+
+        // Some checks to see if this block is compatible with the loaded circuit
+        int iBlockType = input["blockType"].get<int>();
+        unsigned int blockSize = input["blockSize"].get<int>();
+        if (Loopring::BlockType(iBlockType) != circuit->getBlockType() || blockSize != circuit->getBlockSize())
+        {
+            res.set_content("Error: Incompatible block requested! Use /info to check which blocks can be proven.\n", "text/plain");
+            return;
+        }
+
+        if (!generateWitness(circuit, input))
+        {
+            res.set_content("Error: Failed to generate witness for block!\n", "text/plain");
+            return;
+        }
+        if (validate)
+        {
+            if (!validateCircuit(circuit))
+            {
+                res.set_content("Error: Block is invalid!\n", "text/plain");
+                return;
+            }
+        }
+        std::string jProof = proveCircuit(circuit, proving_key);
+        if (jProof.length() == 0)
+        {
+            res.set_content("Error: Failed to prove block!\n", "text/plain");
+            return;
+        }
+        if (proofFilename.length() != 0)
+        {
+            if(!writeProof(jProof, proofFilename))
+            {
+                res.set_content("Error: Failed to write proof!\n", "text/plain");
+                return;
+            }
+        }
+        // Return the proof
+        res.set_content(jProof + "\n", "text/plain");
+    });
+    // Retuns the status of the server
+    svr.Get("/status", [&](const Request& req, Response& res) {
+        if (proverStatus.proving)
+        {
+            std::string status = std::string("Proving ") + proverStatus.blockFilename;
+            res.set_content(status + "\n", "text/plain");
+        }
+        else
+        {
+            res.set_content("Idle\n", "text/plain");
+        }
+    });
+    // Info of this prover server
+    svr.Get("/info", [&](const Request& req, Response& res) {
+        std::string info = std::string("BlockType: ") + std::to_string(int(circuit->getBlockType())) +
+            std::string("; BlockSize: ") + std::to_string(circuit->getBlockSize()) + "\n";
+        res.set_content(info, "text/plain");
+    });
+    // Stops the prover server
+    svr.Get("/stop", [&](const Request& req, Response& res) {
+        const std::lock_guard<std::mutex> lock(mtx);
+        svr.stop();
+    });
+    // Default page contains help
+    svr.Get("/", [&](const Request& req, Response& res) {
+        std::string content;
+        content += "Prover server:\n";
+        content += "- Prove a block: /prove?block_filename=<block.json>&proof_filename=<proof.json>&validate=true (proof_filename and validate are optional)\n";
+        content += "- Status of the server: /status (busy proving a block or not)\n";
+        content += "- Info of the server: /info (which blocks can be proven)\n";
+        content += "- Shut down the server: /stop (will first finish generating the proof if busy)\n";
+        res.set_content(content, "text/plain");
+    });
+
+    std::cout << "Running server on 'localhost' on port " << port << std::endl;
+    svr.listen("localhost", port);
 }
 
 int main (int argc, char **argv)
@@ -307,6 +362,7 @@ int main (int argc, char **argv)
         std::cerr << "-exportwitness <block.json> <witness.json>: Exports the witness to json (circom)" << std::endl;
         std::cerr << "-createpk <block.json> <pk.json> <pk.raw>: Creates the proving key using a bellman pk" << std::endl;
         std::cerr << "-pk_alt2mcl <block.json> <pk_alt.raw> <pk_mlc.raw>: Converts the proving key from the alt format to the mcl format" << std::endl;
+        std::cerr << "-server <block.json> <port>: Keeps the program running as an HTTP server to prove blocks on demand" << std::endl;
         return 1;
     }
 
@@ -399,149 +455,76 @@ int main (int argc, char **argv)
         mode = Mode::Pk_alt2mcl;
         std::cout << "Converting pk for " << argv[2] << " from " << argv[3] << " to " << argv[4] << " ..." << std::endl;
     }
+    else if (strcmp(argv[1], "-server") == 0)
+    {
+        if (argc != 4)
+        {
+            std::cout << "Invalid number of arguments!"<< std::endl;
+            return 1;
+        }
+        mode = Mode::Server;
+        std::cout << "Starting proving server for " << argv[2] << " on port " << argv[3] << "..." << std::endl;
+    }
     else
     {
         std::cerr << "Unknown option: " << argv[1] << std::endl;
         return 1;
     }
 
-    // Read the JSON file
-    const char* filename = argv[2];
-    std::ifstream file(filename);
-    if (!file.is_open())
+    // Read the block file
+    json input = loadBlock(argv[2]);
+    if (input == json())
     {
-        std::cerr << "Cannot open input file: " << filename << std::endl;
         return 1;
     }
-    json input;
-    file >> input;
-    file.close();
 
     // Read meta data
-    int blockType = input["blockType"].get<int>();
+    int iBlockType = input["blockType"].get<int>();
     unsigned int blockSize = input["blockSize"].get<int>();
     bool onchainDataAvailability = input["onchainDataAvailability"].get<bool>();
     std::string strOnchainDataAvailability = onchainDataAvailability ? "_DA_" : "_";
     std::string postFix = strOnchainDataAvailability + std::to_string(blockSize);
 
-    switch(blockType)
+    if (iBlockType >= int(Loopring::BlockType::COUNT))
     {
-        case 0:
-        {
-            baseFilename += "trade" + postFix;
-            break;
-        }
-        case 1:
-        {
-            baseFilename += "deposit" + postFix;
-            break;
-        }
-        case 2:
-        {
-            baseFilename += "withdraw_onchain" + postFix;
-            break;
-        }
-        case 3:
-        {
-            baseFilename += "withdraw_offchain" + postFix;
-            break;
-        }
-        case 4:
-        {
-            baseFilename += "cancel" + postFix;
-            break;
-        }
-        case 5:
-        {
-            baseFilename += "internal_transfer" + postFix;
-            break;
-        }
-        default:
-        {
-            std::cerr << "Unknown block type: " << blockType << std::endl;
-            return 1;
-        }
+        std::cerr << "Invalid block type: " << iBlockType << std::endl;
+        return 1;
     }
+    Loopring::BlockType blockType = Loopring::BlockType(iBlockType);
+    baseFilename += getBaseName(blockType) + postFix;
+    std::string provingKeyFilename = getProvingKeyFilename(baseFilename);
 
-    if (mode == Mode::Prove)
+    if (mode == Mode::Prove || mode == Mode::Server)
     {
-        std::string pkFileName = baseFilename + "_pk.raw";
-        if (!fileExists(pkFileName.c_str())) {
+        if (!fileExists(provingKeyFilename))
+        {
             std::cerr << "Failed to find pk!" << std::endl;
             return 1;
         }
     }
 
-    std::cout << "Building circuit... " << std::endl;
-
     ethsnarks::ProtoboardT pb;
-    switch(blockType)
+    Loopring::Circuit* circuit = createCircuit(blockType, blockSize, onchainDataAvailability, pb);
+
+    if (mode == Mode::Server)
     {
-        case 0:
+        runServer(circuit, provingKeyFilename, std::stoi(argv[3]));
+    }
+
+    if (mode == Mode::Validate || mode == Mode::Prove)
+    {
+        if (!generateWitness(circuit, input))
         {
-            if (!trade(mode, onchainDataAvailability, blockSize, input, pb))
-            {
-                return 1;
-            }
-            break;
-        }
-        case 1:
-        {
-            if (!deposit(mode, blockSize, input, pb))
-            {
-                return 1;
-            }
-            break;
-        }
-        case 2:
-        {
-            if (!onchainWithdraw(mode, blockSize, input, pb))
-            {
-                return 1;
-            }
-            break;
-        }
-        case 3:
-        {
-            if (!offchainWithdraw(mode, onchainDataAvailability, blockSize, input, pb))
-            {
-                return 1;
-            }
-            break;
-        }
-        case 4:
-        {
-            if (!cancel(mode, onchainDataAvailability, blockSize, input, pb))
-            {
-                return 1;
-            }
-            break;
-        }
-        case 5:
-        {
-            if (!internalTransfer(mode, onchainDataAvailability, blockSize, input, pb))
-            {
-                return 1;
-            }
-            break;
-        }
-        default:
-        {
-            std::cerr << "Unknown block type: " << blockType << std::endl;
             return 1;
         }
     }
 
     if (mode == Mode::Validate || mode == Mode::Prove)
     {
-        std::cout << "Validating..."<< std::endl;
-        // Check if the inputs are valid for the circuit
-        if (!pb.is_satisfied())
+        if (!validateCircuit(circuit))
         {
-            std::cerr << "Block is not valid!" << std::endl;
             return 1;
         }
-        std::cout << "Block is valid." << std::endl;
     }
 
     if (mode == Mode::CreateKeys)
@@ -559,15 +542,20 @@ int main (int argc, char **argv)
         std::cout << "GPU Prove: Generate inputsFile." << std::endl;
         std::string inputsFilename = baseFilename + "_inputs.raw";
         auto begin = now();
-        stub_write_input_from_pb(pb,  (baseFilename + "_pk.raw").c_str(), inputsFilename.c_str());
+        stub_write_input_from_pb(pb, provingKeyFilename.c_str(), inputsFilename.c_str());
         print_time(begin, "write input");
 #else
-        if (!generateProof(pb, (baseFilename + "_pk.raw").c_str(), proofFilename))
+        auto proving_key = loadProvingKey(provingKeyFilename);
+        std::string jProof = proveCircuit(circuit, proving_key);
+        if (jProof.length() == 0)
+        {
+            return 1;
+        }
+        if(!writeProof(jProof, proofFilename))
         {
             return 1;
         }
 #endif
-
     }
 
     if (mode == Mode::ExportCircuit)

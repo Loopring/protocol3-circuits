@@ -1,6 +1,7 @@
 #ifndef _INTERNAL_TRANSFER_CIRCUIT_H_
 #define _INTERNAL_TRANSFER_CIRCUIT_H_
 
+#include "Circuit.h"
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
 #include "../Utils/Utils.h"
@@ -280,7 +281,7 @@ public:
     }
 };
 
-class InternalTransferCircuit : public GadgetT
+class InternalTransferCircuit : public Circuit
 {
 public:
     PublicDataGadget publicData;
@@ -312,7 +313,7 @@ public:
     std::unique_ptr<LabelHasher> labelHasher;
 
     InternalTransferCircuit(ProtoboardT &pb, const std::string &prefix)
-        : GadgetT(pb, prefix),
+        : Circuit(pb, prefix),
 
           publicData(pb, FMT(prefix, ".publicData")),
           constants(pb, FMT(prefix, ".constants")),
@@ -331,10 +332,10 @@ public:
     {
     }
 
-    void generate_r1cs_constraints(bool onchainDataAvailability, int numTransfers)
+    void generateConstraints(bool onchainDataAvailability, unsigned int blockSize) override
     {
         this->onchainDataAvailability = onchainDataAvailability;
-        this->numTransfers = numTransfers;
+        this->numTransfers = blockSize;
 
         constants.generate_r1cs_constraints();
 
@@ -413,6 +414,9 @@ public:
         publicKeyX_notZero.generate_r1cs_witness();
 
         // Internal transfers
+#ifdef MULTICORE
+        #pragma omp parallel for
+#endif
         for (unsigned int i = 0; i < block.transfers.size(); i++)
         {
             transfers[i].generate_r1cs_witness(block.transfers[i]);
@@ -430,7 +434,22 @@ public:
         return true;
     }
 
-    void printInfo()
+    bool generateWitness(const json& input) override
+    {
+        return generateWitness(input.get<Loopring::InternalTransferBlock>());
+    }
+
+    BlockType getBlockType() override
+    {
+        return BlockType::InternalTransfer;
+    }
+
+    unsigned int getBlockSize() override
+    {
+        return numTransfers;
+    }
+
+    void printInfo() override
     {
         std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numTransfers) << "/transfer)" << std::endl;
     }
