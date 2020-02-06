@@ -1,6 +1,7 @@
 #ifndef _DEPOSITCIRCUIT_H_
 #define _DEPOSITCIRCUIT_H_
 
+#include "Circuit.h"
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
 
@@ -130,7 +131,7 @@ public:
     }
 };
 
-class DepositCircuit : public GadgetT
+class DepositCircuit : public Circuit
 {
 public:
 
@@ -151,7 +152,7 @@ public:
     std::vector<sha256_many> hashers;
 
     DepositCircuit(ProtoboardT& pb, const std::string& prefix) :
-        GadgetT(pb, prefix),
+        Circuit(pb, prefix),
 
         publicData(pb, FMT(prefix, ".publicData")),
         constants(pb, FMT(prefix, ".constants")),
@@ -167,9 +168,9 @@ public:
 
     }
 
-    void generate_r1cs_constraints(int numDeposits)
+    void generateConstraints(bool onchainDataAvailability, unsigned int blockSize) override
     {
-        this->numDeposits = numDeposits;
+        this->numDeposits = blockSize;
 
         constants.generate_r1cs_constraints();
 
@@ -231,9 +232,16 @@ public:
 
         // Deposits
         assert(deposits.size() == hashers.size());
+#ifdef MULTICORE
+        #pragma omp parallel for
+#endif
         for(unsigned int i = 0; i < block.deposits.size(); i++)
         {
             deposits[i].generate_r1cs_witness(block.deposits[i]);
+        }
+        // Cannot be done in parallel
+        for(unsigned int i = 0; i < block.deposits.size(); i++)
+        {
             hashers[i].generate_r1cs_witness();
         }
         // printBits("DepositBlockHash: 0x", hashers.back().result().bits.get_bits(pb));
@@ -244,7 +252,22 @@ public:
         return true;
     }
 
-    void printInfo()
+    bool generateWitness(const json& input) override
+    {
+        return generateWitness(input.get<Loopring::DepositBlock>());
+    }
+
+    BlockType getBlockType() override
+    {
+        return BlockType::Deposit;
+    }
+
+    unsigned int getBlockSize() override
+    {
+        return numDeposits;
+    }
+
+    void printInfo() override
     {
         std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numDeposits) << "/deposit)" << std::endl;
     }

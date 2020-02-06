@@ -1,6 +1,7 @@
 #ifndef _ORDERCANCELLATIONCIRCUIT_H_
 #define _ORDERCANCELLATIONCIRCUIT_H_
 
+#include "Circuit.h"
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
 #include "../Utils/Utils.h"
@@ -260,7 +261,7 @@ public:
     }
 };
 
-class OrderCancellationCircuit : public GadgetT
+class OrderCancellationCircuit : public Circuit
 {
 public:
 
@@ -293,7 +294,7 @@ public:
     std::unique_ptr<LabelHasher> labelHasher;
 
     OrderCancellationCircuit(ProtoboardT& pb, const std::string& prefix) :
-        GadgetT(pb, prefix),
+        Circuit(pb, prefix),
 
         publicData(pb, FMT(prefix, ".publicData")),
         constants(pb, FMT(prefix, ".constants")),
@@ -313,10 +314,10 @@ public:
 
     }
 
-    void generate_r1cs_constraints(bool onchainDataAvailability, int numCancels)
+    void generateConstraints(bool onchainDataAvailability, unsigned int blockSize) override
     {
         this->onchainDataAvailability = onchainDataAvailability;
-        this->numCancels = numCancels;
+        this->numCancels = blockSize;
 
         constants.generate_r1cs_constraints();
 
@@ -395,6 +396,9 @@ public:
         publicKeyX_notZero.generate_r1cs_witness();
 
         // Cancels
+#ifdef MULTICORE
+        #pragma omp parallel for
+#endif
         for(unsigned int i = 0; i < block.cancels.size(); i++)
         {
             cancels[i].generate_r1cs_witness(block.cancels[i]);
@@ -412,7 +416,22 @@ public:
         return true;
     }
 
-    void printInfo()
+    bool generateWitness(const json& input) override
+    {
+        return generateWitness(input.get<Loopring::OrderCancellationBlock>());
+    }
+
+    BlockType getBlockType() override
+    {
+        return BlockType::OrderCancellation;
+    }
+
+    unsigned int getBlockSize() override
+    {
+        return numCancels;
+    }
+
+    void printInfo() override
     {
         std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numCancels) << "/cancel)" << std::endl;
     }

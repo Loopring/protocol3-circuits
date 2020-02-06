@@ -1,6 +1,7 @@
 #ifndef _OFFCHAINWITHDRAWALCIRCUIT_H_
 #define _OFFCHAINWITHDRAWALCIRCUIT_H_
 
+#include "Circuit.h"
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
 #include "../Utils/Utils.h"
@@ -257,7 +258,7 @@ public:
     }
 };
 
-class OffchainWithdrawalCircuit : public GadgetT
+class OffchainWithdrawalCircuit : public Circuit
 {
 public:
 
@@ -290,7 +291,7 @@ public:
     std::unique_ptr<LabelHasher> labelHasher;
 
     OffchainWithdrawalCircuit(ProtoboardT& pb, const std::string& prefix) :
-        GadgetT(pb, prefix),
+        Circuit(pb, prefix),
 
         publicData(pb, FMT(prefix, ".publicData")),
         constants(pb, FMT(prefix, ".constants")),
@@ -310,10 +311,10 @@ public:
 
     }
 
-    void generate_r1cs_constraints(bool onchainDataAvailability, int numWithdrawals)
+    void generateConstraints(bool onchainDataAvailability, unsigned int blockSize) override
     {
         this->onchainDataAvailability = onchainDataAvailability;
-        this->numWithdrawals = numWithdrawals;
+        this->numWithdrawals = blockSize;
 
         constants.generate_r1cs_constraints();
 
@@ -398,6 +399,9 @@ public:
         publicKeyX_notZero.generate_r1cs_witness();
 
         // Withdrawals
+#ifdef MULTICORE
+        #pragma omp parallel for
+#endif
         for(unsigned int i = 0; i < block.withdrawals.size(); i++)
         {
             withdrawals[i].generate_r1cs_witness(block.withdrawals[i]);
@@ -415,7 +419,22 @@ public:
         return true;
     }
 
-    void printInfo()
+    bool generateWitness(const json& input) override
+    {
+        return generateWitness(input.get<Loopring::OffchainWithdrawalBlock>());
+    }
+
+    BlockType getBlockType() override
+    {
+        return BlockType::OffchainWithdrawal;
+    }
+
+    unsigned int getBlockSize() override
+    {
+        return numWithdrawals;
+    }
+
+    void printInfo() override
     {
         std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numWithdrawals) << "/offchain withdrawal)" << std::endl;
     }

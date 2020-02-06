@@ -1,6 +1,7 @@
 #ifndef _ONCHAINWITHDRAWALCIRCUIT_H_
 #define _ONCHAINWITHDRAWALCIRCUIT_H_
 
+#include "Circuit.h"
 #include "../Utils/Constants.h"
 #include "../Utils/Data.h"
 #include "../Utils/Utils.h"
@@ -180,7 +181,7 @@ public:
     }
 };
 
-class OnchainWithdrawalCircuit : public GadgetT
+class OnchainWithdrawalCircuit : public Circuit
 {
 public:
 
@@ -204,7 +205,7 @@ public:
     std::vector<sha256_many> hashers;
 
     OnchainWithdrawalCircuit(ProtoboardT& pb, const std::string& prefix) :
-        GadgetT(pb, prefix),
+        Circuit(pb, prefix),
 
         publicData(pb, FMT(prefix, ".publicData")),
         constants(pb, FMT(prefix, ".constants")),
@@ -223,9 +224,9 @@ public:
 
     }
 
-    void generate_r1cs_constraints(int numWithdrawals)
+    void generateConstraints(bool onchainDataAvailability, unsigned int blockSize) override
     {
-        this->numWithdrawals = numWithdrawals;
+        this->numWithdrawals = blockSize;
 
         constants.generate_r1cs_constraints();
 
@@ -299,9 +300,16 @@ public:
 
         // Withdrawals
         assert(withdrawals.size() == hashers.size());
+#ifdef MULTICORE
+        #pragma omp parallel for
+#endif
         for(unsigned int i = 0; i < block.withdrawals.size(); i++)
         {
             withdrawals[i].generate_r1cs_witness(block.withdrawals[i]);
+        }
+        // Cannot be done in parallel
+        for(unsigned int i = 0; i < block.withdrawals.size(); i++)
+        {
             hashers[i].generate_r1cs_witness();
         }
         // printBits("WithdrawBlockHash: 0x", hashers.back().result().bits.get_bits(pb));
@@ -312,7 +320,22 @@ public:
         return true;
     }
 
-    void printInfo()
+    bool generateWitness(const json& input) override
+    {
+        return generateWitness(input.get<Loopring::OnchainWithdrawalBlock>());
+    }
+
+    BlockType getBlockType() override
+    {
+        return BlockType::OnchainWithdrawal;
+    }
+
+    unsigned int getBlockSize() override
+    {
+        return numWithdrawals;
+    }
+
+    void printInfo() override
     {
         std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numWithdrawals) << "/onchain withdrawal)" << std::endl;
     }
