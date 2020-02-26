@@ -9,8 +9,9 @@
 #include "Circuits/InternalTransferCircuit.h"
 
 #include "ThirdParty/httplib.h"
-#include "ThirdParty/json.hpp"
+//#include "ThirdParty/json.hpp"
 #include "ethsnarks.hpp"
+#include "import.hpp"
 #include "stubs.hpp"
 #include <fstream>
 #include <chrono>
@@ -18,6 +19,74 @@
 
 #ifdef MULTICORE
 #include <omp.h>
+#endif
+
+#define WITH_MEMORY_STATS 0
+
+#if WITH_MEMORY_STATS
+#include <unistd.h>
+#include <ios>
+#include <iostream>
+#include <fstream>
+#include <string>
+
+#include <malloc.h>
+
+//////////////////////////////////////////////////////////////////////////////
+//
+// process_mem_usage(double &, double &) - takes two doubles by reference,
+// attempts to read the system-dependent data for a process' virtual memory
+// size and resident set size, and return the results in KB.
+//
+// On failure, returns 0.0, 0.0
+
+void process_mem_usage(double& vm_usage, double& resident_set)
+{
+   using std::ios_base;
+   using std::ifstream;
+   using std::string;
+
+   vm_usage     = 0.0;
+   resident_set = 0.0;
+
+   // 'file' stat seems to give the most reliable results
+   //
+   ifstream stat_stream("/proc/self/stat",ios_base::in);
+
+   // dummy vars for leading entries in stat that we don't care about
+   //
+   string pid, comm, state, ppid, pgrp, session, tty_nr;
+   string tpgid, flags, minflt, cminflt, majflt, cmajflt;
+   string utime, stime, cutime, cstime, priority, nice;
+   string O, itrealvalue, starttime;
+
+   // the two fields we want
+   //
+   unsigned long vsize;
+   long rss;
+
+   stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
+               >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
+               >> utime >> stime >> cutime >> cstime >> priority >> nice
+               >> O >> itrealvalue >> starttime >> vsize >> rss; // don't care about the rest
+
+   stat_stream.close();
+
+   long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
+   vm_usage     = vsize / 1024.0;
+   resident_set = rss * page_size_kb;
+}
+
+void printMemoryUsage()
+{
+    malloc_trim(0);
+
+    double vm, rss;
+    process_mem_usage(vm, rss);
+    std::cout << "VM: " << unsigned(vm*0.001) << "MB; RSS: " << unsigned(rss*0.001) << "MB" << std::endl;
+}
+#else
+void printMemoryUsage() {}
 #endif
 
 using json = nlohmann::json;
@@ -29,10 +98,80 @@ enum class Mode
     Prove,
     ExportCircuit,
     ExportWitness,
-    CreatePk,
-    Pk_alt2mcl,
-    Server
+    Server,
+    Benchmark
 };
+
+namespace libsnark
+{
+static void from_json(const nlohmann::json& j, libsnark::Config& config)
+{
+    if (j.contains("num_threads"))
+    {
+        config.num_threads = j.at("num_threads").get<unsigned int>();
+    }
+    if (j.contains("smt"))
+    {
+        config.smt = j.at("smt").get<bool>();
+    }
+    if (j.contains("fft"))
+    {
+        config.fft = j.at("fft").get<std::string>();
+    }
+    if (j.contains("radixes"))
+    {
+        config.radixes = j.at("radixes").get<std::vector<unsigned int>>();
+    }
+    if (j.contains("swapAB"))
+    {
+        config.swapAB = j.at("swapAB").get<bool>();
+    }
+    if (j.contains("multi_exp_c"))
+    {
+        config.multi_exp_c = j.at("multi_exp_c").get<unsigned int>();
+    }
+    if (j.contains("multi_exp_prefetch_locality"))
+    {
+        config.multi_exp_prefetch_locality = j.at("multi_exp_prefetch_locality").get<unsigned int>();
+    }
+    if (j.contains("prefetch_stride"))
+    {
+        config.prefetch_stride = j.at("prefetch_stride").get<unsigned int>();
+    }
+    if (j.contains("multi_exp_look_ahead"))
+    {
+        config.multi_exp_look_ahead = j.at("multi_exp_look_ahead").get<unsigned int>();
+    }
+}
+}
+
+struct BenchmarkConfig
+{
+    unsigned int num_iterations;
+    std::vector<unsigned int> num_threads;
+    std::vector<bool> smt;
+    std::vector<std::string> fft;
+    std::vector<std::vector<unsigned int>> radixes;
+    std::vector<bool> swapAB;
+    std::vector<unsigned int> multi_exp_c;
+    std::vector<unsigned int> multi_exp_prefetch_locality;   // 4 == no prefetching, [0, 3] prefetch locality
+    std::vector<unsigned int> prefetch_stride;               // 4 * L1_CACHE_BYTES
+    std::vector<unsigned int> multi_exp_look_ahead;
+};
+
+static void from_json(const nlohmann::json& j, BenchmarkConfig& config)
+{
+    config.num_iterations = j.at("num_iterations").get<unsigned int>();
+    config.num_threads = j.at("num_threads").get<std::vector<unsigned int>>();
+    config.smt = j.at("smt").get<std::vector<bool>>();
+    config.fft = j.at("fft").get<std::vector<std::string>>();
+    config.radixes = j.at("radixes").get<std::vector<std::vector<unsigned int>>>();
+    config.swapAB = j.at("swapAB").get<std::vector<bool>>();
+    config.multi_exp_c = j.at("multi_exp_c").get<std::vector<unsigned int>>();
+    config.multi_exp_prefetch_locality = j.at("multi_exp_prefetch_locality").get<std::vector<unsigned int>>();
+    config.prefetch_stride = j.at("prefetch_stride").get<std::vector<unsigned int>>();
+    config.multi_exp_look_ahead = j.at("multi_exp_look_ahead").get<std::vector<unsigned int>>();
+}
 
 static inline auto now() -> decltype(std::chrono::high_resolution_clock::now()) {
     return std::chrono::high_resolution_clock::now();
@@ -56,6 +195,14 @@ bool fileExists(const std::string& fileName)
 {
     std::ifstream infile(fileName.c_str());
     return infile.good();
+}
+
+void initProverContextBuffers(ProverContextT& context)
+{
+    context.scratch_exponents.resize(std::max(context.constraint_system->num_variables() + 1, context.domain->m - 1));
+    context.aA.resize(context.domain->m, FieldT::one());
+    context.aB.resize(context.domain->m, FieldT::one());
+    context.aH.resize(context.domain->m+1, FieldT::one());
 }
 
 bool generateKeyPair(ethsnarks::ProtoboardT& pb, std::string& baseFilename)
@@ -83,13 +230,13 @@ bool generateKeyPair(ethsnarks::ProtoboardT& pb, std::string& baseFilename)
     return (result == 0);
 }
 
-json loadBlock(const std::string& filename)
+json loadJSON(const std::string& filename)
 {
     // Read the JSON file
     std::ifstream file(filename.c_str());
     if (!file.is_open())
     {
-        std::cerr << "Cannot open block file: " << filename << std::endl;
+        std::cerr << "Cannot open json file: " << filename << std::endl;
         return json();
     }
     json input;
@@ -98,20 +245,39 @@ json loadBlock(const std::string& filename)
     return input;
 }
 
-ethsnarks::ProvingKeyT loadProvingKey(const std::string& pk_file)
+libsnark::Config loadConfig(const std::string& filename)
+{
+    return loadJSON(filename).get<libsnark::Config>();
+}
+
+void loadProvingKey(const std::string& pk_file, ethsnarks::ProvingKeyT& proving_key)
 {
     std::cout << "Loading proving key " << pk_file << "..." << std::endl;
     auto begin = now();
-    auto proving_key = ethsnarks::load_proving_key(pk_file.c_str());
+    auto pk = ethsnarks::load_proving_key(pk_file.c_str());
+    proving_key.alpha_g1 = std::move(pk.alpha_g1);
+    proving_key.beta_g1 = std::move(pk.beta_g1);
+    proving_key.beta_g2 = std::move(pk.beta_g2);
+    proving_key.delta_g1 = std::move(pk.delta_g1);
+    proving_key.delta_g2 = std::move(pk.delta_g2);
+    proving_key.A_query = std::move(pk.A_query);
+    proving_key.B_query = std::move(pk.B_query);
+    proving_key.H_query = std::move(pk.H_query);
+    proving_key.L_query = std::move(pk.L_query);
     print_time(begin, "Proving key loaded");
-    return proving_key;
 }
 
-std::string proveCircuit(Loopring::Circuit* circuit, const ethsnarks::ProvingKeyT& proving_key)
+VerificationKeyT loadVerificationKey(const std::string& vk_file)
+{
+    std::cout << "Loading verification key " << vk_file << "..." << std::endl;
+    return vk_from_json(loadJSON(vk_file));
+}
+
+std::string proveCircuit(ProverContextT& context, Loopring::Circuit* circuit)
 {
     std::cout << "Generating proof..." << std::endl;
     auto begin = now();
-    std::string jProof = ethsnarks::prove(circuit->getPb(), proving_key);
+    std::string jProof = ethsnarks::prove(context, circuit->getPb());
     unsigned int elapsed_ms = elapsed_time_ms(begin);
     elapsed_ms = elapsed_ms == 0 ? 1 : elapsed_ms;
     std::cout << "Proof generated in " << float(elapsed_ms) / 1000.0f << " seconds ("
@@ -208,7 +374,7 @@ std::string getProvingKeyFilename(const std::string& baseFilename)
     return baseFilename + "_pk.raw";
 }
 
-void runServer(Loopring::Circuit* circuit, const std::string& provingKeyFilename, unsigned int port)
+void runServer(Loopring::Circuit* circuit, const std::string& provingKeyFilename, const libsnark::Config& config, unsigned int port)
 {
     using namespace httplib;
 
@@ -235,8 +401,13 @@ void runServer(Loopring::Circuit* circuit, const std::string& provingKeyFilename
         }
     };
 
-    // Load the proving key a single time
-    auto proving_key = loadProvingKey(provingKeyFilename);
+    // Setup the context a single time
+    ProverContextT context;
+    loadProvingKey(provingKeyFilename, context.provingKey);
+    context.constraint_system = &(circuit->getPb().constraint_system);
+    context.config = config;
+    context.domain = get_domain(circuit->getPb(), context.provingKey, config);
+    initProverContextBuffers(context);
 
     // Prover status info
     ProverStatus proverStatus;
@@ -263,7 +434,7 @@ void runServer(Loopring::Circuit* circuit, const std::string& provingKeyFilename
         ProverStatusRAII statusRAII(proverStatus, blockFilename, proofFilename);
 
         // Prove the block
-        json input = loadBlock(blockFilename);
+        json input = loadJSON(blockFilename);
         if (input == json())
         {
             res.set_content("Error: Failed to load block!\n", "text/plain");
@@ -292,7 +463,7 @@ void runServer(Loopring::Circuit* circuit, const std::string& provingKeyFilename
                 return;
             }
         }
-        std::string jProof = proveCircuit(circuit, proving_key);
+        std::string jProof = proveCircuit(context, circuit);
         if (jProof.length() == 0)
         {
             res.set_content("Error: Failed to prove block!\n", "text/plain");
@@ -347,9 +518,126 @@ void runServer(Loopring::Circuit* circuit, const std::string& provingKeyFilename
     svr.listen("localhost", port);
 }
 
+bool runBenchmark(Loopring::Circuit* circuit, const std::string& provingKeyFilename)
+{
+    // Load the proving key a single time
+    ProverContextT context;
+    loadProvingKey(provingKeyFilename, context.provingKey);
+    context.constraint_system = &(circuit->getPb().constraint_system);
+
+    VerificationKeyT vk = loadVerificationKey(provingKeyFilename.substr(0, provingKeyFilename.length() - 6) + "vk.json");
+
+    if (!validateCircuit(circuit))
+    {
+        return false;
+    }
+
+    // Get all configs to benchmark from the benchmark config
+    BenchmarkConfig benchmarkConfig = loadJSON("benchmark.json").get<BenchmarkConfig>();
+
+    // Create all configs
+    std::vector<libsnark::Config> configs;
+    for (auto num_threads : benchmarkConfig.num_threads) {
+    for (auto smt : benchmarkConfig.smt) {
+    for (auto prefetch_stride : benchmarkConfig.prefetch_stride) {
+    for (auto swapAB : benchmarkConfig.swapAB) {
+    for (auto fft : benchmarkConfig.fft) {
+    for (auto radixes : benchmarkConfig.radixes) {
+    for (auto multi_exp_c : benchmarkConfig.multi_exp_c) {
+    for (auto multi_exp_prefetch_locality : benchmarkConfig.multi_exp_prefetch_locality) {
+    for (auto multi_exp_look_ahead : benchmarkConfig.multi_exp_look_ahead) {
+        libsnark::Config config;
+        config.num_threads = num_threads;
+        config.smt = smt;
+        config.prefetch_stride = prefetch_stride;
+        config.swapAB = swapAB;
+        config.fft = fft;
+        config.radixes = radixes;
+        config.multi_exp_c = multi_exp_c;
+        config.multi_exp_prefetch_locality = multi_exp_prefetch_locality;
+        config.multi_exp_look_ahead = multi_exp_look_ahead;
+        configs.push_back(config);
+    }}}}}}}}}
+
+    unsigned int num_iterations = benchmarkConfig.num_iterations;
+
+    struct Result
+    {
+        libsnark::Config config;
+        unsigned int duration_ms;
+
+        static bool compareResult(Result a, Result b)
+        {
+            return (a.duration_ms < b.duration_ms);
+        }
+    };
+    std::vector<Result> results;
+    for (auto config : configs)
+    {
+        std::cout << "*****************************" << std::endl;
+        std::cout << "Config: " << config << std::endl;
+        std::cout << "*****************************" << std::endl;
+#ifdef MULTICORE
+        omp_set_num_threads(config.num_threads);
+#endif
+
+        context.config = config;
+        context.domain = get_domain(circuit->getPb(), context.provingKey, config);
+        initProverContextBuffers(context);
+
+        unsigned int totalTime = 0;
+        for (unsigned int l = 0; l < num_iterations; l++)
+        {
+            auto begin = now();
+            std::string jProof = proveCircuit(context, circuit);
+            totalTime += elapsed_time_ms(begin);
+            if (jProof.length() == 0)
+            {
+                return false;
+            }
+
+            std::stringstream proof_stream;
+            proof_stream << jProof;
+            auto proof_pair = proof_from_json(proof_stream);
+
+            if(!libsnark::r1cs_gg_ppzksnark_zok_verifier_strong_IC<ppT>(vk, proof_pair.first, proof_pair.second))
+            {
+                std::cerr << "Invalid proof!" << std::endl;
+                return false;
+            }
+        }
+
+        Result result;
+        result.config = config;
+        result.duration_ms = totalTime / num_iterations;
+        results.push_back(result);
+    }
+
+    std::sort(results.begin(), results.end(), Result::compareResult);
+
+    std::cout << "Benchmark results:" << std::endl;
+    for (unsigned int i = 0; i < results.size(); i++)
+    {
+        const libsnark::Config& config = results[i].config;
+        std::cout << i << ". " << config << " (" << results[i].duration_ms << "ms)" << std::endl;
+    }
+
+    return true;
+}
+
 int main (int argc, char **argv)
 {
     ethsnarks::ppT::init_public_params();
+
+    // Load in the config
+    libsnark::Config config = loadConfig("config.json");
+    std::cout << "Config: " << config << std::endl;
+
+#ifdef MULTICORE
+    omp_set_max_active_levels(5);
+    std::cout << "Num threads available: " << omp_get_max_threads() << std::endl;
+    std::cout << "Num processors available: " << omp_get_num_procs() << std::endl;
+#endif
 
     if (argc < 3)
     {
@@ -361,15 +649,12 @@ int main (int argc, char **argv)
         std::cerr << "-exportcircuit <block.json> <circuit.json>: Exports the rc1s circuit to json (circom - not all fields)" << std::endl;
         std::cerr << "-exportwitness <block.json> <witness.json>: Exports the witness to json (circom)" << std::endl;
         std::cerr << "-createpk <block.json> <pk.json> <pk.raw>: Creates the proving key using a bellman pk" << std::endl;
-        std::cerr << "-pk_alt2mcl <block.json> <pk_alt.raw> <pk_mlc.raw>: Converts the proving key from the alt format to the mcl format" << std::endl;
+        std::cerr << "-pk_alt2mcl <block.json> <pk_alt.raw> <pk_mcl.raw>: Converts the proving key from the alt format to the mcl format" << std::endl;
+        std::cerr << "-pk_mcl2nozk <pk_mlc.raw> <pk_nozk.raw>: Converts the proving key from the mcl format to the nozk format" << std::endl;
         std::cerr << "-server <block.json> <port>: Keeps the program running as an HTTP server to prove blocks on demand" << std::endl;
+        std::cerr << "-benchmark <block.json>: Try out multiple prover options to find the fastest configuration on the system" << std::endl;
         return 1;
     }
-
-#ifdef MULTICORE
-    const int max_threads = omp_get_max_threads();
-    std::cout << "Num threads: " << max_threads << std::endl;
-#endif
 
     const char* proofFilename = NULL;
     Mode mode = Mode::Validate;
@@ -437,23 +722,50 @@ int main (int argc, char **argv)
     }
     else if (strcmp(argv[1], "-createpk") == 0)
     {
-        if (argc != 5)
+        if (argc != 4)
         {
             std::cout << "Invalid number of arguments!"<< std::endl;
             return 1;
         }
-        mode = Mode::CreatePk;
-        std::cout << "Creating pk for " << argv[2] << " using " << argv[3] << " ..." << std::endl;
+        std::cout << "Converting pk from " << argv[2] << " to " << argv[3] << " ..." << std::endl;
+        if (!pk_bellman2ethsnarks(argv[2], argv[3]))
+        {
+            return 1;
+        }
+        std::cout << "Successfully created pk " << argv[3] << "." << std::endl;
+        return 0;
     }
     else if (strcmp(argv[1], "-pk_alt2mcl") == 0)
     {
-        if (argc != 5)
+        if (argc != 4)
         {
             std::cout << "Invalid number of arguments!"<< std::endl;
             return 1;
         }
-        mode = Mode::Pk_alt2mcl;
-        std::cout << "Converting pk for " << argv[2] << " from " << argv[3] << " to " << argv[4] << " ..." << std::endl;
+         std::cout << "Converting pk from " << argv[2] << " to " << argv[3] << " ..." << std::endl;
+        if (!pk_alt2mcl(argv[2], argv[3]))
+        {
+            std::cout << "Could not convert pk." << std::endl;
+            return 1;
+        }
+        std::cout << "Successfully created pk " << argv[3] << "." << std::endl;
+        return 0;
+    }
+    else if (strcmp(argv[1], "-pk_mcl2nozk") == 0)
+    {
+        if (argc != 4)
+        {
+            std::cout << "Invalid number of arguments!"<< std::endl;
+            return 1;
+        }
+        std::cout << "Converting pk from " << argv[2] << " to " << argv[3] << " ..." << std::endl;
+        if (!pk_mcl2nozk(argv[2], argv[3]))
+        {
+            std::cout << "Failed to convert!"<< std::endl;
+            return 1;
+        }
+        std::cout << "Successfully created pk " << argv[3] << "." << std::endl;
+        return 0;
     }
     else if (strcmp(argv[1], "-server") == 0)
     {
@@ -465,6 +777,16 @@ int main (int argc, char **argv)
         mode = Mode::Server;
         std::cout << "Starting proving server for " << argv[2] << " on port " << argv[3] << "..." << std::endl;
     }
+    else if (strcmp(argv[1], "-benchmark") == 0)
+    {
+        if (argc != 3)
+        {
+            std::cout << "Invalid number of arguments!"<< std::endl;
+            return 1;
+        }
+        mode = Mode::Benchmark;
+        std::cout << "Benchmarking " << argv[2] << "..." << std::endl;
+    }
     else
     {
         std::cerr << "Unknown option: " << argv[1] << std::endl;
@@ -472,7 +794,7 @@ int main (int argc, char **argv)
     }
 
     // Read the block file
-    json input = loadBlock(argv[2]);
+    json input = loadJSON(argv[2]);
     if (input == json())
     {
         return 1;
@@ -505,10 +827,45 @@ int main (int argc, char **argv)
 
     ethsnarks::ProtoboardT pb;
     Loopring::Circuit* circuit = createCircuit(blockType, blockSize, onchainDataAvailability, pb);
+    if (config.swapAB)
+    {
+        pb.constraint_system.swap_AB_if_beneficial();
+    }
+    pb.constraint_system.constraints.shrink_to_fit();
+    pb.values.shrink_to_fit();
+    libsnark::ConstantStorage<FieldT>::getInstance().constants.shrink_to_fit();
+
+    printMemoryUsage();
+
+#if 0
+    unsigned int totalCoeffs = 0;
+    for (size_t i = 0; i < pb.constraint_system.constraints.size(); ++i)
+    {
+        totalCoeffs += pb.constraint_system.constraints[i]->getA().getTerms().size();
+        totalCoeffs += pb.constraint_system.constraints[i]->getB().getTerms().size();
+        totalCoeffs += pb.constraint_system.constraints[i]->getC().getTerms().size();
+    }
+    std::cout << "num coefficients: " << totalCoeffs << std::endl;
+    std::cout << "num unique coefficients: " << libsnark::ConstantStorage<FieldT>::getInstance().constants.size() << std::endl;
+#endif
+
+    if (mode == Mode::Benchmark)
+    {
+        if (!generateWitness(circuit, input))
+        {
+            return 1;
+        }
+        runBenchmark(circuit, provingKeyFilename);
+    }
+
+#ifdef MULTICORE
+    omp_set_num_threads(config.num_threads);
+    std::cout << "Num threads used: " << omp_get_max_threads() << std::endl;
+#endif
 
     if (mode == Mode::Server)
     {
-        runServer(circuit, provingKeyFilename, std::stoi(argv[3]));
+        runServer(circuit, provingKeyFilename, config, std::stoi(argv[3]));
     }
 
     if (mode == Mode::Validate || mode == Mode::Prove)
@@ -545,8 +902,14 @@ int main (int argc, char **argv)
         stub_write_input_from_pb(pb, provingKeyFilename.c_str(), inputsFilename.c_str());
         print_time(begin, "write input");
 #else
-        auto proving_key = loadProvingKey(provingKeyFilename);
-        std::string jProof = proveCircuit(circuit, proving_key);
+        ProverContextT context;
+        loadProvingKey(provingKeyFilename, context.provingKey);
+        context.constraint_system = &pb.constraint_system;
+        context.config = config;
+        context.domain = get_domain(pb, context.provingKey, config);
+        initProverContextBuffers(context);
+        printMemoryUsage();
+        std::string jProof = proveCircuit(context, circuit);
         if (jProof.length() == 0)
         {
             return 1;
@@ -574,25 +937,6 @@ int main (int argc, char **argv)
             std::cerr << "Failed to export witness!" << std::endl;
             return 1;
         }
-    }
-
-    if (mode == Mode::CreatePk)
-    {
-        if (!pk_bellman2ethsnarks(pb, argv[3], argv[4]))
-        {
-            return 1;
-        }
-        std::cout << "pk file created: " << argv[4] << std::endl;
-    }
-
-    if (mode == Mode::Pk_alt2mcl)
-    {
-        if (!pk_alt2mcl(pb, argv[3], argv[4]))
-        {
-            std::cout << "Could not convert pk. Incorrect active curve?" << std::endl;
-            return 1;
-        }
-        std::cout << "pk file created: " << argv[4] << std::endl;
     }
 
     return 0;

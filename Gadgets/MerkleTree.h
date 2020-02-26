@@ -83,11 +83,6 @@ template<typename HashT>
 class merkle_path_compute_4 : public GadgetT
 {
 public:
-    const size_t m_depth;
-    const VariableArrayT m_address_bits;
-    const VariableT m_leaf;
-    const VariableArrayT m_path;
-
     std::vector<merkle_path_selector_4> m_selectors;
     std::vector<HashT> m_hashers;
 
@@ -99,16 +94,14 @@ public:
         const VariableArrayT& in_path,
         const std::string &in_annotation_prefix
     ) :
-        GadgetT(in_pb, in_annotation_prefix),
-        m_depth(in_depth),
-        m_address_bits(in_address_bits),
-        m_leaf(in_leaf),
-        m_path(in_path)
+        GadgetT(in_pb, in_annotation_prefix)
     {
         assert( in_depth > 0 );
         assert( in_address_bits.size() == in_depth * 2 );
 
-        for( size_t i = 0; i < m_depth; i++ )
+        m_selectors.reserve(in_depth);
+        m_hashers.reserve(in_depth);
+        for( size_t i = 0; i < in_depth; i++ )
         {
             m_selectors.push_back(
                 merkle_path_selector_4(
@@ -117,11 +110,11 @@ public:
                     in_address_bits[i*2 + 0], in_address_bits[i*2 + 1],
                     FMT(this->annotation_prefix, ".selector[%zu]", i)));
 
-            auto t = HashT(
-                    in_pb,
-                    var_array(m_selectors[i].getChildren()),
-                    FMT(this->annotation_prefix, ".hasher[%zu]", i));
-            m_hashers.push_back(t);
+            m_hashers.emplace_back(
+                in_pb,
+                var_array(m_selectors[i].getChildren()),
+                FMT(this->annotation_prefix, ".hasher[%zu]", i)
+            );
         }
     }
 

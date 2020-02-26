@@ -3,7 +3,7 @@
 
 #include "Constants.h"
 
-#include "../ThirdParty/json.hpp"
+//#include "../ThirdParty/json.hpp"
 #include "ethsnarks.hpp"
 #include "jubjub/point.hpp"
 #include "jubjub/eddsa.hpp"

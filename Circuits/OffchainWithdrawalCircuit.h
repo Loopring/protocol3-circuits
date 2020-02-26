@@ -328,6 +328,7 @@ public:
         publicKeyX_notZero.generate_r1cs_constraints();
 
         // Withdrawals
+        withdrawals.reserve(numWithdrawals);
         for (size_t j = 0; j < numWithdrawals; j++)
         {
             VariableT withdrawalAccountsRoot = (j == 0) ? merkleRootBefore.packed : withdrawals.back().getNewAccountsRoot();

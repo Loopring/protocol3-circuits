@@ -1381,6 +1381,7 @@ public:
         GadgetT(pb, prefix)
     {
         unsigned int numStages = (labels.size() + numInputs - 1) / numInputs;
+        stageHashers.reserve(numStages);
         for (unsigned int i = 0; i < numStages; i++)
         {
             std::vector<VariableT> inputs;
@@ -1392,7 +1393,6 @@ public:
             }
             stageHashers.emplace_back(pb, var_array(inputs), FMT(this->annotation_prefix, ".stage1"));
         }
-
         hash.reset(new libsnark::dual_variable_gadget<FieldT>(
             pb, stageHashers.back().result(), 256, ".labelHashToBits")
         );
@@ -1405,7 +1405,7 @@ public:
 
     void generate_r1cs_witness()
     {
-        for (auto hasher : stageHashers)
+        for (auto& hasher : stageHashers)
         {
             hasher.generate_r1cs_witness();
         }
@@ -1415,7 +1415,7 @@ public:
 
     void generate_r1cs_constraints()
     {
-        for (auto hasher : stageHashers)
+        for (auto& hasher : stageHashers)
         {
             hasher.generate_r1cs_constraints();
         }

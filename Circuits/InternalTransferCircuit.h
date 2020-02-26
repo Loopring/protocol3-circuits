@@ -349,6 +349,7 @@ public:
         publicKeyX_notZero.generate_r1cs_constraints();
 
         // Internal transfers
+        transfers.reserve(numTransfers);
         for (size_t j = 0; j < numTransfers; j++)
         {
             VariableT transAccountsRoot = (j == 0) ? merkleRootBefore.packed : transfers.back().getNewAccountsRoot();
