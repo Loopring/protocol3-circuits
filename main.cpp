@@ -634,6 +634,8 @@ int main (int argc, char **argv)
     std::cout << "Config: " << config << std::endl;
 
 #ifdef MULTICORE
+    // omp_set_nested is needed for gcc for some reason
+    omp_set_nested(1);
     omp_set_max_active_levels(5);
     std::cout << "Num threads available: " << omp_get_max_threads() << std::endl;
     std::cout << "Num processors available: " << omp_get_num_procs() << std::endl;
