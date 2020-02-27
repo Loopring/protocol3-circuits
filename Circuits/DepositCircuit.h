@@ -184,6 +184,7 @@ public:
 
         // Deposits
         deposits.reserve(numDeposits);
+        hashers.reserve(numDeposits);
         for (size_t j = 0; j < numDeposits; j++)
         {
             VariableT depositAccountsRoot = (j == 0) ? merkleRootBefore.packed : deposits.back().getNewAccountsRoot();
