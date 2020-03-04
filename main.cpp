@@ -200,8 +200,8 @@ bool fileExists(const std::string& fileName)
 void initProverContextBuffers(ProverContextT& context)
 {
     context.scratch_exponents.resize(std::max(context.constraint_system->num_variables() + 1, context.domain->m - 1));
-    context.aA.resize(context.domain->m, FieldT::one());
-    context.aB.resize(context.domain->m, FieldT::one());
+    context.aA.resize(context.domain->m+1, FieldT::one());
+    context.aB.resize(context.domain->m+1, FieldT::one());
     context.aH.resize(context.domain->m+1, FieldT::one());
 }
 
@@ -515,7 +515,7 @@ void runServer(Loopring::Circuit* circuit, const std::string& provingKeyFilename
     });
 
     std::cout << "Running server on 'localhost' on port " << port << std::endl;
-    svr.listen("localhost", port);
+    svr.listen("127.0.0.1", port);
 }
 
 bool runBenchmark(Loopring::Circuit* circuit, const std::string& provingKeyFilename)
