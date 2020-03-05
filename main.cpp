@@ -651,7 +651,7 @@ int main (int argc, char **argv)
         std::cerr << "-exportcircuit <block.json> <circuit.json>: Exports the rc1s circuit to json (circom - not all fields)" << std::endl;
         std::cerr << "-exportwitness <block.json> <witness.json>: Exports the witness to json (circom)" << std::endl;
         std::cerr << "-createpk <block.json> <pk.json> <pk.raw>: Creates the proving key using a bellman pk" << std::endl;
-        std::cerr << "-pk_alt2mcl <block.json> <pk_alt.raw> <pk_mcl.raw>: Converts the proving key from the alt format to the mcl format" << std::endl;
+        std::cerr << "-pk_alt2mcl <pk_alt.raw> <pk_mcl.raw>: Converts the proving key from the alt format to the mcl format" << std::endl;
         std::cerr << "-pk_mcl2nozk <pk_mlc.raw> <pk_nozk.raw>: Converts the proving key from the mcl format to the nozk format" << std::endl;
         std::cerr << "-server <block.json> <port>: Keeps the program running as an HTTP server to prove blocks on demand" << std::endl;
         std::cerr << "-benchmark <block.json>: Try out multiple prover options to find the fastest configuration on the system" << std::endl;
@@ -744,7 +744,7 @@ int main (int argc, char **argv)
             std::cout << "Invalid number of arguments!"<< std::endl;
             return 1;
         }
-         std::cout << "Converting pk from " << argv[2] << " to " << argv[3] << " ..." << std::endl;
+        std::cout << "Converting pk from " << argv[2] << " to " << argv[3] << " ..." << std::endl;
         if (!pk_alt2mcl(argv[2], argv[3]))
         {
             std::cout << "Could not convert pk." << std::endl;
