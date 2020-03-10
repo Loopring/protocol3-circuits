@@ -331,6 +331,7 @@ public:
         publicKeyX_notZero.generate_r1cs_constraints();
 
         // Cancels
+        cancels.reserve(numCancels);
         for (size_t j = 0; j < numCancels; j++)
         {
             VariableT cancelAccountsRoot = (j == 0) ? merkleRootBefore.packed : cancels.back().getNewAccountsRoot();

@@ -544,6 +544,7 @@ public:
         nonce_after.generate_r1cs_constraints();
 
         // Ring settlements
+        ringSettlements.reserve(numRings);
         for (size_t j = 0; j < numRings; j++)
         {
             const VariableT ringAccountsRoot = (j == 0) ? merkleRootBefore.packed : ringSettlements.back().getNewAccountsRoot();
