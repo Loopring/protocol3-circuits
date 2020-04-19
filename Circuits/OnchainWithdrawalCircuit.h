@@ -73,8 +73,8 @@ public:
         amountToWithdrawMin(pb, amountRequested.packed, balanceBefore.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
         amountToWithdraw(pb, bShutdownMode, balanceBefore.balance, amountToWithdrawMin.result(), FMT(prefix, ".amountToWithdraw")),
         // Float
-        amountWithdrawn(pb, constants, Float28Encoding, FMT(prefix, ".amountWithdrawn")),
-        requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
+        amountWithdrawn(pb, constants, Float24Encoding, FMT(prefix, ".amountWithdrawn")),
+        requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
 
         // Shutdown mode - Reset values to genesis state
         amountToSubtract(pb, bShutdownMode, amountToWithdraw.result(), amountWithdrawn.value(), FMT(prefix, ".amountToSubtract")),
@@ -114,7 +114,7 @@ public:
         amountToWithdrawMin.generate_r1cs_witness();
         amountToWithdraw.generate_r1cs_witness();
         // Float
-        amountWithdrawn.generate_r1cs_witness(toFloat(pb.val(amountToWithdraw.result()), Float28Encoding));
+        amountWithdrawn.generate_r1cs_witness(toFloat(pb.val(amountToWithdraw.result()), Float24Encoding));
         requireAccuracyAmountWithdrawn.generate_r1cs_witness();
 
         // Shutdown mode
@@ -163,7 +163,7 @@ public:
 
     const std::vector<VariableArrayT> getOnchainData(const Constants& constants) const
     {
-        return {constants.padding_0000, accountID.bits,
+        return {accountID.bits,
                 tokenID.bits,
                 amountRequested.bits};
     }

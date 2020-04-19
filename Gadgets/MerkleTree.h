@@ -186,7 +186,7 @@ public:
 using HashMerkleTree = Poseidon_gadget_T<5, 1, 6, 52, 4, 1>;
 using HashAccountLeaf = Poseidon_gadget_T<5, 1, 6, 52, 4, 1>;
 using HashBalanceLeaf = Poseidon_gadget_T<5, 1, 6, 52, 2, 1>;
-using HashTradingHistoryLeaf = Poseidon_gadget_T<5, 1, 6, 52, 3, 1>;
+using HashTradingHistoryLeaf = Poseidon_gadget_T<5, 1, 6, 52, 2, 1>;
 
 // Minimal parameters for 128bit security:
 //using HashMerkleTree = Poseidon_gadget_T<5, 1, 6, 52, 4, 1>;

@@ -106,7 +106,7 @@ public:
         bRebateNonZero(pb, rebateBips.packed, FMT(prefix, ".bRebateNonZero")),
 
         // Trade history
-        tradeHistory(pb, constants, tradeHistoryBefore, orderID.packed, FMT(prefix, ".tradeHistory")),
+        tradeHistory(pb, constants, tradeHistoryBefore, orderID, FMT(prefix, ".tradeHistory")),
 
         // Signature
         hash(pb, var_array({
@@ -124,7 +124,7 @@ public:
             buy.packed,
             label
         }), FMT(this->annotation_prefix, ".hash")),
-        signatureVerifier(pb, params, accountBefore.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
+        signatureVerifier(pb, params, constants, accountBefore.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }

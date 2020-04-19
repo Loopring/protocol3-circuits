@@ -84,8 +84,8 @@ public:
             unsigned int length;
         };
         std::vector<std::vector<Range>> ranges;
-        ranges.push_back({{0, 40}});                   // orderA.orderID + orderB.orderID
-        ranges.push_back({{40, 40}});                  // orderA.accountID + orderB.accountID
+        ranges.push_back({{0, 32}});                   // orderA.orderID + orderB.orderID
+        ranges.push_back({{32, 48}});                  // orderA.accountID + orderB.accountID
         ranges.push_back({{80, 8}, {120, 8}});         // orderA.tokenS + orderB.tokenS
         ranges.push_back({{88, 24},{128, 24}});        // orderA.fillS + orderB.fillS
         ranges.push_back({{112, 8}});                  // orderA.data
@@ -107,6 +107,8 @@ public:
 class RingSettlementGadget : public GadgetT
 {
 public:
+
+    const Constants& constants;
 
     // Orders
     OrderGadget orderA;
@@ -173,7 +175,7 @@ public:
     RingSettlementGadget(
         ProtoboardT& pb,
         const jubjub::Params& params,
-        const Constants& constants,
+        const Constants& _constants,
         const VariableT& exchangeID,
         const VariableT& accountsRoot,
         const VariableT& timestamp,
@@ -185,6 +187,8 @@ public:
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
+
+        constants(_constants),
 
         // Orders
         orderA(pb, params, constants, exchangeID, FMT(prefix, ".orderA")),
@@ -230,8 +234,8 @@ public:
 
         // Update UserA
         updateTradeHistory_A(pb, orderA.balanceSBefore.tradingHistory, subArray(orderA.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
-                             {orderA.tradeHistoryBefore.filled, orderA.tradeHistoryBefore.cancelled, orderA.tradeHistoryBefore.orderID},
-                             {orderMatching.getFilledAfter_A(), orderA.tradeHistory.getCancelledToStore(), orderA.tradeHistory.getOrderIDToStore()},
+                             {orderA.tradeHistoryBefore.filled, orderA.tradeHistoryBefore.orderID},
+                             {orderMatching.getFilledAfter_A(), orderA.orderID.packed},
                              FMT(prefix, ".updateTradeHistory_A")),
         updateBalanceS_A(pb, orderA.accountBefore.balancesRoot, orderA.tokenS.bits,
                          {balanceS_A.front(), orderA.balanceSBefore.tradingHistory},
@@ -248,8 +252,8 @@ public:
 
         // Update UserB
         updateTradeHistory_B(pb, orderB.balanceSBefore.tradingHistory, subArray(orderB.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
-                             {orderB.tradeHistoryBefore.filled, orderB.tradeHistoryBefore.cancelled, orderB.tradeHistoryBefore.orderID},
-                             {orderMatching.getFilledAfter_B(), orderB.tradeHistory.getCancelledToStore(), orderB.tradeHistory.getOrderIDToStore()},
+                             {orderB.tradeHistoryBefore.filled, orderB.tradeHistoryBefore.orderID},
+                             {orderMatching.getFilledAfter_B(), orderB.orderID.packed},
                              FMT(prefix, ".updateTradeHistory_B")),
         updateBalanceS_B(pb, orderB.accountBefore.balancesRoot, orderB.tokenS.bits,
                          {balanceS_B.front(), orderB.balanceSBefore.tradingHistory},
@@ -413,8 +417,11 @@ public:
     {
         return
         {
-            orderA.orderID.bits, orderB.orderID.bits,
-            orderA.accountID.bits, orderB.accountID.bits,
+            VariableArrayT(1, constants.zero), VariableArrayT(1, orderA.tradeHistory.getOverwrite()), subArray(orderA.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
+            VariableArrayT(1, constants.zero), VariableArrayT(1, orderB.tradeHistory.getOverwrite()), subArray(orderB.orderID.bits, 0, NUM_BITS_TRADING_HISTORY),
+
+            orderA.accountID.bits,
+            orderB.accountID.bits,
 
             orderA.tokenS.bits,
             fillS_A.bits(),
@@ -519,7 +526,7 @@ public:
             publicData.publicInput,
             accountBefore_O.nonce
         }), FMT(this->annotation_prefix, ".hash")),
-        signatureVerifier(pb, params, accountBefore_O.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
+        signatureVerifier(pb, params, constants, accountBefore_O.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }
@@ -603,7 +610,6 @@ public:
         publicData.add(labelHasher->result()->bits);
         if (onchainDataAvailability)
         {
-            publicData.add(constants.padding_0000);
             publicData.add(operatorAccountID.bits);
             // Transform the ring data
             transformData.generate_r1cs_constraints(numRings, flattenReverse(dataAvailabityData.data));

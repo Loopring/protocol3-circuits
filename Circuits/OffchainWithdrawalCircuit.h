@@ -100,8 +100,8 @@ public:
 
         // Calculate how much can be withdrawn
         amountToWithdraw(pb, amountRequested.packed, balanceBefore.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
-        amountWithdrawn(pb, constants, Float28Encoding, FMT(prefix, ".amountWithdrawn")),
-        requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
+        amountWithdrawn(pb, constants, Float24Encoding, FMT(prefix, ".amountWithdrawn")),
+        requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
 
         // Calculate the new balance
         balance_after(pb, balanceBefore.balance, amountWithdrawn.value(), FMT(prefix, ".balance_after")),
@@ -140,7 +140,7 @@ public:
             label,
             accountBefore.nonce
         }), FMT(this->annotation_prefix, ".hash")),
-        signatureVerifier(pb, params, accountBefore.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
+        signatureVerifier(pb, params, constants, accountBefore.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
 
     }
@@ -171,7 +171,7 @@ public:
 
         // Calculate how much can be withdrawn
         amountToWithdraw.generate_r1cs_witness();
-        amountWithdrawn.generate_r1cs_witness(toFloat(pb.val(amountToWithdraw.result()), Float28Encoding));
+        amountWithdrawn.generate_r1cs_witness(toFloat(pb.val(amountToWithdraw.result()), Float24Encoding));
         requireAccuracyAmountWithdrawn.generate_r1cs_witness();
 
         // Calculate the new balance
@@ -370,7 +370,6 @@ public:
         // Data availability
         if (onchainDataAvailability)
         {
-            publicData.add(constants.padding_0000);
             publicData.add(operatorAccountID.bits);
             for (auto& withdrawal : withdrawals)
             {

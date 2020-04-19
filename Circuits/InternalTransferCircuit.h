@@ -19,6 +19,8 @@ class InternalTransferGadget : public GadgetT
 {
 public:
 
+    const Constants& constants;
+
     // User From state
     BalanceGadget balanceFBefore_From;
     BalanceGadget balanceTBefore_From;
@@ -37,6 +39,16 @@ public:
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
     VariableT label;
+    DualVariableGadget type;
+
+    // Signature
+    Poseidon_gadget_T<10, 1, 6, 53, 9, 1> hash;
+    SignatureVerifier signatureVerifier;
+
+    // Type
+    NotGadget signatureInvalid;
+    UnsafeAddGadget numConditionalTransfersAfter;
+    RequireEqualGadget type_eq_signatureInvalid;
 
     // User To account check
     RequireNotZeroGadget publicKeyX_notZero;
@@ -68,20 +80,19 @@ public:
     // Update Operator
     UpdateBalanceGadget updateBalanceF_O;
 
-    // Signature
-    Poseidon_gadget_T<10, 1, 6, 53, 9, 1> hash;
-    SignatureVerifier signatureVerifier;
-
     InternalTransferGadget(
         ProtoboardT &pb,
         const jubjub::Params& params,
-        const Constants& constants,
+        const Constants& _constants,
         const VariableT& accountsMerkleRoot,
         const VariableT& operatorBalancesRoot,
         const VariableT& blockExchangeID,
+        const VariableT& numConditionalTransfersBefore,
         const std::string &prefix
     ) :
         GadgetT(pb, prefix),
+
+        constants(_constants),
 
         // User From state
         balanceFBefore_From(pb, FMT(prefix, "balanceFBefore_From")),
@@ -101,6 +112,16 @@ public:
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         label(make_variable(pb, FMT(prefix, ".label"))),
+        type(pb, NUM_BITS_TYPE, FMT(prefix, ".type")),
+
+        // Signature
+        hash(pb, var_array({blockExchangeID, accountID_From.packed, accountID_To.packed, tokenID.packed, amount.packed, feeTokenID.packed, fee.packed, label, accountBefore_From.nonce}), FMT(this->annotation_prefix, ".hash")),
+        signatureVerifier(pb, params, constants, accountBefore_From.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"), false),
+
+        // Type
+        signatureInvalid(pb, signatureVerifier.result(), ".signatureInvalid"),
+        numConditionalTransfersAfter(pb, numConditionalTransfersBefore, signatureInvalid.result(), ".numConditionalTransfersAfter"),
+        type_eq_signatureInvalid(pb, type.packed, signatureInvalid.result(), ".type_eq_signatureInvalid"),
 
         // User To account check
         publicKeyX_notZero(pb, accountBefore_To.publicKey.x, FMT(prefix, ".publicKeyX_notZero")),
@@ -117,8 +138,8 @@ public:
         // Transfer from From to To
         transferPayment(pb, NUM_BITS_AMOUNT, balanceTBefore_From.balance, balanceTBefore_To.balance, fAmount.value(), FMT(prefix, ".transferPayment")),
 
-        // Increase the nonce of From by 1
-        nonce_From_after(pb, accountBefore_From.nonce, constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_From_after")),
+        // Increase the nonce of From by 1 (unless it's a conditional transfer)
+        nonce_From_after(pb, accountBefore_From.nonce, signatureVerifier.result(), NUM_BITS_NONCE, FMT(prefix, ".nonce_From_after")),
 
         // Update User From
         updateBalanceF_From(pb, accountBefore_From.balancesRoot, feeTokenID.bits,
@@ -148,11 +169,7 @@ public:
         updateBalanceF_O(pb, operatorBalancesRoot, feeTokenID.bits,
                          {balanceBefore_O.balance, balanceBefore_O.tradingHistory},
                          {feePayment.Y, balanceBefore_O.tradingHistory},
-                         FMT(prefix, ".updateBalanceF_O")),
-
-        // Signature
-        hash(pb, var_array({blockExchangeID, accountID_From.packed, accountID_To.packed, tokenID.packed, amount.packed, feeTokenID.packed, fee.packed, label, accountBefore_From.nonce}), FMT(this->annotation_prefix, ".hash")),
-        signatureVerifier(pb, params, accountBefore_From.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
+                         FMT(prefix, ".updateBalanceF_O"))
     {
 
     }
@@ -177,6 +194,19 @@ public:
         feeTokenID.generate_r1cs_witness(pb, transfer.balanceUpdateF_From.tokenID);
         fee.generate_r1cs_witness(pb, transfer.fee);
         pb.val(label) = transfer.label;
+        type.generate_r1cs_witness(pb, transfer.type);
+
+        // Signature
+        hash.generate_r1cs_witness();
+        signatureVerifier.generate_r1cs_witness(transfer.signature);
+
+        // Type
+        signatureInvalid.generate_r1cs_witness();
+        numConditionalTransfersAfter.generate_r1cs_witness();
+        type_eq_signatureInvalid.generate_r1cs_witness();
+
+        print(pb, "signatureInvalid", signatureInvalid.result());
+        print(pb, "numConditionalTransfersAfter", numConditionalTransfersAfter.result());
 
         // User To account check
         publicKeyX_notZero.generate_r1cs_witness();
@@ -207,10 +237,6 @@ public:
 
         // Update Operator
         updateBalanceF_O.generate_r1cs_witness(transfer.balanceUpdateF_O.proof);
-
-        // Signature
-        hash.generate_r1cs_witness();
-        signatureVerifier.generate_r1cs_witness(transfer.signature);
     }
 
     void generate_r1cs_constraints()
@@ -223,6 +249,16 @@ public:
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
         // label has no limit
+        type.generate_r1cs_constraints(true);
+
+        // Signature
+        hash.generate_r1cs_constraints();
+        signatureVerifier.generate_r1cs_constraints();
+
+        // Type
+        signatureInvalid.generate_r1cs_constraints();
+        numConditionalTransfersAfter.generate_r1cs_constraints();
+        type_eq_signatureInvalid.generate_r1cs_constraints();
 
         // User To account check
         publicKeyX_notZero.generate_r1cs_constraints();
@@ -254,15 +290,12 @@ public:
 
         // Update Operator
         updateBalanceF_O.generate_r1cs_constraints();
-
-        // Signature
-        hash.generate_r1cs_constraints();
-        signatureVerifier.generate_r1cs_constraints();
     }
 
     const std::vector<VariableArrayT> getPublicData() const
     {
-        return {accountID_From.bits,
+        return {type.bits,
+                accountID_From.bits,
                 accountID_To.bits,
                 tokenID.bits,
                 fAmount.bits(),
@@ -278,6 +311,11 @@ public:
     const VariableT& getNewOperatorBalancesRoot() const
     {
         return updateBalanceF_O.result();
+    }
+
+    const VariableT& getNewNumConditionalTransfers() const
+    {
+        return numConditionalTransfersAfter.result();
     }
 };
 
@@ -295,6 +333,7 @@ public:
     DualVariableGadget exchangeID;
     DualVariableGadget merkleRootBefore;
     DualVariableGadget merkleRootAfter;
+    std::unique_ptr<libsnark::dual_variable_gadget<FieldT>> numConditionalTransfers;
     DualVariableGadget operatorAccountID;
 
     // Operator account check
@@ -362,6 +401,7 @@ public:
                 transAccountsRoot,
                 transOperatorBalancesRoot,
                 exchangeID.packed,
+                (j == 0) ? constants.zero : transfers.back().getNewNumConditionalTransfers(),
                 std::string("transfer_") + std::to_string(j));
             transfers.back().generate_r1cs_constraints();
             labels.push_back(transfers.back().label);
@@ -378,14 +418,20 @@ public:
         labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelHash")));
         labelHasher->generate_r1cs_constraints();
 
+        // Num conditional transfers
+        numConditionalTransfers.reset(new libsnark::dual_variable_gadget<FieldT>(
+            pb, transfers.back().getNewNumConditionalTransfers(), 32, ".numConditionalTransfers")
+        );
+        numConditionalTransfers->generate_r1cs_constraints(true);
+
         // Public data
         publicData.add(exchangeID.bits);
         publicData.add(merkleRootBefore.bits);
         publicData.add(merkleRootAfter.bits);
         publicData.add(labelHasher->result()->bits);
+        publicData.add(numConditionalTransfers->bits);
         if (onchainDataAvailability)
         {
-            publicData.add(constants.padding_0000);
             publicData.add(operatorAccountID.bits);
             for (const InternalTransferGadget& transfer : transfers)
             {
@@ -416,7 +462,7 @@ public:
 
         // Internal transfers
 #ifdef MULTICORE
-        #pragma omp parallel for
+        //#pragma omp parallel for
 #endif
         for (unsigned int i = 0; i < block.transfers.size(); i++)
         {
@@ -428,6 +474,9 @@ public:
 
         // Labels
         labelHasher->generate_r1cs_witness();
+
+        // Num conditional transfers
+        numConditionalTransfers->generate_r1cs_witness_from_packed();
 
         // Public data
         publicData.generate_r1cs_witness();

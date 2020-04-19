@@ -119,7 +119,7 @@ public:
 
     const std::vector<VariableArrayT> getOnchainData(const Constants& constants) const
     {
-        return {constants.padding_0000, accountID.bits,
+        return {accountID.bits,
                 publicKeyX.bits, publicKeyY.bits,
                 tokenID.bits,
                 amount.bits};

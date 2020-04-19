@@ -26,7 +26,6 @@ TradeHistoryState createTradeHistoryState(ProtoboardT& pb, const TradeHistoryLea
 {
     TradeHistoryState tradeHistoryState;
     tradeHistoryState.filled = make_variable(pb, state.filled, ".filled");
-    tradeHistoryState.cancelled = make_variable(pb, state.cancelled, ".cancelled");
     tradeHistoryState.orderID = make_variable(pb, state.orderID, ".orderID");
     return tradeHistoryState;
 }

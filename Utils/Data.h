@@ -44,15 +44,13 @@ class TradeHistoryLeaf
 {
 public:
     ethsnarks::FieldT filled;
-    ethsnarks::FieldT cancelled;
     ethsnarks::FieldT orderID;
 };
 
 static void from_json(const json& j, TradeHistoryLeaf& leaf)
 {
     leaf.filled = ethsnarks::FieldT(j.at("filled").get<std::string>().c_str());
-    leaf.cancelled = ethsnarks::FieldT(j.at("cancelled"));
-    leaf.orderID = ethsnarks::FieldT(j.at("orderID"));
+    leaf.orderID = ethsnarks::FieldT(j.at("orderID").get<std::string>().c_str());
 }
 
 class BalanceLeaf
@@ -118,7 +116,7 @@ public:
 
 static void from_json(const json& j, TradeHistoryUpdate& tradeHistoryUpdate)
 {
-    tradeHistoryUpdate.orderID = ethsnarks::FieldT(j.at("orderID"));
+    tradeHistoryUpdate.orderID = ethsnarks::FieldT(j.at("orderID").get<std::string>().c_str());
     tradeHistoryUpdate.proof = j.at("proof").get<Proof>();
     tradeHistoryUpdate.rootBefore = ethsnarks::FieldT(j.at("rootBefore").get<std::string>().c_str());
     tradeHistoryUpdate.rootAfter = ethsnarks::FieldT(j.at("rootAfter").get<std::string>().c_str());
@@ -198,7 +196,7 @@ public:
 static void from_json(const json& j, Order& order)
 {
     order.exchangeID = ethsnarks::FieldT(j.at("exchangeID"));
-    order.orderID = ethsnarks::FieldT(j.at("orderID"));
+    order.orderID = ethsnarks::FieldT(j.at("orderID").get<std::string>().c_str());
     order.accountID = ethsnarks::FieldT(j.at("accountID"));
     order.tokenS = ethsnarks::FieldT(j.at("tokenS"));
     order.tokenB = ethsnarks::FieldT(j.at("tokenB"));
@@ -500,66 +498,6 @@ static void from_json(const json& j, OffchainWithdrawalBlock& block)
     }
 }
 
-
-class Cancellation
-{
-public:
-    ethsnarks::FieldT fee;
-    ethsnarks::FieldT label;
-    Signature signature;
-
-    TradeHistoryUpdate tradeHistoryUpdate_A;
-    BalanceUpdate balanceUpdateT_A;
-    BalanceUpdate balanceUpdateF_A;
-    AccountUpdate accountUpdate_A;
-    BalanceUpdate balanceUpdateF_O;
-};
-
-static void from_json(const json& j, Cancellation& cancellation)
-{
-    cancellation.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
-    cancellation.label = ethsnarks::FieldT(j.at("label").get<std::string>().c_str());
-    cancellation.signature = j.at("signature").get<Signature>();
-
-    cancellation.tradeHistoryUpdate_A = j.at("tradeHistoryUpdate_A").get<TradeHistoryUpdate>();
-    cancellation.balanceUpdateT_A = j.at("balanceUpdateT_A").get<BalanceUpdate>();
-    cancellation.balanceUpdateF_A = j.at("balanceUpdateF_A").get<BalanceUpdate>();
-    cancellation.accountUpdate_A = j.at("accountUpdate_A").get<AccountUpdate>();
-    cancellation.balanceUpdateF_O = j.at("balanceUpdateF_O").get<BalanceUpdate>();
-}
-
-class OrderCancellationBlock
-{
-public:
-    ethsnarks::FieldT exchangeID;
-
-    ethsnarks::FieldT merkleRootBefore;
-    ethsnarks::FieldT merkleRootAfter;
-
-    ethsnarks::FieldT operatorAccountID;
-    AccountUpdate accountUpdate_O;
-
-    std::vector<Loopring::Cancellation> cancels;
-};
-
-static void from_json(const json& j, OrderCancellationBlock& block)
-{
-    block.exchangeID = ethsnarks::FieldT(j["exchangeID"].get<unsigned int>());
-
-    block.merkleRootBefore = ethsnarks::FieldT(j["merkleRootBefore"].get<std::string>().c_str());
-    block.merkleRootAfter = ethsnarks::FieldT(j["merkleRootAfter"].get<std::string>().c_str());
-
-    block.operatorAccountID = ethsnarks::FieldT(j.at("operatorAccountID"));
-    block.accountUpdate_O = j.at("accountUpdate_O").get<AccountUpdate>();
-
-    // Read cancels
-    json jCancels = j["cancels"];
-    for(unsigned int i = 0; i < jCancels.size(); i++)
-    {
-        block.cancels.emplace_back(jCancels[i].get<Loopring::Cancellation>());
-    }
-}
-
 /*
  * New internal transfer protocal
  */
@@ -569,6 +507,7 @@ public:
     ethsnarks::FieldT fee;
     ethsnarks::FieldT amount;
     ethsnarks::FieldT label;
+    ethsnarks::FieldT type;
     Signature signature;
 
     BalanceUpdate balanceUpdateF_From; // pay fee step
@@ -586,6 +525,7 @@ static void from_json(const json& j, InternalTransfer& interTrans)
     interTrans.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
     interTrans.amount = ethsnarks::FieldT(j["amountRequested"].get<std::string>().c_str());
     interTrans.label = ethsnarks::FieldT(j.at("label"));
+    interTrans.type = ethsnarks::FieldT(j.at("type"));
     interTrans.signature = j.at("signature").get<Signature>();
 
     interTrans.balanceUpdateF_From = j.at("balanceUpdateF_From").get<BalanceUpdate>();
