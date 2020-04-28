@@ -17,7 +17,6 @@ namespace Loopring
     static const unsigned int NUM_BITS_TIMESTAMP = 32;
     static const unsigned int NUM_BITS_NONCE = 32;
     static const unsigned int NUM_BITS_BIPS = 6;
-    static const unsigned int NUM_BITS_LABEL = 32;
     static const unsigned int NUM_BITS_EXCHANGE_ID = 32;
     static const unsigned int NUM_BITS_PROTOCOL_FEE_BIPS = 8;
     static const unsigned int NUM_BITS_TYPE = 8;

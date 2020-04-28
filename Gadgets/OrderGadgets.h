@@ -37,7 +37,6 @@ public:
     DualVariableGadget validUntil;
     DualVariableGadget maxFeeBips;
     DualVariableGadget buy;
-    VariableT label;
 
     DualVariableGadget feeBips;
     DualVariableGadget rebateBips;
@@ -58,7 +57,7 @@ public:
     TradeHistoryTrimmingGadget tradeHistory;
 
     // Signature
-    Poseidon_gadget_T<14, 1, 6, 53, 13, 1> hash;
+    Poseidon_gadget_T<13, 1, 6, 53, 12, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OrderGadget(
@@ -88,7 +87,6 @@ public:
         validUntil(pb, NUM_BITS_TIMESTAMP, FMT(prefix, ".validUntil")),
         maxFeeBips(pb, NUM_BITS_BIPS, FMT(prefix, ".maxFeeBips")),
         buy(pb, 1, FMT(prefix, ".buy")),
-        label(make_variable(pb, FMT(prefix, ".label"))),
 
         feeBips(pb, NUM_BITS_BIPS, FMT(prefix, ".feeBips")),
         rebateBips(pb, NUM_BITS_BIPS, FMT(prefix, ".rebateBips")),
@@ -121,8 +119,7 @@ public:
             validSince.packed,
             validUntil.packed,
             maxFeeBips.packed,
-            buy.packed,
-            label
+            buy.packed
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, constants, accountBefore.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
     {
@@ -151,7 +148,6 @@ public:
         validUntil.generate_r1cs_witness(pb, order.validUntil);
         maxFeeBips.generate_r1cs_witness(pb, order.maxFeeBips);
         buy.generate_r1cs_witness(pb, order.buy);
-        pb.val(label) = order.label;
 
         feeBips.generate_r1cs_witness(pb, order.feeBips);
         rebateBips.generate_r1cs_witness(pb, order.rebateBips);
@@ -190,7 +186,6 @@ public:
         validUntil.generate_r1cs_constraints(true);
         maxFeeBips.generate_r1cs_constraints(true);
         buy.generate_r1cs_constraints(true);
-        // label has no limit
 
         feeBips.generate_r1cs_constraints(true);
         rebateBips.generate_r1cs_constraints(true);

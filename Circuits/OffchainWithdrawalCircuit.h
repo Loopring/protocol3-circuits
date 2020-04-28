@@ -33,7 +33,6 @@ public:
     DualVariableGadget amountRequested;
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
-    VariableT label;
 
     // Fee as float
     FloatGadget fFee;
@@ -62,7 +61,7 @@ public:
     UpdateBalanceGadget updateBalanceF_O;
 
     // Signature
-    Poseidon_gadget_T<9, 1, 6, 53, 8, 1> hash;
+    Poseidon_gadget_T<8, 1, 6, 53, 7, 1> hash;
     SignatureVerifier signatureVerifier;
 
     OffchainWithdrawalGadget(
@@ -89,7 +88,6 @@ public:
         amountRequested(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amountRequested")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
-        label(make_variable(pb, FMT(prefix, ".label"))),
 
         // Fee as float
         fFee(pb, constants, Float16Encoding, FMT(prefix, ".fFee")),
@@ -137,7 +135,6 @@ public:
             amountRequested.packed,
             feeTokenID.packed,
             fee.packed,
-            label,
             accountBefore.nonce
         }), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, constants, accountBefore.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"))
@@ -160,7 +157,6 @@ public:
         amountRequested.generate_r1cs_witness(pb, withdrawal.amountRequested);
         feeTokenID.generate_r1cs_witness(pb, withdrawal.balanceUpdateF_A.tokenID);
         fee.generate_r1cs_witness(pb, withdrawal.fee);
-        pb.val(label) = withdrawal.label;
 
         // Fee as float
         fFee.generate_r1cs_witness(toFloat(withdrawal.fee, Float16Encoding));
@@ -201,7 +197,6 @@ public:
         amountRequested.generate_r1cs_constraints(true);
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
-        // label has no limit
 
         // Fee as float
         fFee.generate_r1cs_constraints();
@@ -286,10 +281,6 @@ public:
     // Update Operator
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
-    // Labels
-    std::vector<VariableT> labels;
-    std::unique_ptr<LabelHasher> labelHasher;
-
     OffchainWithdrawalCircuit(ProtoboardT& pb, const std::string& prefix) :
         Circuit(pb, prefix),
 
@@ -343,7 +334,6 @@ public:
                 std::string("withdrawals_") + std::to_string(j)
             );
             withdrawals.back().generate_r1cs_constraints();
-            labels.push_back(withdrawals.back().label);
         }
 
         // Update Operator
@@ -352,10 +342,6 @@ public:
             {accountBefore_O.publicKey.x, accountBefore_O.publicKey.y, accountBefore_O.nonce, withdrawals.back().getNewOperatorBalancesRoot()},
             FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
-
-        // Labels
-        labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelHash")));
-        labelHasher->generate_r1cs_constraints();
 
         // Public data
         publicData.add(exchangeID.bits);
@@ -366,7 +352,6 @@ public:
         {
             publicData.add(withdrawal.getApprovedWithdrawalData());
         }
-        publicData.add(labelHasher->result()->bits);
         // Data availability
         if (onchainDataAvailability)
         {
@@ -409,9 +394,6 @@ public:
 
         // Update Operator
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
-
-        // Labels
-        labelHasher->generate_r1cs_witness();
 
         // Public data
         publicData.generate_r1cs_witness();

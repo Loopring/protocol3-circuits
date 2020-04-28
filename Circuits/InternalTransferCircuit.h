@@ -38,11 +38,10 @@ public:
     DualVariableGadget amount;
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
-    VariableT label;
     DualVariableGadget type;
 
     // Signature
-    Poseidon_gadget_T<10, 1, 6, 53, 9, 1> hash;
+    Poseidon_gadget_T<9, 1, 6, 53, 8, 1> hash;
     SignatureVerifier signatureVerifier;
 
     // Type
@@ -111,11 +110,10 @@ public:
         amount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amount")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
-        label(make_variable(pb, FMT(prefix, ".label"))),
         type(pb, NUM_BITS_TYPE, FMT(prefix, ".type")),
 
         // Signature
-        hash(pb, var_array({blockExchangeID, accountID_From.packed, accountID_To.packed, tokenID.packed, amount.packed, feeTokenID.packed, fee.packed, label, accountBefore_From.nonce}), FMT(this->annotation_prefix, ".hash")),
+        hash(pb, var_array({blockExchangeID, accountID_From.packed, accountID_To.packed, tokenID.packed, amount.packed, feeTokenID.packed, fee.packed, accountBefore_From.nonce}), FMT(this->annotation_prefix, ".hash")),
         signatureVerifier(pb, params, constants, accountBefore_From.publicKey, hash.result(), FMT(prefix, ".signatureVerifier"), false),
 
         // Type
@@ -193,7 +191,6 @@ public:
         amount.generate_r1cs_witness(pb, transfer.amount);
         feeTokenID.generate_r1cs_witness(pb, transfer.balanceUpdateF_From.tokenID);
         fee.generate_r1cs_witness(pb, transfer.fee);
-        pb.val(label) = transfer.label;
         type.generate_r1cs_witness(pb, transfer.type);
 
         // Signature
@@ -248,7 +245,6 @@ public:
         amount.generate_r1cs_constraints(true);
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
-        // label has no limit
         type.generate_r1cs_constraints(true);
 
         // Signature
@@ -347,10 +343,6 @@ public:
     // Update Operator
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
-    // Labels
-    std::vector<VariableT> labels;
-    std::unique_ptr<LabelHasher> labelHasher;
-
     InternalTransferCircuit(ProtoboardT &pb, const std::string &prefix)
         : Circuit(pb, prefix),
 
@@ -404,7 +396,6 @@ public:
                 (j == 0) ? constants.zero : transfers.back().getNewNumConditionalTransfers(),
                 std::string("transfer_") + std::to_string(j));
             transfers.back().generate_r1cs_constraints();
-            labels.push_back(transfers.back().label);
         }
 
         // Update Operator
@@ -413,10 +404,6 @@ public:
             {accountBefore_O.publicKey.x, accountBefore_O.publicKey.y, accountBefore_O.nonce, transfers.back().getNewOperatorBalancesRoot()},
             FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
-
-        // Labels
-        labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelHash")));
-        labelHasher->generate_r1cs_constraints();
 
         // Num conditional transfers
         numConditionalTransfers.reset(new libsnark::dual_variable_gadget<FieldT>(
@@ -428,7 +415,6 @@ public:
         publicData.add(exchangeID.bits);
         publicData.add(merkleRootBefore.bits);
         publicData.add(merkleRootAfter.bits);
-        publicData.add(labelHasher->result()->bits);
         publicData.add(numConditionalTransfers->bits);
         if (onchainDataAvailability)
         {
@@ -471,9 +457,6 @@ public:
 
         // Update operator
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
-
-        // Labels
-        labelHasher->generate_r1cs_witness();
 
         // Num conditional transfers
         numConditionalTransfers->generate_r1cs_witness_from_packed();

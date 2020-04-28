@@ -185,7 +185,6 @@ public:
     ethsnarks::FieldT validUntil;
     ethsnarks::FieldT maxFeeBips;
     ethsnarks::FieldT buy;
-    ethsnarks::FieldT label;
 
     ethsnarks::FieldT feeBips;
     ethsnarks::FieldT rebateBips;
@@ -207,7 +206,6 @@ static void from_json(const json& j, Order& order)
     order.validUntil = ethsnarks::FieldT(j.at("validUntil"));
     order.maxFeeBips = ethsnarks::FieldT(j.at("maxFeeBips"));
     order.buy = ethsnarks::FieldT(j.at("buy").get<bool>() ? 1 : 0);
-    order.label = ethsnarks::FieldT(j.at("label").get<std::string>().c_str());
 
     order.feeBips = ethsnarks::FieldT(j.at("feeBips"));
     order.rebateBips = ethsnarks::FieldT(j.at("rebateBips"));
@@ -441,7 +439,6 @@ class OffchainWithdrawal
 public:
     ethsnarks::FieldT amountRequested;
     ethsnarks::FieldT fee;
-    ethsnarks::FieldT label;
     Signature signature;
 
     BalanceUpdate balanceUpdateF_A;
@@ -454,7 +451,6 @@ static void from_json(const json& j, OffchainWithdrawal& withdrawal)
 {
     withdrawal.amountRequested = ethsnarks::FieldT(j.at("amountRequested").get<std::string>().c_str());
     withdrawal.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
-    withdrawal.label = ethsnarks::FieldT(j.at("label").get<std::string>().c_str());
     withdrawal.signature = j.at("signature").get<Signature>();
 
     withdrawal.balanceUpdateF_A = j.at("balanceUpdateF_A").get<BalanceUpdate>();
@@ -506,7 +502,6 @@ class InternalTransfer
 public:
     ethsnarks::FieldT fee;
     ethsnarks::FieldT amount;
-    ethsnarks::FieldT label;
     ethsnarks::FieldT type;
     Signature signature;
 
@@ -524,7 +519,6 @@ static void from_json(const json& j, InternalTransfer& interTrans)
 {
     interTrans.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
     interTrans.amount = ethsnarks::FieldT(j["amountRequested"].get<std::string>().c_str());
-    interTrans.label = ethsnarks::FieldT(j.at("label"));
     interTrans.type = ethsnarks::FieldT(j.at("type"));
     interTrans.signature = j.at("signature").get<Signature>();
 

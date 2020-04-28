@@ -492,10 +492,6 @@ public:
     // Update Operator
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
 
-    // Labels
-    std::vector<VariableT> labels;
-    std::unique_ptr<LabelHasher> labelHasher;
-
     RingSettlementCircuit(ProtoboardT& pb, const std::string& prefix) :
         Circuit(pb, prefix),
 
@@ -572,9 +568,6 @@ public:
             );
             ringSettlements.back().generate_r1cs_constraints();
 
-            labels.push_back(ringSettlements.back().orderA.label);
-            labels.push_back(ringSettlements.back().orderB.label);
-
             if (onchainDataAvailability)
             {
                 // Store data from ring settlement
@@ -596,10 +589,6 @@ public:
                       FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
 
-        // Labels
-        labelHasher.reset(new LabelHasher(pb, constants, labels, FMT(annotation_prefix, ".labelHash")));
-        labelHasher->generate_r1cs_constraints();
-
         // Public data
         publicData.add(exchangeID.bits);
         publicData.add(merkleRootBefore.bits);
@@ -607,7 +596,6 @@ public:
         publicData.add(timestamp.bits);
         publicData.add(protocolTakerFeeBips.bits);
         publicData.add(protocolMakerFeeBips.bits);
-        publicData.add(labelHasher->result()->bits);
         if (onchainDataAvailability)
         {
             publicData.add(operatorAccountID.bits);
@@ -665,9 +653,6 @@ public:
 
         // Update Operator
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
-
-        // Labels
-        labelHasher->generate_r1cs_witness();
 
         // Transform the ring data
         if (onchainDataAvailability)
