@@ -293,9 +293,9 @@ public:
         return {type.bits,
                 accountID_From.bits,
                 accountID_To.bits,
-                tokenID.bits,
+                VariableArrayT(2, constants.zero), tokenID.bits,
+                VariableArrayT(2, constants.zero), feeTokenID.bits,
                 fAmount.bits(),
-                feeTokenID.bits,
                 fFee.bits()};
     }
 

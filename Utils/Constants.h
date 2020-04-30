@@ -5,7 +5,7 @@ namespace Loopring
 {
     static const unsigned int TREE_DEPTH_TRADING_HISTORY = 7;
     static const unsigned int TREE_DEPTH_ACCOUNTS = 12;
-    static const unsigned int TREE_DEPTH_TOKENS = 4;
+    static const unsigned int TREE_DEPTH_TOKENS = 5;
 
     static const unsigned int NUM_BITS_MAX_VALUE = 254;
     static const unsigned int NUM_BITS_FIELD_CAPACITY = 253;

@@ -21,13 +21,10 @@ TEST_CASE("SignatureVerifier", "[SignatureVerifier]")
             pb.val(publicKey.y) = _pubKeyY;
             pb_variable<FieldT> message = make_variable(pb, _msg, "message");
 
-            std::cout << "requireValid: " << requireValid << std::endl;
             SignatureVerifier signatureVerifier(pb, params, constants, publicKey, message, "signatureVerifier", requireValid);
             signatureVerifier.generate_r1cs_constraints();
             signatureVerifier.generate_r1cs_witness(signature);
 
-            std::cout << "pb.is_satisfied(): " << pb.is_satisfied() << std::endl;
-            std::cout << "expectedSatisfied: " << expectedSatisfied << std::endl;
             REQUIRE(pb.is_satisfied() == (requireValid ? expectedSatisfied : true));
             REQUIRE((pb.val(signatureVerifier.result()) == (expectedSatisfied ? FieldT::one() : FieldT::zero())));
         }

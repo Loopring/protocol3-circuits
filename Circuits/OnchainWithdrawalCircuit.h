@@ -20,6 +20,8 @@ class OnchainWithdrawalGadget : public GadgetT
 {
 public:
 
+    const Constants& constants;
+
     // User state
     BalanceGadget balanceBefore;
     AccountGadget accountBefore;
@@ -52,12 +54,14 @@ public:
 
     OnchainWithdrawalGadget(
         ProtoboardT& pb,
-        const Constants& constants,
+        const Constants& _constants,
         const VariableT& accountsMerkleRoot,
         const VariableT& bShutdownMode,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
+
+        constants(_constants),
 
         // User state
         balanceBefore(pb, FMT(prefix, ".balanceBefore")),
@@ -161,16 +165,16 @@ public:
         updateAccount_A.generate_r1cs_constraints();
     }
 
-    const std::vector<VariableArrayT> getOnchainData(const Constants& constants) const
+    const std::vector<VariableArrayT> getOnchainData() const
     {
         return {accountID.bits,
-                tokenID.bits,
+                VariableArrayT(6, constants.zero), tokenID.bits,
                 amountRequested.bits};
     }
 
     const std::vector<VariableArrayT> getApprovedWithdrawalData() const
     {
-        return {tokenID.bits,
+        return {VariableArrayT(6, constants.zero), tokenID.bits,
                 accountID.bits,
                 amountWithdrawn.bits()};
     }
@@ -257,7 +261,7 @@ public:
             withdrawals.back().generate_r1cs_constraints();
 
             // Hash data from withdrawal request
-            std::vector<VariableArrayT> withdrawalRequestData = withdrawals.back().getOnchainData(constants);
+            std::vector<VariableArrayT> withdrawalRequestData = withdrawals.back().getOnchainData();
             std::vector<VariableArrayT> hash;
             hash.push_back(reverse((j == 0) ? withdrawalBlockHashStart.bits : hashers.back().result().bits));
             hash.insert(hash.end(), withdrawalRequestData.begin(), withdrawalRequestData.end());

@@ -20,6 +20,8 @@ class OffchainWithdrawalGadget : public GadgetT
 {
 public:
 
+    const Constants& constants;
+
     // User state
     BalanceGadget balanceFBefore;
     BalanceGadget balanceBefore;
@@ -67,13 +69,15 @@ public:
     OffchainWithdrawalGadget(
         ProtoboardT& pb,
         const jubjub::Params& params,
-        const Constants& constants,
+        const Constants& _constants,
         const VariableT& accountsMerkleRoot,
         const VariableT& operatorBalancesRoot,
         const VariableT& blockExchangeID,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
+
+        constants(_constants),
 
         // User state
         balanceFBefore(pb, FMT(prefix, ".balanceFBefore")),
@@ -231,14 +235,14 @@ public:
 
     const std::vector<VariableArrayT> getApprovedWithdrawalData() const
     {
-        return {tokenID.bits,
+        return {VariableArrayT(6, constants.zero), tokenID.bits,
                 accountID.bits,
                 amountWithdrawn.bits()};
     }
 
     const std::vector<VariableArrayT> getDataAvailabilityData() const
     {
-        return {feeTokenID.bits,
+        return {VariableArrayT(6, constants.zero), feeTokenID.bits,
                 fFee.bits()};
     }
 

@@ -24,7 +24,7 @@ class TransformRingSettlementDataGadget : public GadgetT
 {
 public:
 
-    const unsigned int ringSize = 20 * 8;
+    const unsigned int ringSize = 21 * 8;
 
     VariableArrayT data;
     Bitstream transformedData;
@@ -84,12 +84,12 @@ public:
             unsigned int length;
         };
         std::vector<std::vector<Range>> ranges;
-        ranges.push_back({{0, 32}});                   // orderA.orderID + orderB.orderID
+        ranges.push_back({{0, 32}});                   // orderA.tradeHistoryData + orderB.tradeHistoryData
         ranges.push_back({{32, 48}});                  // orderA.accountID + orderB.accountID
-        ranges.push_back({{80, 8}, {120, 8}});         // orderA.tokenS + orderB.tokenS
-        ranges.push_back({{88, 24},{128, 24}});        // orderA.fillS + orderB.fillS
-        ranges.push_back({{112, 8}});                  // orderA.data
-        ranges.push_back({{152, 8}});                  // orderB.data
+        ranges.push_back({{80, 24}});                  // orderA.tokenS + orderB.tokenS
+        ranges.push_back({{104, 48}});                 // orderA.fillS + orderB.fillS
+        ranges.push_back({{152, 8}});                  // orderA.data
+        ranges.push_back({{160, 8}});                  // orderB.data
         for (const std::vector<Range>& subRanges : ranges)
         {
             for (unsigned int i = 0; i < numRings; i++)
@@ -423,12 +423,13 @@ public:
             orderA.accountID.bits,
             orderB.accountID.bits,
 
-            orderA.tokenS.bits,
-            fillS_A.bits(),
-            orderA.buy.bits, VariableArrayT(1, orderA.hasRebate()), orderA.feeOrRebateBips.bits,
+            VariableArrayT(2, constants.zero), orderA.tokenS.bits,
+            VariableArrayT(2, constants.zero), orderB.tokenS.bits,
 
-            orderB.tokenS.bits,
+            fillS_A.bits(),
             fillS_B.bits(),
+
+            orderA.buy.bits, VariableArrayT(1, orderA.hasRebate()), orderA.feeOrRebateBips.bits,
             orderB.buy.bits, VariableArrayT(1, orderB.hasRebate()), orderB.feeOrRebateBips.bits,
         };
     }
