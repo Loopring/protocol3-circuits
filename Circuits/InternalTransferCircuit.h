@@ -199,7 +199,7 @@ public:
 
         // Type
         signatureInvalid.generate_r1cs_witness();
-        numConditionalTransfersAfter.generate_r1cs_witness();
+        pb.val(numConditionalTransfersAfter.sum) = transfer.numConditionalTransfersAfter;
         type_eq_signatureInvalid.generate_r1cs_witness();
 
         print(pb, "signatureInvalid", signatureInvalid.result());
@@ -448,7 +448,7 @@ public:
 
         // Internal transfers
 #ifdef MULTICORE
-        //#pragma omp parallel for
+        #pragma omp parallel for
 #endif
         for (unsigned int i = 0; i < block.transfers.size(); i++)
         {

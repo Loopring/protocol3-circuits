@@ -505,6 +505,8 @@ public:
     ethsnarks::FieldT type;
     Signature signature;
 
+    ethsnarks::FieldT numConditionalTransfersAfter;
+
     BalanceUpdate balanceUpdateF_From; // pay fee step
     BalanceUpdate balanceUpdateT_From; // transfer step
     AccountUpdate accountUpdate_From;
@@ -521,6 +523,8 @@ static void from_json(const json& j, InternalTransfer& interTrans)
     interTrans.amount = ethsnarks::FieldT(j["amountRequested"].get<std::string>().c_str());
     interTrans.type = ethsnarks::FieldT(j.at("type"));
     interTrans.signature = j.at("signature").get<Signature>();
+
+    interTrans.numConditionalTransfersAfter = ethsnarks::FieldT(j.at("numConditionalTransfersAfter"));
 
     interTrans.balanceUpdateF_From = j.at("balanceUpdateF_From").get<BalanceUpdate>();
     interTrans.balanceUpdateT_From = j.at("balanceUpdateT_From").get<BalanceUpdate>();
