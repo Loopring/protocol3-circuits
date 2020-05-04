@@ -202,9 +202,6 @@ public:
         pb.val(numConditionalTransfersAfter.sum) = transfer.numConditionalTransfersAfter;
         type_eq_signatureInvalid.generate_r1cs_witness();
 
-        print(pb, "signatureInvalid", signatureInvalid.result());
-        print(pb, "numConditionalTransfersAfter", numConditionalTransfersAfter.result());
-
         // User To account check
         publicKeyX_notZero.generate_r1cs_witness();
 
