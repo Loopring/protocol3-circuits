@@ -37,7 +37,7 @@ public:
     const VariableT maxAmount;
     const VariableArrayT zeroAccount;
 
-    const VariableArrayT padding_0000;
+    const VariableT maxConcurrentOrderIDs;
 
     Constants(
         ProtoboardT& pb,
@@ -53,8 +53,8 @@ public:
         _100000(make_variable(pb, ethsnarks::FieldT(100000), FMT(prefix, "._100000"))),
         emptyTradeHistory(make_variable(pb, ethsnarks::FieldT(EMPTY_TRADE_HISTORY), FMT(prefix, ".emptyTradeHistory"))),
         maxAmount(make_variable(pb, ethsnarks::FieldT(MAX_AMOUNT), FMT(prefix, ".maxAmount"))),
-        zeroAccount(NUM_BITS_ACCOUNT, zero),
-        padding_0000(4, zero)
+        maxConcurrentOrderIDs(make_variable(pb, ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS), FMT(prefix, ".maxConcurrentOrderIDs"))),
+        zeroAccount(NUM_BITS_ACCOUNT, zero)
     {
         assert(NUM_BITS_MAX_VALUE == FieldT::size_in_bits());
         assert(NUM_BITS_FIELD_CAPACITY == FieldT::capacity());
@@ -75,6 +75,7 @@ public:
         pb.add_r1cs_constraint(ConstraintT(_100000, FieldT::one(), ethsnarks::FieldT(100000)), "._100000");
         pb.add_r1cs_constraint(ConstraintT(emptyTradeHistory, FieldT::one(), ethsnarks::FieldT(EMPTY_TRADE_HISTORY)), ".emptyTradeHistory");
         pb.add_r1cs_constraint(ConstraintT(maxAmount, FieldT::one(), ethsnarks::FieldT(MAX_AMOUNT)), ".maxAmount");
+        pb.add_r1cs_constraint(ConstraintT(maxConcurrentOrderIDs, FieldT::one(), ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS)), ".maxConcurrentOrderIDs");
     }
 };
 
@@ -1063,6 +1064,10 @@ public:
     ScalarMult m_At;                                    // A*hash_RAM
     PointAdder m_rhs;                                   // rhs = R + (A*hash_RAM)
 
+    EqualGadget equalX;
+    EqualGadget equalY;
+    AndGadget valid;
+
     EdDSA_Poseidon(
         ProtoboardT& in_pb,
         const Params& in_params,
@@ -1087,7 +1092,12 @@ public:
         m_At(in_pb, in_params, in_A.x, in_A.y, m_hash_RAM.result(), FMT(this->annotation_prefix, ".At = A * hash_RAM")),
 
         // rhs = PointAdd(R, At)
-        m_rhs(in_pb, in_params, in_R.x, in_R.y, m_At.result_x(), m_At.result_y(), FMT(this->annotation_prefix, ".rhs"))
+        m_rhs(in_pb, in_params, in_R.x, in_R.y, m_At.result_x(), m_At.result_y(), FMT(this->annotation_prefix, ".rhs")),
+
+        // Verify the two points are equal
+        equalX(in_pb, m_lhs.result_x(), m_rhs.result_x(), ".equalX"),
+        equalY(in_pb, m_lhs.result_y(), m_rhs.result_y(), ".equalY"),
+        valid(in_pb, {equalX.result(), equalY.result()}, ".valid")
     {
 
     }
@@ -1101,13 +1111,9 @@ public:
         m_rhs.generate_r1cs_constraints();
 
         // Verify the two points are equal
-        this->pb.add_r1cs_constraint(
-            ConstraintT(m_lhs.result_x(), FieldT::one(), m_rhs.result_x()),
-            FMT(this->annotation_prefix, " lhs.x == rhs.x"));
-
-        this->pb.add_r1cs_constraint(
-            ConstraintT(m_lhs.result_y(), FieldT::one(), m_rhs.result_y()),
-            FMT(this->annotation_prefix, " lhs.y == rhs.y"));
+        equalX.generate_r1cs_constraints();
+        equalY.generate_r1cs_constraints();
+        valid.generate_r1cs_constraints();
     }
 
     void generate_r1cs_witness()
@@ -1117,6 +1123,16 @@ public:
         m_hash_RAM.generate_r1cs_witness();
         m_At.generate_r1cs_witness();
         m_rhs.generate_r1cs_witness();
+
+        // Verify the two points are equal
+        equalX.generate_r1cs_witness();
+        equalY.generate_r1cs_witness();
+        valid.generate_r1cs_witness();
+    }
+
+    const VariableT& result() const
+    {
+        return valid.result();
     }
 };
 
@@ -1124,31 +1140,32 @@ public:
 class SignatureVerifier : public GadgetT
 {
 public:
+    const Constants& constants;
     const jubjub::VariablePointT sig_R;
     const VariableArrayT sig_s;
     const VariableT sig_m;
     EdDSA_Poseidon signatureVerifier;
+    bool requireValid;
 
     SignatureVerifier(
         ProtoboardT& pb,
         const jubjub::Params& params,
+        const Constants& _constants,
         const jubjub::VariablePointT& publicKey,
         const VariableT& _message,
-        const std::string& prefix
+        const std::string& prefix,
+        bool _requireValid = true
     ) :
         GadgetT(pb, prefix),
 
+        constants(_constants),
         sig_R(pb, FMT(prefix, ".R")),
         sig_s(make_var_array(pb, FieldT::size_in_bits(), FMT(prefix, ".s"))),
         sig_m(_message),
-        signatureVerifier(pb, params, jubjub::EdwardsPoint(params.Gx, params.Gy), publicKey, sig_R, sig_s, sig_m, FMT(prefix, ".signatureVerifier"))
+        signatureVerifier(pb, params, jubjub::EdwardsPoint(params.Gx, params.Gy), publicKey, sig_R, sig_s, sig_m, FMT(prefix, ".signatureVerifier")),
+        requireValid(_requireValid)
     {
 
-    }
-
-    const VariableArrayT& getHash()
-    {
-        return signatureVerifier.m_hash_RAM.result();
     }
 
     void generate_r1cs_witness(Signature sig)
@@ -1162,6 +1179,20 @@ public:
     void generate_r1cs_constraints()
     {
         signatureVerifier.generate_r1cs_constraints();
+        if (requireValid)
+        {
+            requireEqual(pb, signatureVerifier.result(), constants.one, FMT(annotation_prefix, ".isSignatureValid"));
+        }
+    }
+
+    const VariableT& result() const
+    {
+        return signatureVerifier.result();
+    }
+
+    const VariableArrayT& getHash()
+    {
+        return signatureVerifier.m_hash_RAM.result();
     }
 };
 
@@ -1355,71 +1386,6 @@ public:
     const VariableArrayT& bits() const
     {
         return f;
-    }
-};
-
- // Hashes the labels in different stages so we only need a single Poseidon permutation.
- // Currently hashes 64 labels + the hash of the previous stage in a single stage.
- // There is no particular reason 64 labels are hashed together at once
- // (and depending on our understanding of Poseidon this could still change).
- // This doesn't need to be very secure, the only requirement is that it shouldn't be completely
- // trivial to find a different set of labels with the same hash.
-class LabelHasher : public GadgetT
-{
-public:
-    static const unsigned numInputs = 64;
-    std::vector<Poseidon_gadget_T<numInputs + 2, 1, 6, 56, numInputs + 1, 1>> stageHashers;
-
-    std::unique_ptr<libsnark::dual_variable_gadget<FieldT>> hash;
-
-    LabelHasher(
-        ProtoboardT& pb,
-        const Constants& constants,
-        const std::vector<VariableT>& labels,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix)
-    {
-        unsigned int numStages = (labels.size() + numInputs - 1) / numInputs;
-        stageHashers.reserve(numStages);
-        for (unsigned int i = 0; i < numStages; i++)
-        {
-            std::vector<VariableT> inputs;
-            inputs.push_back(i == 0 ? constants.zero : stageHashers.back().result());
-            for (unsigned int j = 0; j < numInputs; j++)
-            {
-                const unsigned int labelIdx = i * numInputs + j;
-                inputs.push_back((labelIdx < labels.size()) ? labels[labelIdx] : constants.zero);
-            }
-            stageHashers.emplace_back(pb, var_array(inputs), FMT(this->annotation_prefix, ".stage1"));
-        }
-        hash.reset(new libsnark::dual_variable_gadget<FieldT>(
-            pb, stageHashers.back().result(), 256, ".labelHashToBits")
-        );
-    }
-
-    const std::unique_ptr<libsnark::dual_variable_gadget<FieldT>>& result() const
-    {
-        return hash;
-    }
-
-    void generate_r1cs_witness()
-    {
-        for (auto& hasher : stageHashers)
-        {
-            hasher.generate_r1cs_witness();
-        }
-        hash->generate_r1cs_witness_from_packed();
-        print(pb, "[ZKS]labelHash", hash->packed);
-    }
-
-    void generate_r1cs_constraints()
-    {
-        for (auto& hasher : stageHashers)
-        {
-            hasher.generate_r1cs_constraints();
-        }
-        hash->generate_r1cs_constraints(true);
     }
 };
 

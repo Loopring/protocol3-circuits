@@ -17,7 +17,6 @@ namespace Loopring
 struct TradeHistoryState
 {
     VariableT filled;
-    VariableT cancelled;
     VariableT orderID;
 };
 
@@ -25,7 +24,6 @@ class TradeHistoryGadget : public GadgetT
 {
 public:
     VariableT filled;
-    VariableT cancelled;
     VariableT orderID;
 
     TradeHistoryGadget(
@@ -35,7 +33,6 @@ public:
         GadgetT(pb, prefix),
 
         filled(make_variable(pb, FMT(prefix, ".filled"))),
-        cancelled(make_variable(pb, FMT(prefix, ".cancelled"))),
         orderID(make_variable(pb, FMT(prefix, ".orderID")))
     {
 
@@ -44,7 +41,6 @@ public:
     void generate_r1cs_witness(const TradeHistoryLeaf& tradeHistoryLeaf)
     {
         pb.val(filled) = tradeHistoryLeaf.filled;
-        pb.val(cancelled) = tradeHistoryLeaf.cancelled;
         pb.val(orderID) = tradeHistoryLeaf.orderID;
     }
 };
@@ -69,8 +65,8 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        leafBefore(pb, var_array({before.filled, before.cancelled, before.orderID}), FMT(prefix, ".leafBefore")),
-        leafAfter(pb, var_array({after.filled, after.cancelled, after.orderID}), FMT(prefix, ".leafAfter")),
+        leafBefore(pb, var_array({before.filled, before.orderID}), FMT(prefix, ".leafBefore")),
+        leafAfter(pb, var_array({after.filled, after.orderID}), FMT(prefix, ".leafAfter")),
 
         proof(make_var_array(pb, TREE_DEPTH_TRADING_HISTORY * 3, FMT(prefix, ".proof"))),
         proofVerifierBefore(pb, TREE_DEPTH_TRADING_HISTORY, address, leafBefore.result(), merkleRoot, proof, FMT(prefix, ".pathBefore")),
@@ -106,13 +102,20 @@ public:
 
 class TradeHistoryTrimmingGadget : public GadgetT
 {
-    LeqGadget bNew;
-    NotGadget bTrim;
+    VariableT address;
+    libsnark::packing_gadget<FieldT> packAddress;
+    IsNonZero isNonZeroTradeHistoryOrderID;
+    TernaryGadget tradeHistoryOrderID;
+
+    UnsafeAddGadget nextTradeHistoryOrderID;
+
+    EqualGadget orderID_eq_tradeHistoryOrderID;
+    EqualGadget orderID_eq_nextTradeHistoryOrderID;
+
+    OrGadget isValidOrderID;
+    RequireEqualGadget requireValidOrderID;
 
     TernaryGadget filled;
-    TernaryGadget cancelledToStore;
-    TernaryGadget cancelled;
-    TernaryGadget orderIDToStore;
 
 public:
 
@@ -120,42 +123,59 @@ public:
         ProtoboardT& pb,
         const Constants& constants,
         const TradeHistoryGadget& tradeHistory,
-        const VariableT& orderID,
+        const DualVariableGadget& orderID,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
-        bNew(pb, tradeHistory.orderID, orderID, NUM_BITS_ORDERID, FMT(prefix, ".tradeHistoryOrderID <(=) orderID")),
-        bTrim(pb, bNew.leq(), FMT(prefix, ".!bNew")),
+        address(make_variable(pb, FMT(prefix, ".address"))),
 
-        filled(pb, bNew.lt(), constants.zero, tradeHistory.filled, FMT(prefix, ".filled")),
-        cancelledToStore(pb, bNew.lt(), constants.zero, tradeHistory.cancelled, FMT(prefix, ".cancelledToStore")),
-        cancelled(pb, bTrim.result(), constants.one, cancelledToStore.result(), FMT(prefix, ".cancelled")),
-        orderIDToStore(pb, bNew.lt(), orderID, tradeHistory.orderID, FMT(prefix, ".orderIDToStore"))
+        packAddress(pb, subArray(orderID.bits, 0, NUM_BITS_TRADING_HISTORY), address, FMT(prefix, ".packAddress")),
+        isNonZeroTradeHistoryOrderID(pb, tradeHistory.orderID, FMT(prefix, ".isNonZeroTradeHistoryOrderID")),
+        tradeHistoryOrderID(pb, isNonZeroTradeHistoryOrderID.result(), tradeHistory.orderID, address, FMT(prefix, ".tradeHistoryOrderID")),
+
+        nextTradeHistoryOrderID(pb, tradeHistoryOrderID.result(), constants.maxConcurrentOrderIDs, FMT(prefix, ".nextTradeHistoryOrderID")),
+
+        orderID_eq_tradeHistoryOrderID(pb, orderID.packed, tradeHistoryOrderID.result(), FMT(prefix, ".nextTradeHistoryOrderID")),
+        orderID_eq_nextTradeHistoryOrderID(pb, orderID.packed, nextTradeHistoryOrderID.result(), FMT(prefix, ".orderID_eq_nextTradeHistoryOrderID")),
+        isValidOrderID(pb, {orderID_eq_tradeHistoryOrderID.result(), orderID_eq_nextTradeHistoryOrderID.result()}, FMT(prefix, ".isValidOrderID")),
+        requireValidOrderID(pb, isValidOrderID.result(), constants.one, FMT(prefix, ".requireValidOrderID")),
+
+        filled(pb, orderID_eq_tradeHistoryOrderID.result(), tradeHistory.filled, constants.zero, FMT(prefix, ".filled"))
     {
 
     }
 
     void generate_r1cs_witness()
     {
-        bNew.generate_r1cs_witness();
-        bTrim.generate_r1cs_witness();
+        packAddress.generate_r1cs_witness_from_bits();
+        isNonZeroTradeHistoryOrderID.generate_r1cs_witness();
+        tradeHistoryOrderID.generate_r1cs_witness();
+
+        nextTradeHistoryOrderID.generate_r1cs_witness();
+
+        orderID_eq_tradeHistoryOrderID.generate_r1cs_witness();
+        orderID_eq_nextTradeHistoryOrderID.generate_r1cs_witness();
+        isValidOrderID.generate_r1cs_witness();
+        requireValidOrderID.generate_r1cs_witness();
 
         filled.generate_r1cs_witness();
-        cancelledToStore.generate_r1cs_witness();
-        cancelled.generate_r1cs_witness();
-        orderIDToStore.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
-        bNew.generate_r1cs_constraints();
-        bTrim.generate_r1cs_constraints();
+        packAddress.generate_r1cs_constraints(false);
+        isNonZeroTradeHistoryOrderID.generate_r1cs_constraints();
+        tradeHistoryOrderID.generate_r1cs_constraints();
+
+        nextTradeHistoryOrderID.generate_r1cs_constraints();
+
+        orderID_eq_tradeHistoryOrderID.generate_r1cs_constraints();
+        orderID_eq_nextTradeHistoryOrderID.generate_r1cs_constraints();
+        isValidOrderID.generate_r1cs_constraints();
+        requireValidOrderID.generate_r1cs_constraints();
 
         filled.generate_r1cs_constraints();
-        cancelledToStore.generate_r1cs_constraints();
-        cancelled.generate_r1cs_constraints();
-        orderIDToStore.generate_r1cs_constraints();
     }
 
     const VariableT& getFilled() const
@@ -163,19 +183,9 @@ public:
         return filled.result();
     }
 
-    const VariableT& getCancelled() const
+    const VariableT& getOverwrite() const
     {
-        return cancelled.result();
-    }
-
-    const VariableT& getCancelledToStore() const
-    {
-        return cancelledToStore.result();
-    }
-
-    const VariableT& getOrderIDToStore() const
-    {
-        return orderIDToStore.result();
+        return orderID_eq_nextTradeHistoryOrderID.result();
     }
 };
 

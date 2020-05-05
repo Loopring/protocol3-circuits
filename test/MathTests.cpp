@@ -1128,27 +1128,3 @@ TEST_CASE("Range limit", "[dual_variable_gadget]")
         }
     }}
 }
-
-TEST_CASE("LabelHasher", "[LabelHasher]")
-{
-    unsigned int maxLength = 1024;
-    for (unsigned int n = 1; n <= maxLength; n = n * 2 + 1) {
-        DYNAMIC_SECTION("Num labels: " << n)
-    {
-        protoboard<FieldT> pb;
-
-        std::vector<VariableT> labels;
-        for (unsigned int i = 0; i < n; i++)
-        {
-            labels.emplace_back(make_variable(pb, ".label"));
-            pb.val(labels.back()) = getRandomFieldElement();
-        }
-
-        Constants constants(pb, "constants");
-        LabelHasher labelHasher(pb, constants, labels, "labelHasher");
-        labelHasher.generate_r1cs_constraints();
-        labelHasher.generate_r1cs_witness();
-
-        REQUIRE(pb.is_satisfied());
-    }}
-}

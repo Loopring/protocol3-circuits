@@ -5,19 +5,16 @@
 
 TEST_CASE("TradeHistoryTrimming", "[TradeHistoryTrimmingGadget]")
 {
-    auto tradeHistoryTrimmingChecked = [](const TradeHistoryLeaf& tradeHistoryLeaf,
-                                          const FieldT& _orderID,
-                                          const FieldT& expectedFilled,
-                                          const FieldT& expectedCancelled,
-                                          const FieldT& expectedCancelledToStore,
-                                          const FieldT& expectedOrderIDToStore)
+    auto tradeHistoryTrimmingChecked = [](const TradeHistoryLeaf& tradeHistoryLeaf, const FieldT& _orderID,
+                                          bool expectedSatisfied, const FieldT& expectedFilled = FieldT::zero(), const FieldT& expectedOverwrite = FieldT::zero())
     {
         protoboard<FieldT> pb;
 
         TradeHistoryGadget tradeHistory(pb, "tradeHistory");
         tradeHistory.generate_r1cs_witness(tradeHistoryLeaf);
 
-        VariableT orderID = make_variable(pb, _orderID, "orderID");
+        DualVariableGadget orderID(pb, NUM_BITS_ORDERID, "orderID");
+        orderID.generate_r1cs_witness(pb, _orderID);
 
         jubjub::Params params;
         Constants constants(pb, "constants");
@@ -27,11 +24,12 @@ TEST_CASE("TradeHistoryTrimming", "[TradeHistoryTrimmingGadget]")
         tradeHistoryTrimmingGadget.generate_r1cs_witness();
         tradeHistoryTrimmingGadget.generate_r1cs_constraints();
 
-        REQUIRE(pb.is_satisfied());
-        REQUIRE((pb.val(tradeHistoryTrimmingGadget.getFilled()) == expectedFilled));
-        REQUIRE((pb.val(tradeHistoryTrimmingGadget.getCancelled()) == expectedCancelled));
-        REQUIRE((pb.val(tradeHistoryTrimmingGadget.getCancelledToStore()) == expectedCancelledToStore));
-        REQUIRE((pb.val(tradeHistoryTrimmingGadget.getOrderIDToStore()) == expectedOrderIDToStore));
+        REQUIRE(pb.is_satisfied() == expectedSatisfied);
+        if (expectedSatisfied)
+        {
+            REQUIRE((pb.val(tradeHistoryTrimmingGadget.getFilled()) == expectedFilled));
+            REQUIRE((pb.val(tradeHistoryTrimmingGadget.getOverwrite()) == expectedOverwrite));
+        }
     };
 
     unsigned int delta = pow(2, NUM_BITS_TRADING_HISTORY);
@@ -42,61 +40,79 @@ TEST_CASE("TradeHistoryTrimming", "[TradeHistoryTrimmingGadget]")
     {
         SECTION("Initial state orderID == 0")
         {
-            tradeHistoryTrimmingChecked({0, 0, 0}, 0,
-                                        0, 0, 0, 0);
+            tradeHistoryTrimmingChecked({0, 0}, 0,
+                                        true, 0, 0);
         }
         SECTION("Initial state orderID > 0")
         {
-            tradeHistoryTrimmingChecked({0, 0, 0}, orderID,
-                                        0, 0, 0, orderID);
+            tradeHistoryTrimmingChecked({0, 0}, orderID,
+                                        true, 0, 0);
         }
         SECTION("Order filled")
         {
-            tradeHistoryTrimmingChecked({filled, 0, orderID}, orderID,
-                                        filled, 0, 0, orderID);
+            tradeHistoryTrimmingChecked({filled, orderID}, orderID,
+                                        true, filled, 0);
         }
-        SECTION("Order cancelled")
+        SECTION("Initial state orderID == delta - 1")
         {
-            tradeHistoryTrimmingChecked({filled, 1, orderID}, orderID,
-                                        filled, 1, 1, orderID);
+            tradeHistoryTrimmingChecked({0, 0}, delta - 1,
+                                        true, 0, 0);
         }
     }
 
     SECTION("orderID > tradeHistoryOrderID (trimmed)")
     {
+        SECTION("First overwrite")
+        {
+            tradeHistoryTrimmingChecked({0, 0}, delta,
+                                        true, 0, 1);
+        }
         SECTION("Previous order not filled")
         {
-            tradeHistoryTrimmingChecked({0, 0, orderID}, delta + orderID,
-                                        0, 0, 0, delta + orderID);
+            tradeHistoryTrimmingChecked({0, orderID}, delta + orderID,
+                                        true, 0, 1);
         }
         SECTION("Previous order filled")
         {
-            tradeHistoryTrimmingChecked({filled, 0, orderID}, delta + orderID,
-                                        0, 0, 0, delta + orderID);
+            tradeHistoryTrimmingChecked({filled, orderID}, delta + orderID,
+                                        true, 0, 1);
         }
-        SECTION("Previous order cancelled")
+        SECTION("Max overwrite delta")
         {
-            tradeHistoryTrimmingChecked({filled, 1, orderID}, delta + orderID,
-                                        0, 0, 0, delta + orderID);
+            tradeHistoryTrimmingChecked({0, 0}, delta + orderID,
+                                        true, 0, 1);
+        }
+        SECTION("orderID too big")
+        {
+            tradeHistoryTrimmingChecked({0, 0}, delta + delta + orderID,
+                                        false);
+            tradeHistoryTrimmingChecked({0, 0}, delta * 9 + orderID,
+                                        false);
+            tradeHistoryTrimmingChecked({0, 0}, delta * 99 + orderID,
+                                        false);
+            tradeHistoryTrimmingChecked({0, 0}, delta * 999 + orderID,
+                                        false);
+            tradeHistoryTrimmingChecked({0, 0}, delta * 9999 + orderID,
+                                        false);
         }
     }
 
     SECTION("orderID < tradeHistoryOrderID (cancelled)")
     {
+        SECTION("First rejection")
+        {
+            tradeHistoryTrimmingChecked({0, 0}, delta * 2,
+                                        false);
+        }
         SECTION("New order not filled")
         {
-            tradeHistoryTrimmingChecked({0, 0, delta + orderID}, orderID,
-                                        0, 1, 0, delta + orderID);
+            tradeHistoryTrimmingChecked({0, delta + orderID}, orderID,
+                                        false);
         }
         SECTION("New order filled")
         {
-            tradeHistoryTrimmingChecked({filled, 0, delta + orderID}, orderID,
-                                        filled, 1, 0, delta + orderID);
-        }
-        SECTION("New order cancelled")
-        {
-            tradeHistoryTrimmingChecked({filled, 1, delta + orderID}, orderID,
-                                        filled, 1, 1, delta + orderID);
+            tradeHistoryTrimmingChecked({filled, delta + orderID}, orderID,
+                                        false);
         }
     }
 }

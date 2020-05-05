@@ -16,19 +16,27 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
-// Checks if the fill rate < 0.1% worse than the target rate
-// (fillAmountS/fillAmountB) * 1000 < (amountS/amountB) * 1001
-// (fillAmountS * amountB * 1000) < (fillAmountB * amountS * 1001)
+// Checks if the fill rate <= 0.1% worse than the target rate
+// (fillAmountS/fillAmountB) * 1000 <= (amountS/amountB) * 1001
+// (fillAmountS * amountB * 1000) <= (fillAmountB * amountS * 1001)
+// Also checks that not just a single fill is non-zero.
 class RequireFillRateGadget : public GadgetT
 {
 public:
     UnsafeMulGadget fillAmountS_mul_amountB;
     UnsafeMulGadget fillAmountS_mul_amountB_mul_1000;
-
     UnsafeMulGadget fillAmountB_mul_amountS;
     UnsafeMulGadget fillAmountB_mul_amountS_mul_1001;
+    RequireLeqGadget validRate;
 
-    RequireLtGadget valid;
+    IsNonZero isNonZeroFillAmountS;
+    IsNonZero isNonZeroFillAmountB;
+    AndGadget fillsNonZero;
+    NotGadget isZeroFillAmountS;
+    NotGadget isZeroFillAmountB;
+    AndGadget fillsZero;
+    OrGadget fillsValid;
+    RequireEqualGadget requireFillsValid;
 
     RequireFillRateGadget(
         ProtoboardT& pb,
@@ -44,11 +52,20 @@ public:
 
         fillAmountS_mul_amountB(pb, fillAmountS, amountB, FMT(prefix, ".fillAmountS_mul_amountB")),
         fillAmountS_mul_amountB_mul_1000(pb, fillAmountS_mul_amountB.result(), constants._1000, FMT(prefix, ".fillAmountS_mul_amountB_mul_1000")),
-
         fillAmountB_mul_amountS(pb, fillAmountB, amountS, FMT(prefix, ".fillAmountB_mul_amountS")),
         fillAmountB_mul_amountS_mul_1001(pb, fillAmountB_mul_amountS.result(), constants._1001, FMT(prefix, ".fillAmountB_mul_amountS_mul_1001")),
+        validRate(pb, fillAmountS_mul_amountB_mul_1000.result(), fillAmountB_mul_amountS_mul_1001.result(), n * 2 + 10 /*=ceil(log2(1000))*/, FMT(prefix, ".validRate")),
 
-        valid(pb, fillAmountS_mul_amountB_mul_1000.result(), fillAmountB_mul_amountS_mul_1001.result(), n * 2 + 10 /*=ceil(log2(1000))*/, FMT(prefix, ".valid"))
+        // Also enforce that either both fill amounts are zero or both are non-zero.
+        // This check is also important to make sure no token transfers can happen to unregistered token IDs.
+        isNonZeroFillAmountS(pb, fillAmountS, FMT(prefix, "isNonZeroFillAmountS")),
+        isNonZeroFillAmountB(pb, fillAmountB, FMT(prefix, "isNonZeroFillAmountB")),
+        fillsNonZero(pb, {isNonZeroFillAmountS.result(), isNonZeroFillAmountB.result()}, FMT(prefix, "fillsNonZero")),
+        isZeroFillAmountS(pb, isNonZeroFillAmountS.result(), FMT(prefix, "isZeroFillAmountS")),
+        isZeroFillAmountB(pb, isNonZeroFillAmountB.result(), FMT(prefix, "isZeroFillAmountB")),
+        fillsZero(pb, {isZeroFillAmountS.result(), isZeroFillAmountB.result()}, FMT(prefix, "fillsZero")),
+        fillsValid(pb, {fillsNonZero.result(), fillsZero.result()}, FMT(prefix, "fillsValid")),
+        requireFillsValid(pb, fillsValid.result(), constants.one, FMT(prefix, "requireFillsValid"))
     {
 
     }
@@ -57,22 +74,36 @@ public:
     {
         fillAmountS_mul_amountB.generate_r1cs_witness();
         fillAmountS_mul_amountB_mul_1000.generate_r1cs_witness();
-
         fillAmountB_mul_amountS.generate_r1cs_witness();
         fillAmountB_mul_amountS_mul_1001.generate_r1cs_witness();
+        validRate.generate_r1cs_witness();
 
-        valid.generate_r1cs_witness();
+        isNonZeroFillAmountS.generate_r1cs_witness();
+        isNonZeroFillAmountB.generate_r1cs_witness();
+        fillsNonZero.generate_r1cs_witness();
+        isZeroFillAmountS.generate_r1cs_witness();
+        isZeroFillAmountB.generate_r1cs_witness();
+        fillsZero.generate_r1cs_witness();
+        fillsValid.generate_r1cs_witness();
+        requireFillsValid.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
         fillAmountS_mul_amountB.generate_r1cs_constraints();
         fillAmountS_mul_amountB_mul_1000.generate_r1cs_constraints();
-
         fillAmountB_mul_amountS.generate_r1cs_constraints();
         fillAmountB_mul_amountS_mul_1001.generate_r1cs_constraints();
+        validRate.generate_r1cs_constraints();
 
-        valid.generate_r1cs_constraints();
+        isNonZeroFillAmountS.generate_r1cs_constraints();
+        isNonZeroFillAmountB.generate_r1cs_constraints();
+        fillsNonZero.generate_r1cs_constraints();
+        isZeroFillAmountS.generate_r1cs_constraints();
+        isZeroFillAmountB.generate_r1cs_constraints();
+        fillsZero.generate_r1cs_constraints();
+        fillsValid.generate_r1cs_constraints();
+        requireFillsValid.generate_r1cs_constraints();
     }
 };
 
@@ -92,9 +123,6 @@ public:
 
     NotGadget validAllOrNoneSell;
     NotGadget validAllOrNoneBuy;
-
-    IsNonZero isNonZeroFillAmountS;
-    IsNonZero isNonZeroFillAmountB;
 
     AndGadget valid;
 
@@ -122,18 +150,12 @@ public:
         validAllOrNoneSell(pb, notValidAllOrNoneSell.result(), FMT(prefix, "validAllOrNoneSell")),
         validAllOrNoneBuy(pb, notValidAllOrNoneBuy.result(), FMT(prefix, "validAllOrNoneBuy")),
 
-        // This is an important check that makes sure no token transfers can happen to unregistered token IDs
-        isNonZeroFillAmountS(pb, fillAmountS, FMT(prefix, "isNonZeroFillAmountS")),
-        isNonZeroFillAmountB(pb, fillAmountB, FMT(prefix, "isNonZeroFillAmountB")),
-
         valid(pb,
                 {
                     validSince_leq_timestamp.leq(),
                     timestamp_leq_validUntil.leq(),
                     validAllOrNoneSell.result(),
-                    validAllOrNoneBuy.result(),
-                    isNonZeroFillAmountS.result(),
-                    isNonZeroFillAmountB.result()
+                    validAllOrNoneBuy.result()
                 },
                 FMT(prefix, ".valid")
             )
@@ -155,9 +177,6 @@ public:
         validAllOrNoneSell.generate_r1cs_witness();
         validAllOrNoneBuy.generate_r1cs_witness();
 
-        isNonZeroFillAmountS.generate_r1cs_witness();
-        isNonZeroFillAmountB.generate_r1cs_witness();
-
         valid.generate_r1cs_witness();
     }
 
@@ -174,9 +193,6 @@ public:
 
         validAllOrNoneSell.generate_r1cs_constraints();
         validAllOrNoneBuy.generate_r1cs_constraints();
-
-        isNonZeroFillAmountS.generate_r1cs_constraints();
-        isNonZeroFillAmountB.generate_r1cs_constraints();
 
         valid.generate_r1cs_constraints();
     }
@@ -251,7 +267,6 @@ class RequireFillLimitGadget : public GadgetT
 {
 public:
     TernaryGadget fillAmount;
-    TernaryGadget fillLimitBeforeCancelled;
     TernaryGadget fillLimit;
     AddGadget filledAfter;
     RequireLeqGadget filledAfter_leq_fillLimit;
@@ -267,8 +282,7 @@ public:
         GadgetT(pb, prefix),
 
         fillAmount(pb, order.buy.packed, fillB, fillS, FMT(prefix, ".fillAmount")),
-        fillLimitBeforeCancelled(pb, order.buy.packed, order.amountB.packed, order.amountS.packed, FMT(prefix, ".fillLimitBeforeCancelled")),
-        fillLimit(pb, order.tradeHistory.getCancelled(), order.tradeHistory.getFilled(), fillLimitBeforeCancelled.result(), FMT(prefix, ".fillLimitBeforeCancelled")),
+        fillLimit(pb, order.buy.packed, order.amountB.packed, order.amountS.packed, FMT(prefix, ".fillLimit")),
         filledAfter(pb, order.tradeHistory.getFilled(), fillAmount.result(), NUM_BITS_AMOUNT, FMT(prefix, ".filledAfter")),
         filledAfter_leq_fillLimit(pb, filledAfter.result(), fillLimit.result(), NUM_BITS_AMOUNT, FMT(prefix, ".filledAfter_leq_fillLimit"))
     {
@@ -278,7 +292,6 @@ public:
     void generate_r1cs_witness()
     {
         fillAmount.generate_r1cs_witness();
-        fillLimitBeforeCancelled.generate_r1cs_witness();
         fillLimit.generate_r1cs_witness();
         filledAfter.generate_r1cs_witness();
         filledAfter_leq_fillLimit.generate_r1cs_witness();
@@ -287,7 +300,6 @@ public:
     void generate_r1cs_constraints()
     {
         fillAmount.generate_r1cs_constraints();
-        fillLimitBeforeCancelled.generate_r1cs_constraints();
         fillLimit.generate_r1cs_constraints();
         filledAfter.generate_r1cs_constraints();
         filledAfter_leq_fillLimit.generate_r1cs_constraints();

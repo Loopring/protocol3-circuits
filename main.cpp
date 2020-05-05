@@ -5,7 +5,6 @@
 #include "Circuits/DepositCircuit.h"
 #include "Circuits/OnchainWithdrawalCircuit.h"
 #include "Circuits/OffchainWithdrawalCircuit.h"
-#include "Circuits/OrderCancellationCircuit.h"
 #include "Circuits/InternalTransferCircuit.h"
 
 #include "ThirdParty/httplib.h"
@@ -307,7 +306,6 @@ Loopring::Circuit* newCircuit(Loopring::BlockType blockType, ethsnarks::Protoboa
         case Loopring::BlockType::Deposit: return new Loopring::DepositCircuit(outPb, "circuit");
         case Loopring::BlockType::OnchainWithdrawal: return new Loopring::OnchainWithdrawalCircuit(outPb, "circuit");
         case Loopring::BlockType::OffchainWithdrawal: return new Loopring::OffchainWithdrawalCircuit(outPb, "circuit");
-        case Loopring::BlockType::OrderCancellation: return new Loopring::OrderCancellationCircuit(outPb, "circuit");
         case Loopring::BlockType::InternalTransfer: return new Loopring::InternalTransferCircuit(outPb, "circuit");
         default:
         {
@@ -363,7 +361,6 @@ std::string getBaseName(Loopring::BlockType blockType)
         case Loopring::BlockType::Deposit: return "deposit";
         case Loopring::BlockType::OnchainWithdrawal: return "withdraw_onchain";
         case Loopring::BlockType::OffchainWithdrawal: return "withdraw_offchain";
-        case Loopring::BlockType::OrderCancellation: return "cancel";
         case Loopring::BlockType::InternalTransfer: return "internal_transfer";
         default: return "unknown";
     }

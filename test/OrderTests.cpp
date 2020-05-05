@@ -127,12 +127,6 @@ TEST_CASE("Order", "[OrderGadget]")
             _order.buy = (order.buy == FieldT::one()) ? FieldT::zero() : FieldT::one();
             orderChecked(exchangeID, _order, account, balanceLeafS, balanceLeafB, tradeHistoryLeaf, false);
         }
-        SECTION("label")
-        {
-            Order _order = order;
-            _order.label += 1;
-            orderChecked(exchangeID, _order, account, balanceLeafS, balanceLeafB, tradeHistoryLeaf, false);
-        }
     }
 
     doSignatureCheck = false;
@@ -204,10 +198,6 @@ TEST_CASE("Order", "[OrderGadget]")
             Order _order = order;
             _order.buy = 2;
             orderChecked(exchangeID, _order, account, balanceLeafS, balanceLeafB, tradeHistoryLeaf, false);
-        }
-        SECTION("label")
-        {
-            // No limit
         }
         SECTION("feeBips")
         {

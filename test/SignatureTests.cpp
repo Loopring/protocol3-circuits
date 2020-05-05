@@ -6,21 +6,28 @@
 TEST_CASE("SignatureVerifier", "[SignatureVerifier]")
 {
      auto signatureVerifierChecked = [](const FieldT& _pubKeyX, const FieldT& _pubKeyY, const FieldT& _msg,
-                                        const Loopring::Signature& signature, bool expectedSatisfied)
+                                        const Loopring::Signature& signature, bool expectedSatisfied, bool checkValid = false)
     {
-        protoboard<FieldT> pb;
+        for (unsigned int i = 0; i < (checkValid ? 2 : 1); i++)
+        {
+            bool requireValid = (i == 0);
 
-        jubjub::Params params;
-        jubjub::VariablePointT publicKey(pb, "publicKey");
-        pb.val(publicKey.x) = _pubKeyX;
-        pb.val(publicKey.y) = _pubKeyY;
-        pb_variable<FieldT> message = make_variable(pb, _msg, "message");
+            protoboard<FieldT> pb;
 
-        SignatureVerifier signatureVerifier(pb, params, publicKey, message, "signatureVerifier");
-        signatureVerifier.generate_r1cs_constraints();
-        signatureVerifier.generate_r1cs_witness(signature);
+            Constants constants(pb, "constants");
+            jubjub::Params params;
+            jubjub::VariablePointT publicKey(pb, "publicKey");
+            pb.val(publicKey.x) = _pubKeyX;
+            pb.val(publicKey.y) = _pubKeyY;
+            pb_variable<FieldT> message = make_variable(pb, _msg, "message");
 
-        REQUIRE(pb.is_satisfied() == expectedSatisfied);
+            SignatureVerifier signatureVerifier(pb, params, constants, publicKey, message, "signatureVerifier", requireValid);
+            signatureVerifier.generate_r1cs_constraints();
+            signatureVerifier.generate_r1cs_witness(signature);
+
+            REQUIRE(pb.is_satisfied() == (requireValid ? expectedSatisfied : true));
+            REQUIRE((pb.val(signatureVerifier.result()) == (expectedSatisfied ? FieldT::one() : FieldT::zero())));
+        }
     };
 
     // Correct publicKey + message + signature
@@ -62,12 +69,12 @@ TEST_CASE("SignatureVerifier", "[SignatureVerifier]")
 
     SECTION("Different (but valid) public key")
     {
-        signatureVerifierChecked(pubKeyX_2, pubKeyY_2, msg, Loopring::Signature(EdwardsPoint(Rx, Ry), s), false);
+        signatureVerifierChecked(pubKeyX_2, pubKeyY_2, msg, Loopring::Signature(EdwardsPoint(Rx, Ry), s), false, true);
     }
 
     SECTION("Different message")
     {
-        signatureVerifierChecked(pubKeyX, pubKeyY, msg + 1, Loopring::Signature(EdwardsPoint(Rx, Ry), s), false);
+        signatureVerifierChecked(pubKeyX, pubKeyY, msg + 1, Loopring::Signature(EdwardsPoint(Rx, Ry), s), false, true);
     }
 
     SECTION("Zero message value")
@@ -97,6 +104,11 @@ TEST_CASE("SignatureVerifier", "[SignatureVerifier]")
 
     SECTION("Signature of message of different public key")
     {
-        signatureVerifierChecked(pubKeyX, pubKeyY, msg, Loopring::Signature(EdwardsPoint(Rx_2, Ry_2), s_2), false);
+        signatureVerifierChecked(pubKeyX, pubKeyY, msg, Loopring::Signature(EdwardsPoint(Rx_2, Ry_2), s_2), false, true);
+    }
+
+    SECTION("Signature invalid but a valid point")
+    {
+        signatureVerifierChecked(pubKeyX, pubKeyY, msg, Loopring::Signature(EdwardsPoint(pubKeyX, pubKeyY), 0), false, true);
     }
 }

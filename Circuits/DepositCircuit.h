@@ -19,6 +19,8 @@ class DepositGadget : public GadgetT
 {
 public:
 
+    const Constants& constants;
+
     // User state
     BalanceGadget balanceBefore;
     AccountGadget accountBefore;
@@ -40,11 +42,13 @@ public:
 
     DepositGadget(
         ProtoboardT& pb,
-        const Constants& constants,
+        const Constants& _constants,
         const VariableT& root,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
+
+        constants(_constants),
 
         // User state
         balanceBefore(pb, FMT(prefix, ".balanceBefore")),
@@ -117,11 +121,11 @@ public:
         updateAccount.generate_r1cs_constraints();
     }
 
-    const std::vector<VariableArrayT> getOnchainData(const Constants& constants) const
+    const std::vector<VariableArrayT> getOnchainData() const
     {
-        return {constants.padding_0000, accountID.bits,
+        return {accountID.bits,
                 publicKeyX.bits, publicKeyY.bits,
-                tokenID.bits,
+                VariableArrayT(6, constants.zero), tokenID.bits,
                 amount.bits};
     }
 
@@ -197,7 +201,7 @@ public:
             deposits.back().generate_r1cs_constraints();
 
             // Hash data from deposit
-            std::vector<VariableArrayT> depositData = deposits.back().getOnchainData(constants);
+            std::vector<VariableArrayT> depositData = deposits.back().getOnchainData();
             std::vector<VariableArrayT> hashBits;
             hashBits.push_back(reverse((j == 0) ? depositBlockHashStart.bits : hashers.back().result().bits));
             hashBits.insert(hashBits.end(), depositData.begin(), depositData.end());

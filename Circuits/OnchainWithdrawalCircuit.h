@@ -20,6 +20,8 @@ class OnchainWithdrawalGadget : public GadgetT
 {
 public:
 
+    const Constants& constants;
+
     // User state
     BalanceGadget balanceBefore;
     AccountGadget accountBefore;
@@ -52,12 +54,14 @@ public:
 
     OnchainWithdrawalGadget(
         ProtoboardT& pb,
-        const Constants& constants,
+        const Constants& _constants,
         const VariableT& accountsMerkleRoot,
         const VariableT& bShutdownMode,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
+
+        constants(_constants),
 
         // User state
         balanceBefore(pb, FMT(prefix, ".balanceBefore")),
@@ -73,8 +77,8 @@ public:
         amountToWithdrawMin(pb, amountRequested.packed, balanceBefore.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
         amountToWithdraw(pb, bShutdownMode, balanceBefore.balance, amountToWithdrawMin.result(), FMT(prefix, ".amountToWithdraw")),
         // Float
-        amountWithdrawn(pb, constants, Float28Encoding, FMT(prefix, ".amountWithdrawn")),
-        requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float28Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
+        amountWithdrawn(pb, constants, Float24Encoding, FMT(prefix, ".amountWithdrawn")),
+        requireAccuracyAmountWithdrawn(pb, amountWithdrawn.value(), amountToWithdraw.result(), Float24Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyAmountRequested")),
 
         // Shutdown mode - Reset values to genesis state
         amountToSubtract(pb, bShutdownMode, amountToWithdraw.result(), amountWithdrawn.value(), FMT(prefix, ".amountToSubtract")),
@@ -114,7 +118,7 @@ public:
         amountToWithdrawMin.generate_r1cs_witness();
         amountToWithdraw.generate_r1cs_witness();
         // Float
-        amountWithdrawn.generate_r1cs_witness(toFloat(pb.val(amountToWithdraw.result()), Float28Encoding));
+        amountWithdrawn.generate_r1cs_witness(toFloat(pb.val(amountToWithdraw.result()), Float24Encoding));
         requireAccuracyAmountWithdrawn.generate_r1cs_witness();
 
         // Shutdown mode
@@ -161,16 +165,16 @@ public:
         updateAccount_A.generate_r1cs_constraints();
     }
 
-    const std::vector<VariableArrayT> getOnchainData(const Constants& constants) const
+    const std::vector<VariableArrayT> getOnchainData() const
     {
-        return {constants.padding_0000, accountID.bits,
-                tokenID.bits,
+        return {accountID.bits,
+                VariableArrayT(6, constants.zero), tokenID.bits,
                 amountRequested.bits};
     }
 
     const std::vector<VariableArrayT> getApprovedWithdrawalData() const
     {
-        return {tokenID.bits,
+        return {VariableArrayT(6, constants.zero), tokenID.bits,
                 accountID.bits,
                 amountWithdrawn.bits()};
     }
@@ -257,7 +261,7 @@ public:
             withdrawals.back().generate_r1cs_constraints();
 
             // Hash data from withdrawal request
-            std::vector<VariableArrayT> withdrawalRequestData = withdrawals.back().getOnchainData(constants);
+            std::vector<VariableArrayT> withdrawalRequestData = withdrawals.back().getOnchainData();
             std::vector<VariableArrayT> hash;
             hash.push_back(reverse((j == 0) ? withdrawalBlockHashStart.bits : hashers.back().result().bits));
             hash.insert(hash.end(), withdrawalRequestData.begin(), withdrawalRequestData.end());
