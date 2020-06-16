@@ -184,7 +184,7 @@ public:
 
 // Same parameters for ease of implementation in EVM
 using HashMerkleTree = Poseidon_gadget_T<5, 1, 6, 52, 4, 1>;
-using HashAccountLeaf = Poseidon_gadget_T<5, 1, 6, 52, 4, 1>;
+using HashAccountLeaf = Poseidon_gadget_T<6, 1, 6, 52, 5, 1>;
 using HashBalanceLeaf = Poseidon_gadget_T<5, 1, 6, 52, 2, 1>;
 using HashTradingHistoryLeaf = Poseidon_gadget_T<5, 1, 6, 52, 2, 1>;
 

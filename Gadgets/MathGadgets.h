@@ -29,15 +29,26 @@ class Constants : public GadgetT
 public:
     const VariableT zero;
     const VariableT one;
+    const VariableT two;
+    const VariableT three;
+    const VariableT four;
+    const VariableT five;
+    const VariableT six;
+    const VariableT seven;
+
     const VariableT _1000;
     const VariableT _1001;
     const VariableT _10000;
     const VariableT _100000;
+    const VariableT halfP;
     const VariableT emptyTradeHistory;
     const VariableT maxAmount;
+    const VariableT base;
     const VariableArrayT zeroAccount;
 
     const VariableT maxConcurrentOrderIDs;
+
+    std::vector<VariableT> values;
 
     Constants(
         ProtoboardT& pb,
@@ -47,17 +58,34 @@ public:
 
         zero(make_variable(pb, FieldT::zero(), FMT(prefix, ".zero"))),
         one(make_variable(pb, FieldT::one(), FMT(prefix, ".one"))),
+        two(make_variable(pb, ethsnarks::FieldT(2), FMT(prefix, ".two"))),
+        three(make_variable(pb, ethsnarks::FieldT(3), FMT(prefix, ".three"))),
+        four(make_variable(pb, ethsnarks::FieldT(4), FMT(prefix, ".four"))),
+        five(make_variable(pb, ethsnarks::FieldT(5), FMT(prefix, ".five"))),
+        six(make_variable(pb, ethsnarks::FieldT(6), FMT(prefix, ".six"))),
+        seven(make_variable(pb, ethsnarks::FieldT(7), FMT(prefix, ".seven"))),
         _1000(make_variable(pb, ethsnarks::FieldT(1000), FMT(prefix, "._1000"))),
         _1001(make_variable(pb, ethsnarks::FieldT(1001), FMT(prefix, "._1001"))),
         _10000(make_variable(pb, ethsnarks::FieldT(10000), FMT(prefix, "._10000"))),
         _100000(make_variable(pb, ethsnarks::FieldT(100000), FMT(prefix, "._100000"))),
+        halfP(make_variable(pb, ethsnarks::FieldT(HALF_P), FMT(prefix, ".halfP"))),
         emptyTradeHistory(make_variable(pb, ethsnarks::FieldT(EMPTY_TRADE_HISTORY), FMT(prefix, ".emptyTradeHistory"))),
         maxAmount(make_variable(pb, ethsnarks::FieldT(MAX_AMOUNT), FMT(prefix, ".maxAmount"))),
         maxConcurrentOrderIDs(make_variable(pb, ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS), FMT(prefix, ".maxConcurrentOrderIDs"))),
+        base(make_variable(pb, ethsnarks::FieldT(BASE), FMT(prefix, ".base"))),
         zeroAccount(NUM_BITS_ACCOUNT, zero)
     {
         assert(NUM_BITS_MAX_VALUE == FieldT::size_in_bits());
         assert(NUM_BITS_FIELD_CAPACITY == FieldT::capacity());
+
+        values.push_back(zero);
+        values.push_back(one);
+        values.push_back(two);
+        values.push_back(three);
+        values.push_back(four);
+        values.push_back(five);
+        values.push_back(six);
+        values.push_back(seven);
     }
 
     void generate_r1cs_witness()
@@ -69,13 +97,22 @@ public:
     {
         pb.add_r1cs_constraint(ConstraintT(zero, FieldT::one(), FieldT::zero()), ".zero");
         pb.add_r1cs_constraint(ConstraintT(one, FieldT::one(), FieldT::one()), ".one");
+        pb.add_r1cs_constraint(ConstraintT(two, FieldT::one(), FieldT(2)), ".two");
+        pb.add_r1cs_constraint(ConstraintT(three, FieldT::one(), FieldT(3)), ".three");
+        pb.add_r1cs_constraint(ConstraintT(four, FieldT::one(), FieldT(4)), ".four");
+        pb.add_r1cs_constraint(ConstraintT(five, FieldT::one(), FieldT(5)), ".five");
+        pb.add_r1cs_constraint(ConstraintT(six, FieldT::one(), FieldT(6)), ".six");
+        pb.add_r1cs_constraint(ConstraintT(seven, FieldT::one(), FieldT(7)), ".seven");
+
         pb.add_r1cs_constraint(ConstraintT(_1000, FieldT::one(), ethsnarks::FieldT(1000)), "._1000");
         pb.add_r1cs_constraint(ConstraintT(_1001, FieldT::one(), ethsnarks::FieldT(1001)), "._1001");
         pb.add_r1cs_constraint(ConstraintT(_10000, FieldT::one(), ethsnarks::FieldT(10000)), "._10000");
         pb.add_r1cs_constraint(ConstraintT(_100000, FieldT::one(), ethsnarks::FieldT(100000)), "._100000");
+        pb.add_r1cs_constraint(ConstraintT(halfP, FieldT::one(), ethsnarks::FieldT(HALF_P)), ".halfP");
         pb.add_r1cs_constraint(ConstraintT(emptyTradeHistory, FieldT::one(), ethsnarks::FieldT(EMPTY_TRADE_HISTORY)), ".emptyTradeHistory");
         pb.add_r1cs_constraint(ConstraintT(maxAmount, FieldT::one(), ethsnarks::FieldT(MAX_AMOUNT)), ".maxAmount");
         pb.add_r1cs_constraint(ConstraintT(maxConcurrentOrderIDs, FieldT::one(), ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS)), ".maxConcurrentOrderIDs");
+        pb.add_r1cs_constraint(ConstraintT(base, FieldT::one(), ethsnarks::FieldT(BASE)), ".base");
     }
 };
 
@@ -359,52 +396,6 @@ public:
             libsnark::generate_boolean_r1cs_constraint<ethsnarks::FieldT>(pb, b, FMT(annotation_prefix, ".bitness"));
         }
         pb.add_r1cs_constraint(ConstraintT(b, y - x, y - selected), FMT(annotation_prefix, ".b * (y - x) == (y - selected)"));
-    }
-};
-
-// (A <(=) B)
-class LeqGadget : public GadgetT
-{
-public:
-    VariableT _lt;
-    VariableT _leq;
-    libsnark::comparison_gadget<ethsnarks::FieldT> comparison;
-
-    LeqGadget(
-        ProtoboardT& pb,
-        const VariableT& A,
-        const VariableT& B,
-        const size_t n,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix),
-
-        _lt(make_variable(pb, 1, FMT(prefix, ".lt"))),
-        _leq(make_variable(pb, 1, FMT(prefix, ".leq"))),
-        comparison(pb, n, A, B, _lt, _leq, FMT(prefix, ".A <(=) B"))
-    {
-        // The comparison gadget is only guaranteed to work correctly on values in the field capacity - 1
-        assert(n <= NUM_BITS_FIELD_CAPACITY - 1);
-    }
-
-    const VariableT& lt() const
-    {
-        return _lt;
-    }
-
-    const VariableT& leq() const
-    {
-        return _leq;
-    }
-
-    void generate_r1cs_witness()
-    {
-        comparison.generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        comparison.generate_r1cs_constraints();
     }
 };
 
@@ -753,6 +744,70 @@ public:
     {
         pb.add_r1cs_constraint(ConstraintT(A - B, FieldT::one(), difference), FMT(annotation_prefix, ".A - B == difference"));
         notZero.generate_r1cs_constraints();
+    }
+};
+
+// (A <(=) B)
+class LeqGadget : public GadgetT
+{
+public:
+    VariableT _lt;
+    VariableT _leq;
+    libsnark::comparison_gadget<ethsnarks::FieldT> comparison;
+    NotGadget _gt;
+    NotGadget _gte;
+
+    LeqGadget(
+        ProtoboardT& pb,
+        const VariableT& A,
+        const VariableT& B,
+        const size_t n,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        _lt(make_variable(pb, 1, FMT(prefix, ".lt"))),
+        _leq(make_variable(pb, 1, FMT(prefix, ".leq"))),
+        comparison(pb, n, A, B, _lt, _leq, FMT(prefix, ".A <(=) B")),
+        _gt(pb, _leq, FMT(prefix, ".gt")),
+        _gte(pb, _lt, FMT(prefix, ".gte"))
+    {
+        // The comparison gadget is only guaranteed to work correctly on values in the field capacity - 1
+        //assert(n <= NUM_BITS_FIELD_CAPACITY - 1);
+    }
+
+    const VariableT& lt() const
+    {
+        return _lt;
+    }
+
+    const VariableT& leq() const
+    {
+        return _leq;
+    }
+
+    const VariableT& gt() const
+    {
+        return _gt.result();
+    }
+
+    const VariableT& gte() const
+    {
+        return _gte.result();
+    }
+
+    void generate_r1cs_witness()
+    {
+        comparison.generate_r1cs_witness();
+        _gt.generate_r1cs_witness();
+        _gte.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        comparison.generate_r1cs_constraints();
+        _gt.generate_r1cs_constraints();
+        _gte.generate_r1cs_constraints();
     }
 };
 
@@ -1145,6 +1200,10 @@ public:
     const VariableArrayT sig_s;
     const VariableT sig_m;
     EdDSA_Poseidon signatureVerifier;
+
+    NotGadget notRequired;
+    OrGadget valid;
+
     bool requireValid;
 
     SignatureVerifier(
@@ -1152,7 +1211,8 @@ public:
         const jubjub::Params& params,
         const Constants& _constants,
         const jubjub::VariablePointT& publicKey,
-        const VariableT& _message,
+        const VariableT& message,
+        const VariableT& required,
         const std::string& prefix,
         bool _requireValid = true
     ) :
@@ -1161,8 +1221,10 @@ public:
         constants(_constants),
         sig_R(pb, FMT(prefix, ".R")),
         sig_s(make_var_array(pb, FieldT::size_in_bits(), FMT(prefix, ".s"))),
-        sig_m(_message),
+        sig_m(message),
         signatureVerifier(pb, params, jubjub::EdwardsPoint(params.Gx, params.Gy), publicKey, sig_R, sig_s, sig_m, FMT(prefix, ".signatureVerifier")),
+        notRequired(pb, required, FMT(prefix, ".notRequired")),
+        valid(pb, {notRequired.result(), signatureVerifier.result()}, FMT(prefix, ".valid")),
         requireValid(_requireValid)
     {
 
@@ -1174,42 +1236,29 @@ public:
         pb.val(sig_R.y) = sig.R.y;
         sig_s.fill_with_bits_of_field_element(pb, sig.s);
         signatureVerifier.generate_r1cs_witness();
+        notRequired.generate_r1cs_witness();
+        valid.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
         signatureVerifier.generate_r1cs_constraints();
+        notRequired.generate_r1cs_constraints();
+        valid.generate_r1cs_constraints();
         if (requireValid)
         {
-            requireEqual(pb, signatureVerifier.result(), constants.one, FMT(annotation_prefix, ".isSignatureValid"));
+            requireEqual(pb, valid.result(), constants.one, FMT(annotation_prefix, ".isSignatureCheckValid"));
         }
     }
 
     const VariableT& result() const
     {
-        return signatureVerifier.result();
+        return valid.result();
     }
 
     const VariableArrayT& getHash()
     {
         return signatureVerifier.m_hash_RAM.result();
-    }
-};
-
-// Helper class to collect bits
-class Bitstream
-{
-public:
-    std::vector<VariableArrayT> data;
-
-    void add(const VariableArrayT& bits)
-    {
-        data.push_back(bits);
-    }
-
-    void add(const std::vector<VariableArrayT>& bits)
-    {
-        data.insert(data.end(), bits.begin(), bits.end());
     }
 };
 
@@ -1219,7 +1268,7 @@ class PublicDataGadget : public GadgetT
 {
 public:
     const VariableT publicInput;
-    std::vector<VariableArrayT> publicDataBits;
+    VariableArrayT publicDataBits;
 
     std::unique_ptr<sha256_many> hasher;
     std::unique_ptr<libsnark::dual_variable_gadget<FieldT>> calculatedHash;
@@ -1236,12 +1285,7 @@ public:
 
     void add(const VariableArrayT& bits)
     {
-        publicDataBits.push_back(bits);
-    }
-
-    void add(const std::vector<VariableArrayT>& bits)
-    {
-        publicDataBits.insert(publicDataBits.end(), bits.begin(), bits.end());
+        publicDataBits.insert(publicDataBits.end(), bits.rbegin(), bits.rend());
     }
 
     void generate_r1cs_witness()
@@ -1253,7 +1297,7 @@ public:
         calculatedHash->generate_r1cs_witness_from_bits();
         pb.val(publicInput) = pb.val(calculatedHash->packed);
 
-        printBits("[ZKS]publicData: 0x", flattenReverse(publicDataBits).get_bits(pb), false);
+        printBits("[ZKS]publicData: 0x", publicDataBits.get_bits(pb), false);
         printBits("[ZKS]publicDataHash: 0x", hasher->result().bits.get_bits(pb));
         print(pb, "[ZKS]publicInput", calculatedHash->packed);
     }
@@ -1261,7 +1305,7 @@ public:
     void generate_r1cs_constraints()
     {
         // Calculate the hash
-        hasher.reset(new sha256_many(pb, flattenReverse(publicDataBits), ".hasher"));
+        hasher.reset(new sha256_many(pb, publicDataBits, ".hasher"));
         hasher->generate_r1cs_constraints();
 
         // Check that the hash matches the public input
@@ -1389,6 +1433,40 @@ public:
     }
 };
 
+class ToBitsGadget : public GadgetT
+{
+public:
+
+    libsnark::dual_variable_gadget<FieldT> dualVariable;
+
+    ToBitsGadget(
+        ProtoboardT& pb,
+        const VariableT& value,
+        const size_t width,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+        dualVariable(pb, value, width, FMT(prefix, ".dualVariable"))
+    {
+
+    }
+
+    void generate_r1cs_witness()
+    {
+        dualVariable.generate_r1cs_witness_from_packed();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        dualVariable.generate_r1cs_constraints(true);
+    }
+
+    const VariableArrayT& result() const
+    {
+        return dualVariable.bits;
+    }
+};
+
 class DualVariableGadget : public libsnark::dual_variable_gadget<FieldT>
 {
 public:
@@ -1400,6 +1478,22 @@ public:
         libsnark::dual_variable_gadget<FieldT>(pb, width, prefix)
     {
 
+    }
+
+    DualVariableGadget(
+        ProtoboardT& pb,
+        const VariableT& value,
+        const size_t width,
+        const std::string& prefix
+    ) :
+        libsnark::dual_variable_gadget<FieldT>(pb, value, width, prefix)
+    {
+
+    }
+
+    void generate_r1cs_witness()
+    {
+        generate_r1cs_witness_from_packed();
     }
 
     void generate_r1cs_witness(ProtoboardT& pb, const FieldT& value)
@@ -1417,7 +1511,267 @@ public:
         }
         generate_r1cs_witness_from_bits();
     }
+
+    void generate_r1cs_constraints(bool enforce = true)
+    {
+        libsnark::dual_variable_gadget<FieldT>::generate_r1cs_constraints(enforce);
+    }
 };
+
+class SelectorGadget : public GadgetT
+{
+public:
+
+    std::vector<EqualGadget> selectors;
+    std::vector<OrGadget> matched;
+
+    std::unique_ptr<EqualGadget> valid;
+
+    SelectorGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const std::vector<VariableT>& keys,
+        const VariableT& key,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix)
+    {
+        for (unsigned int i = 0; i < keys.size(); i++)
+        {
+            selectors.emplace_back(EqualGadget(pb, key, keys[i], FMT(prefix, ".selectors")));
+            matched.emplace_back(OrGadget(pb, {selectors.back().result(), (i == 0) ? constants.zero : matched.back().result()}, FMT(prefix, ".matched")));
+        }
+        // Make sure the key was found
+        valid.reset(new EqualGadget(pb, matched.back().result(), constants.one, FMT(prefix, ".key_not_found")));
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (unsigned int i = 0; i < selectors.size(); i++)
+        {
+            selectors[i].generate_r1cs_witness();
+            matched[i].generate_r1cs_witness();
+        }
+        valid->generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        for (unsigned int i = 0; i < selectors.size(); i++)
+        {
+            selectors[i].generate_r1cs_constraints();
+            matched[i].generate_r1cs_constraints();
+        }
+        valid->generate_r1cs_constraints();
+    }
+
+    const std::vector<VariableT> result() const
+    {
+        std::vector<VariableT> results;
+        for (unsigned int i = 0; i < selectors.size(); i++)
+        {
+            results.emplace_back(selectors[i].result());
+        }
+        return results;
+    }
+
+    const VariableT& isValid() const
+    {
+        return valid->result();
+    }
+};
+
+class SelectGadget : public GadgetT
+{
+public:
+
+    std::vector<TernaryGadget> results;
+
+    SelectGadget(
+        ProtoboardT& pb,
+        const std::vector<VariableT>& selector,
+        const std::vector<VariableT>& values,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix)
+    {
+        assert(values.size() == selector.size());
+        for (unsigned int i = 0; i < values.size(); i++)
+        {
+            results.emplace_back(TernaryGadget(pb, selector[i], values[i], (i == 0) ? values[0] : results.back().result(), FMT(prefix, ".results")));
+        }
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (unsigned int i = 0; i < results.size(); i++)
+        {
+            results[i].generate_r1cs_witness();
+        }
+    }
+
+    void generate_r1cs_constraints()
+    {
+        for (unsigned int i = 0; i < results.size(); i++)
+        {
+            results[i].generate_r1cs_constraints(false);
+        }
+    }
+
+    const VariableT& result() const
+    {
+        return results.back().result();
+    }
+};
+
+class ArraySelectGadget : public GadgetT
+{
+public:
+
+    std::vector<std::vector<TernaryGadget>> results;
+    VariableArrayT res;
+
+    ArraySelectGadget(
+        ProtoboardT& pb,
+        const std::vector<VariableT>& selector,
+        const std::vector<VariableArrayT>& values,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix)
+    {
+        assert(values.size() == selector.size());
+
+        results.reserve(values.size());
+        for (unsigned int n = 0; n < values[0].size(); n++)
+        {
+            results.emplace_back();
+            results.back().reserve(values.size());
+            for (unsigned int i = 0; i < values.size(); i++)
+            {
+                results.back().emplace_back(TernaryGadget(pb, selector[i], values[i][n], (i == 0) ? values[i][n] : results.back().back().result(), FMT(prefix, ".results")));
+            }
+            res.emplace_back(results.back().back().result());
+        }
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (unsigned int i = 0; i < results.size(); i++)
+        {
+            for (unsigned int j = 0; j < results[i].size(); j++)
+            {
+                results[i][j].generate_r1cs_witness();
+            }
+        }
+    }
+
+    void generate_r1cs_constraints()
+    {
+        for (unsigned int i = 0; i < results.size(); i++)
+        {
+            for (unsigned int j = 0; j < results[i].size(); j++)
+            {
+                results[i][j].generate_r1cs_constraints(false);
+            }
+        }
+    }
+
+    const VariableArrayT& result() const
+    {
+        return res;
+    }
+};
+
+class OwnerValidGadget : public GadgetT
+{
+public:
+
+    EqualGadget newOwner_equal_oldOwner;
+    EqualGadget no_oldOwner;
+    OrGadget equal_owner_or_no_owner;
+    RequireEqualGadget equal_owner_or_no_owner_eq_true;
+
+    OwnerValidGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const VariableT& oldOwner,
+        const VariableT& newOwner,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        newOwner_equal_oldOwner(pb, newOwner, oldOwner, FMT(prefix, ".newOwner_equal_oldOwner")),
+        no_oldOwner(pb, oldOwner, constants.zero, FMT(prefix, ".no_oldOwner")),
+        equal_owner_or_no_owner(pb, {newOwner_equal_oldOwner.result(), no_oldOwner.result()}, FMT(prefix, ".equal_owner_or_no_owner")),
+        equal_owner_or_no_owner_eq_true(pb, equal_owner_or_no_owner.result(), constants.one, FMT(prefix, ".equal_owner_or_no_owner_eq_true"))
+    {
+
+    }
+
+    void generate_r1cs_witness()
+    {
+        newOwner_equal_oldOwner.generate_r1cs_witness();
+        no_oldOwner.generate_r1cs_witness();
+        equal_owner_or_no_owner.generate_r1cs_witness();
+        equal_owner_or_no_owner_eq_true.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        newOwner_equal_oldOwner.generate_r1cs_constraints();
+        no_oldOwner.generate_r1cs_constraints();
+        equal_owner_or_no_owner.generate_r1cs_constraints();
+        equal_owner_or_no_owner_eq_true.generate_r1cs_constraints();
+    }
+};
+
+// b ? A : B
+/*class SelectorGadget : public GadgetT
+{
+public:
+    VariableT b;
+    VariableT x;
+    VariableT y;
+
+    VariableT selected;
+
+    std::vector<UnsafeAddGadget> sum;
+
+    SelectGadget(
+        ProtoboardT& pb,
+        const std::vector<VariableT>& bits,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        b(_b),
+        x(_x),
+        y(_y),
+
+        selected(make_variable(pb, FMT(prefix, ".selected")))
+    {
+
+    }
+
+    const VariableT& result() const
+    {
+        return selected;
+    }
+
+    void generate_r1cs_witness()
+    {
+        pb.val(selected) = (pb.val(b) == FieldT::one()) ? pb.val(x) : pb.val(y);
+    }
+
+    void generate_r1cs_constraints(bool enforceBitness = true)
+    {
+        if (enforceBitness)
+        {
+            libsnark::generate_boolean_r1cs_constraint<ethsnarks::FieldT>(pb, b, FMT(annotation_prefix, ".bitness"));
+        }
+        pb.add_r1cs_constraint(ConstraintT(b, y - x, y - selected), FMT(annotation_prefix, ".b * (y - x) == (y - selected)"));
+    }
+};*/
 
 }
 

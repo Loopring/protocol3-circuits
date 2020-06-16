@@ -18,6 +18,7 @@ namespace Loopring
 
 struct AccountState
 {
+    VariableT owner;
     VariableT publicKeyX;
     VariableT publicKeyY;
     VariableT nonce;
@@ -27,6 +28,7 @@ struct AccountState
 class AccountGadget : public GadgetT
 {
 public:
+    VariableT owner;
     const jubjub::VariablePointT publicKey;
     VariableT nonce;
     VariableT balancesRoot;
@@ -37,6 +39,7 @@ public:
     ) :
         GadgetT(pb, prefix),
 
+        owner(make_variable(pb, FMT(prefix, ".owner"))),
         publicKey(pb, FMT(prefix, ".publicKey")),
         nonce(make_variable(pb, FMT(prefix, ".nonce"))),
         balancesRoot(make_variable(pb, FMT(prefix, ".balancesRoot")))
@@ -46,6 +49,7 @@ public:
 
     void generate_r1cs_witness(const Account& account)
     {
+        pb.val(owner) = account.owner;
         pb.val(publicKey.x) = account.publicKey.x;
         pb.val(publicKey.y) = account.publicKey.y;
         pb.val(nonce) = account.nonce;
@@ -73,8 +77,8 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        leafBefore(pb, var_array({before.publicKeyX, before.publicKeyY, before.nonce, before.balancesRoot}), FMT(prefix, ".leafBefore")),
-        leafAfter(pb, var_array({after.publicKeyX, after.publicKeyY, after.nonce, after.balancesRoot}), FMT(prefix, ".leafAfter")),
+        leafBefore(pb, var_array({before.owner, before.publicKeyX, before.publicKeyY, before.nonce, before.balancesRoot}), FMT(prefix, ".leafBefore")),
+        leafAfter(pb, var_array({after.owner, after.publicKeyX, after.publicKeyY, after.nonce, after.balancesRoot}), FMT(prefix, ".leafAfter")),
 
         proof(make_var_array(pb, TREE_DEPTH_ACCOUNTS * 3, FMT(prefix, ".proof"))),
         proofVerifierBefore(pb, TREE_DEPTH_ACCOUNTS, address, leafBefore.result(), merkleRoot, proof, FMT(prefix, ".pathBefore")),
