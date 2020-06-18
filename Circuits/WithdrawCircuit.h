@@ -28,6 +28,7 @@ public:
     DualVariableGadget amount;
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
+    DualVariableGadget to;
     DualVariableGadget type;
 
     // Signature
@@ -41,16 +42,18 @@ public:
     IsNonZero isConditional;
     UnsafeAddGadget numConditionalTransactionsAfter;
     NotGadget needsSignature;
-    EqualGadget invalidWithdrawal;
+
+    // Check how much should be withdrawn
+    EqualGadget amountIsZero;
+    EqualGadget amountIsFullBalance;
+    EqualGadget validFullWithdrawalType;
+    EqualGadget invalidFullWithdrawalType;
+    IfThenRequireGadget checkValidFullWithdrawal;
+    IfThenRequireGadget checkInvalidFullWithdrawal;
 
     // Fee as float
     FloatGadget fFee;
     RequireAccuracyGadget requireAccuracyFee;
-
-    // Calculate how much can be withdrawn
-    MinGadget amountToWithdraw;
-    TernaryGadget amountWithdrawn;
-    ToBitsGadget amountWithdrawnBits;
 
     // Fee payment from From to the operator
     TransferGadget feePayment;
@@ -69,13 +72,14 @@ public:
         BaseTransactionCircuit(pb, state, prefix),
 
         // Inputs
-        owner(pb, state.accountA.account.owner, NUM_BITS_OWNER, FMT(prefix, ".owner")),
+        owner(pb, state.accountA.account.owner, NUM_BITS_ADDRESS, FMT(prefix, ".owner")),
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
         nonce(pb, state.accountA.account.nonce, NUM_BITS_NONCE, FMT(prefix, ".nonce")),
         tokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID")),
         amount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amount")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
+        to(pb, NUM_BITS_ADDRESS, FMT(prefix, ".to")),
         type(pb, NUM_BITS_TYPE, FMT(prefix, ".type")),
 
         // Signature
@@ -93,15 +97,17 @@ public:
         balanceA_O(pb, state.oper.balanceA.balance, FMT(prefix, ".balanceA_O")),
 
         // Type
-        isConditional(pb, type.packed, ".isConditional"),
-        numConditionalTransactionsAfter(pb, state.numConditionalTransactions, state.constants.one, ".numConditionalTransactionsAfter"),
-        needsSignature(pb, isConditional.result(), ".needsSignature"),
-        invalidWithdrawal(pb, type.packed, state.constants.two, ".invalidWithdrawal"),
+        isConditional(pb, type.packed, FMT(prefix, ".isConditional")),
+        numConditionalTransactionsAfter(pb, state.numConditionalTransactions, state.constants.one, FMT(prefix, ".numConditionalTransactionsAfter")),
+        needsSignature(pb, isConditional.result(), FMT(prefix, ".needsSignature")),
 
-        // Calculate how much can be withdrawn
-        amountToWithdraw(pb, amount.packed, state.accountA.balanceS.balance, NUM_BITS_AMOUNT, FMT(prefix, ".min(amountRequested, balance)")),
-        amountWithdrawn(pb, invalidWithdrawal.result(), state.constants.zero, amountToWithdraw.result(), FMT(prefix, ".min(amountRequested, balance)")),
-        amountWithdrawnBits(pb, amountWithdrawn.result(), NUM_BITS_AMOUNT, FMT(prefix, ".amountWithdrawnBits")),
+        // Check how much should be withdrawn
+        amountIsZero(pb, amount.packed, state.constants.zero, FMT(prefix, ".amountIsZero")),
+        amountIsFullBalance(pb, amount.packed, state.accountA.balanceS.balance, FMT(prefix, ".amountIsFullBalance")),
+        validFullWithdrawalType(pb, type.packed, state.constants.two, FMT(prefix, ".validFullWithdrawalType")),
+        invalidFullWithdrawalType(pb, type.packed, state.constants.three, FMT(prefix, ".invalidFullWithdrawalType")),
+        checkValidFullWithdrawal(pb, validFullWithdrawalType.result(), amountIsFullBalance.result(), FMT(prefix, ".checkValidFullWithdrawal")),
+        checkInvalidFullWithdrawal(pb, invalidFullWithdrawalType.result(), amountIsZero.result(), FMT(prefix, ".checkInvalidFullWithdrawal")),
 
         // Fee as float
         fFee(pb, state.constants, Float16Encoding, FMT(prefix, ".fFee")),
@@ -111,7 +117,7 @@ public:
         feePayment(pb, balanceB_A, balanceA_O, fFee.value(), FMT(prefix, ".feePayment")),
 
         // Calculate the new balance
-        balance_after(pb, state.accountA.balanceS.balance, amountWithdrawn.result(), FMT(prefix, ".balance_after")),
+        balance_after(pb, state.accountA.balanceS.balance, amount.packed, FMT(prefix, ".balance_after")),
 
         // Increase the nonce of From by 1 (unless it's a conditional transfer)
         nonce_after(pb, state.accountA.account.nonce, state.constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_From_after"))
@@ -144,6 +150,7 @@ public:
         amount.generate_r1cs_witness(pb, withdrawal.amount);
         feeTokenID.generate_r1cs_witness(pb, withdrawal.feeTokenID);
         fee.generate_r1cs_witness(pb, withdrawal.fee);
+        to.generate_r1cs_witness(pb, withdrawal.to);
         type.generate_r1cs_witness(pb, withdrawal.type);
         // Signature
         hash.generate_r1cs_witness();
@@ -153,12 +160,14 @@ public:
         numConditionalTransactionsAfter.generate_r1cs_witness();
         //pb.val(numConditionalTransactionsAfter.sum) = transfer.numConditionalTransactionsAfter;
         needsSignature.generate_r1cs_witness();
-        invalidWithdrawal.generate_r1cs_witness();
 
-        // Calculate how much can be withdrawn
-        amountToWithdraw.generate_r1cs_witness();
-        amountWithdrawn.generate_r1cs_witness();
-        amountWithdrawnBits.generate_r1cs_witness();
+        // Check how much should be withdrawn
+        amountIsZero.generate_r1cs_witness();
+        amountIsFullBalance.generate_r1cs_witness();
+        validFullWithdrawalType.generate_r1cs_witness();
+        invalidFullWithdrawalType.generate_r1cs_witness();
+        checkValidFullWithdrawal.generate_r1cs_witness();
+        checkInvalidFullWithdrawal.generate_r1cs_witness();
 
         // Fee as float
         fFee.generate_r1cs_witness(toFloat(withdrawal.fee, Float16Encoding));
@@ -184,6 +193,7 @@ public:
         amount.generate_r1cs_constraints(true);
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
+        to.generate_r1cs_constraints(true);
         type.generate_r1cs_constraints(true);
 
         // Signature
@@ -193,12 +203,14 @@ public:
         isConditional.generate_r1cs_constraints();
         numConditionalTransactionsAfter.generate_r1cs_constraints();
         needsSignature.generate_r1cs_constraints();
-        invalidWithdrawal.generate_r1cs_constraints();
 
-        // Calculate how much can be withdrawn
-        amountToWithdraw.generate_r1cs_constraints();
-        amountWithdrawn.generate_r1cs_constraints();
-        amountWithdrawnBits.generate_r1cs_constraints();
+        // Check how much should be withdrawn
+        amountIsZero.generate_r1cs_constraints();
+        amountIsFullBalance.generate_r1cs_constraints();
+        validFullWithdrawalType.generate_r1cs_constraints();
+        invalidFullWithdrawalType.generate_r1cs_constraints();
+        checkValidFullWithdrawal.generate_r1cs_constraints();
+        checkInvalidFullWithdrawal.generate_r1cs_constraints();
 
         // Fee as float
         fFee.generate_r1cs_constraints();
@@ -223,9 +235,9 @@ public:
             nonce.bits,
             tokenID.bits,
             feeTokenID.bits,
-            amountWithdrawnBits.result(),
+            amount.bits,
             fFee.bits(),
-            amount.bits
+            to.bits
         });
     }
 };

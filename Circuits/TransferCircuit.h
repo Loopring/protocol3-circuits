@@ -78,8 +78,8 @@ public:
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         type(pb, NUM_BITS_TYPE, FMT(prefix, ".type")),
-        owner_From(pb, state.accountA.account.owner, NUM_BITS_OWNER, FMT(prefix, ".owner_From")),
-        owner_To(pb, NUM_BITS_OWNER, FMT(prefix, ".owner_To")),
+        owner_From(pb, state.accountA.account.owner, NUM_BITS_ADDRESS, FMT(prefix, ".owner_From")),
+        owner_To(pb, NUM_BITS_ADDRESS, FMT(prefix, ".owner_To")),
         nonce(pb, state.accountA.account.nonce, NUM_BITS_NONCE, FMT(prefix, ".nonce")),
 
         hash(pb, var_array({
@@ -101,7 +101,7 @@ public:
 
         // Owner
         ownerValid(pb, state.constants, state.accountB.account.owner, owner_To.packed, FMT(prefix, ".owner_To_equal_accountID_To_owner")),
-        //owner_delta(pb, owner_To_equal_accountID_To_owner.result(), VariableArrayT(NUM_BITS_OWNER, state.constants.zero), owner_To.bits, FMT(prefix, ".owner_delta")),
+        //owner_delta(pb, owner_To_equal_accountID_To_owner.result(), VariableArrayT(NUM_BITS_ADDRESS, state.constants.zero), owner_To.bits, FMT(prefix, ".owner_delta")),
 
         // Type
         isConditional(pb, type.packed, ".isConditional"),

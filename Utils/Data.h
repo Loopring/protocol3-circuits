@@ -87,6 +87,7 @@ auto dummyWithdraw = R"({
     "amount": "0",
     "feeTokenID": 0,
     "fee": "0",
+    "to": "0",
     "type": 0,
     "signature": {
         "Rx": "13060336632196495412858530687189935300033555341384637843571668213752389743866",
@@ -358,6 +359,7 @@ public:
     ethsnarks::FieldT amount;
     ethsnarks::FieldT feeTokenID;
     ethsnarks::FieldT fee;
+    ethsnarks::FieldT to;
     ethsnarks::FieldT type;
 };
 
@@ -368,6 +370,7 @@ static void from_json(const json& j, OffchainWithdrawal& withdrawal)
     withdrawal.amount = ethsnarks::FieldT(j["amount"].get<std::string>().c_str());
     withdrawal.feeTokenID = ethsnarks::FieldT(j.at("feeTokenID"));
     withdrawal.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
+    withdrawal.to = ethsnarks::FieldT(j["to"].get<std::string>().c_str());
     withdrawal.type = ethsnarks::FieldT(j.at("type"));
 }
 

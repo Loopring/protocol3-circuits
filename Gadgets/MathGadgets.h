@@ -915,6 +915,41 @@ public:
     }
 };
 
+// if (A) then require(B)
+class IfThenRequireGadget : public GadgetT
+{
+public:
+    NotGadget notA;
+    OrGadget res;
+
+    IfThenRequireGadget(
+        ProtoboardT& pb,
+        const VariableT& A,
+        const VariableT& B,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        notA(pb, A, FMT(prefix, ".notA")),
+        res(pb, {notA.result(), B}, FMT(prefix, ".res"))
+    {
+
+    }
+
+    void generate_r1cs_witness()
+    {
+        notA.generate_r1cs_witness();
+        res.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        notA.generate_r1cs_constraints();
+        res.generate_r1cs_constraints();
+        pb.add_r1cs_constraint(ConstraintT(res.result(), FieldT::one(), FieldT::one()), FMT(annotation_prefix, ".valid"));
+    }
+};
+
 // (value * numerator) = product
 // product / denominator = quotient
 // product % denominator = remainder

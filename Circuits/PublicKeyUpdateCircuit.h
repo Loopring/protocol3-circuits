@@ -53,7 +53,7 @@ public:
         BaseTransactionCircuit(pb, state, prefix),
 
         // Inputs
-        owner(pb, state.accountA.account.owner, NUM_BITS_OWNER, FMT(prefix, ".owner")),
+        owner(pb, state.accountA.account.owner, NUM_BITS_ADDRESS, FMT(prefix, ".owner")),
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
         nonce(pb, state.accountA.account.nonce, NUM_BITS_NONCE, FMT(prefix, ".nonce")),
         publicKeyX(make_variable(pb, FMT(prefix, ".publicKeyX"))),

@@ -36,8 +36,8 @@ public:
         BaseTransactionCircuit(pb, state, prefix),
 
         // Inputs
-        oldOwner(pb, state.accountA.account.owner, NUM_BITS_OWNER, FMT(prefix, ".owner")),
-        newOwner(pb, state.accountA.account.owner, NUM_BITS_OWNER, FMT(prefix, ".owner")),
+        oldOwner(pb, state.accountA.account.owner, NUM_BITS_ADDRESS, FMT(prefix, ".owner")),
+        newOwner(pb, state.accountA.account.owner, NUM_BITS_ADDRESS, FMT(prefix, ".owner")),
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
         nonce(pb, state.accountA.account.nonce, NUM_BITS_NONCE, FMT(prefix, ".nonce")),
         publicKeyX(make_variable(pb, FMT(prefix, ".publicKeyX"))),

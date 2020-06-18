@@ -38,7 +38,7 @@ public:
         BaseTransactionCircuit(pb, state, prefix),
 
         // Inputs
-        owner(pb, NUM_BITS_OWNER, FMT(prefix, ".owner")),
+        owner(pb, NUM_BITS_ADDRESS, FMT(prefix, ".owner")),
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
         tokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID")),
         amount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amount")),
