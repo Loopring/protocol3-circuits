@@ -139,10 +139,10 @@ public:
 
     const Constants& constants;
 
-    TransactionState state;
-
     DualVariableGadget type;
     SelectorBitsGadget selectorBits;
+
+    TransactionState state;
 
     // Process transaction
     NoopCircuit noop;
@@ -195,10 +195,10 @@ public:
 
         constants(_constants),
 
-        state(pb, constants, exchangeID, timestamp, protocolTakerFeeBips, protocolMakerFeeBips, numConditionalTransactionsBefore, FMT(prefix, ".transactionState")),
-
         type(pb, NUM_BITS_TX_TYPE, FMT(prefix, ".type")),
         selectorBits(pb, constants, type.packed, (unsigned int) TransactionType::COUNT, FMT(prefix, ".selectorBits")),
+
+        state(pb, params, constants, exchangeID, timestamp, protocolTakerFeeBips, protocolMakerFeeBips, numConditionalTransactionsBefore, type.packed, FMT(prefix, ".transactionState")),
 
         // Process transaction
         noop(pb, state, FMT(prefix, ".noop")),
@@ -210,8 +210,8 @@ public:
         transfer(pb, state, FMT(prefix, ".transfer")),
         tx(pb, state, selectorBits.result(), {&noop, &spotTrade, &deposit, &withdrawB, &withdraw, &publicKeyUpdate, &transfer}, FMT(prefix, ".tx")),
 
-        signatureVerifierA(pb, params, state.constants, state.accountA.account.publicKey, tx.getOutput(hash_A), tx.getOutput(signatureRequired_A), FMT(prefix, ".signatureVerifierA")),
-        signatureVerifierB(pb, params, state.constants, state.accountB.account.publicKey, tx.getOutput(hash_B), tx.getOutput(signatureRequired_B), FMT(prefix, ".signatureVerifierB")),
+        signatureVerifierA(pb, params, state.constants, jubjub::VariablePointT(tx.getOutput(publicKeyX_A), tx.getOutput(publicKeyY_A)), tx.getOutput(hash_A), tx.getOutput(signatureRequired_A), FMT(prefix, ".signatureVerifierA")),
+        signatureVerifierB(pb, params, state.constants, jubjub::VariablePointT(tx.getOutput(publicKeyX_B), tx.getOutput(publicKeyY_B)), tx.getOutput(hash_B), tx.getOutput(signatureRequired_B), FMT(prefix, ".signatureVerifierB")),
 
         // Update UserA
         updateTradeHistory_A(pb, state.accountA.balanceS.tradingHistory, tx.getArrayOutput(tradeHistoryA_Address),
@@ -274,6 +274,9 @@ public:
 
     void generate_r1cs_witness(const UniversalTransaction& uTx)
     {
+        type.generate_r1cs_witness(pb, uTx.type);
+        selectorBits.generate_r1cs_witness();
+
         state.generate_r1cs_witness(uTx.witness.accountUpdate_A.before,
                                     uTx.witness.balanceUpdateS_A.before,
                                     uTx.witness.balanceUpdateB_A.before,
@@ -286,9 +289,6 @@ public:
                                     uTx.witness.balanceUpdateB_P.before,
                                     uTx.witness.balanceUpdateA_O.before,
                                     uTx.witness.balanceUpdateB_O.before);
-
-        type.generate_r1cs_witness(pb, uTx.type);
-        selectorBits.generate_r1cs_witness();
 
         noop.generate_r1cs_witness();
         spotTrade.generate_r1cs_witness(uTx.spotTrade);

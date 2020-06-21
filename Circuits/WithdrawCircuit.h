@@ -62,6 +62,8 @@ public:
     UnsafeSubGadget balance_after;
 
     // Increase the nonce of the user by 1
+    OrGadget isForcedWithdrawal;
+    NotGadget isNotForcedWithdrawal;
     AddGadget nonce_after;
 
     WithdrawCircuit(
@@ -119,8 +121,10 @@ public:
         // Calculate the new balance
         balance_after(pb, state.accountA.balanceS.balance, amount.packed, FMT(prefix, ".balance_after")),
 
-        // Increase the nonce of From by 1 (unless it's a conditional transfer)
-        nonce_after(pb, state.accountA.account.nonce, state.constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_From_after"))
+        // Increase the nonce by 1 (unless it's a forced withdrawal)
+        isForcedWithdrawal(pb, {validFullWithdrawalType.result(), invalidFullWithdrawalType.result()}, FMT(prefix, ".isForcedWithdrawal")),
+        isNotForcedWithdrawal(pb, isForcedWithdrawal.result(), FMT(prefix, ".isNotForcedWithdrawal")),
+        nonce_after(pb, state.accountA.account.nonce, isNotForcedWithdrawal.result(), NUM_BITS_NONCE, FMT(prefix, ".nonce_after"))
     {
         setArrayOutput(accountA_Address, accountID.bits);
         setOutput(accountA_Nonce, nonce_after.result());
@@ -179,7 +183,9 @@ public:
         // Calculate the new balance
         balance_after.generate_r1cs_witness();
 
-        // Increase the nonce of From by 1
+        // Increase the nonce by 1 (unless it's a forced withdrawal)
+        isForcedWithdrawal.generate_r1cs_witness();
+        isNotForcedWithdrawal.generate_r1cs_witness();
         nonce_after.generate_r1cs_witness();
     }
 
@@ -222,7 +228,9 @@ public:
         // Calculate the new balance
         balance_after.generate_r1cs_constraints();
 
-        // Increase the nonce of From by 1
+        // Increase the nonce by 1 (unless it's a forced withdrawal)
+        isForcedWithdrawal.generate_r1cs_constraints();
+        isNotForcedWithdrawal.generate_r1cs_constraints();
         nonce_after.generate_r1cs_constraints();
     }
 

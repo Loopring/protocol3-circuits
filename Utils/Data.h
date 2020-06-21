@@ -31,12 +31,7 @@ auto dummySpotTrade = R"({
         "tokenS": 0,
         "tokenB": 1,
         "validSince": 0,
-        "validUntil": 4294967295,
-        "signature": {
-            "Rx": "13060336632196495412858530687189935300033555341384637843571668213752389743866",
-            "Ry": "4915883150652842217472446614681036440072632592629277920562695676195366802174",
-            "s": "2049853744288428596543952232796911341686225132653835991176529722328469628710"
-        }
+        "validUntil": 4294967295
     },
     "orderB": {
         "accountID": 0,
@@ -53,31 +48,27 @@ auto dummySpotTrade = R"({
         "tokenS": 1,
         "tokenB": 0,
         "validSince": 0,
-        "validUntil": 4294967295,
-        "signature": {
-            "Rx": "13060336632196495412858530687189935300033555341384637843571668213752389743866",
-            "Ry": "4915883150652842217472446614681036440072632592629277920562695676195366802174",
-            "s": "2049853744288428596543952232796911341686225132653835991176529722328469628710"
-        }
+        "validUntil": 4294967295
     }
 })"_json;
 
 auto dummyTransfer = R"({
     "accountFromID": 0,
-    "accountToID": 0,
+    "accountToID": 2,
     "amount": "0",
     "fee": "0",
     "feeTokenID": 0,
     "transTokenID": 0,
+    "validUntil": 4294967295,
     "type": 0,
     "ownerFrom": "0",
-    "ownerTo": "0",
-    "nonce": 0,
-    "signature": {
-        "Rx": "13060336632196495412858530687189935300033555341384637843571668213752389743866",
-        "Ry": "4915883150652842217472446614681036440072632592629277920562695676195366802174",
-        "s": "2049853744288428596543952232796911341686225132653835991176529722328469628710"
-    }
+    "ownerTo": "2",
+    "dualAuthorX": "0",
+    "dualAuthorY": "0",
+    "payerAccountToID": 2,
+    "payerOwnerTo": "2",
+    "payeeAccountToID": 2,
+    "nonce": 0
 })"_json;
 
 auto dummyWithdraw = R"({
@@ -88,20 +79,15 @@ auto dummyWithdraw = R"({
     "feeTokenID": 0,
     "fee": "0",
     "to": "0",
-    "type": 0,
-    "signature": {
-        "Rx": "13060336632196495412858530687189935300033555341384637843571668213752389743866",
-        "Ry": "4915883150652842217472446614681036440072632592629277920562695676195366802174",
-        "s": "2049853744288428596543952232796911341686225132653835991176529722328469628710"
-    }
+    "type": 0
 })"_json;
 
 auto dummyPublicKeyUpdate = R"({
     "owner": "0",
     "accountID": 0,
     "nonce": 0,
-    "publicKeyX": "0",
-    "publicKeyY": "0",
+    "publicKeyX": "13060336632196495412858530687189935300033555341384637843571668213752389743866",
+    "publicKeyY": "4915883150652842217472446614681036440072632592629277920562695676195366802174",
     "feeTokenID": 0,
     "fee": "0"
 })"_json;
@@ -407,7 +393,13 @@ public:
     ethsnarks::FieldT amount;
     ethsnarks::FieldT feeTokenID;
     ethsnarks::FieldT fee;
+    ethsnarks::FieldT validUntil;
     ethsnarks::FieldT ownerTo;
+    ethsnarks::FieldT dualAuthorX;
+    ethsnarks::FieldT dualAuthorY;
+    ethsnarks::FieldT payerAccountToID;
+    ethsnarks::FieldT payerOwnerTo;
+    ethsnarks::FieldT payeeAccountToID;
     ethsnarks::FieldT type;
 };
 
@@ -419,7 +411,13 @@ static void from_json(const json& j, Transfer& transfer)
     transfer.amount = ethsnarks::FieldT(j["amount"].get<std::string>().c_str());
     transfer.feeTokenID = ethsnarks::FieldT(j.at("feeTokenID"));
     transfer.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
+    transfer.validUntil = ethsnarks::FieldT(j.at("validUntil"));
     transfer.ownerTo = ethsnarks::FieldT(j["ownerTo"].get<std::string>().c_str());
+    transfer.dualAuthorX = ethsnarks::FieldT(j["dualAuthorX"].get<std::string>().c_str());
+    transfer.dualAuthorY = ethsnarks::FieldT(j["dualAuthorY"].get<std::string>().c_str());
+    transfer.payerAccountToID = ethsnarks::FieldT(j.at("payerAccountToID"));
+    transfer.payerOwnerTo = ethsnarks::FieldT(j["payerOwnerTo"].get<std::string>().c_str());
+    transfer.payeeAccountToID = ethsnarks::FieldT(j.at("payeeAccountToID"));
     transfer.type = ethsnarks::FieldT(j.at("type"));
 }
 
@@ -481,6 +479,10 @@ static void from_json(const json& j, Witness& state)
     {
         state.signatureB = j.at("signatureB").get<Signature>();
     }
+    else
+    {
+        state.signatureB = state.signatureA;
+    }
 }
 
 class UniversalTransaction
@@ -506,11 +508,12 @@ static void from_json(const json& j, UniversalTransaction& transaction)
     transaction.deposit = dummyDeposit.get<Loopring::Deposit>();
     transaction.publicKeyUpdate = dummyPublicKeyUpdate.get<Loopring::PublicKeyUpdate>();
 
-    // Patch some of the dummy tx's so they are valid agains the current state
+    // Patch some of the dummy tx's so they are valid against the current state
     // Deposit
     transaction.deposit.owner = transaction.witness.accountUpdate_A.before.owner;
     // Transfer
     transaction.transfer.ownerTo = transaction.witness.accountUpdate_B.before.owner;
+    transaction.transfer.payerOwnerTo = transaction.witness.accountUpdate_B.before.owner;
 
     // Now get the actual transaction data for the actual transaction that will execute from the block
     if (j.contains("noop"))

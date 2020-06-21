@@ -43,7 +43,7 @@ public:
     const VariableT halfP;
     const VariableT emptyTradeHistory;
     const VariableT maxAmount;
-    const VariableT base;
+    const VariableT txTypeTransfer;
     const VariableArrayT zeroAccount;
 
     const VariableT maxConcurrentOrderIDs;
@@ -72,7 +72,7 @@ public:
         emptyTradeHistory(make_variable(pb, ethsnarks::FieldT(EMPTY_TRADE_HISTORY), FMT(prefix, ".emptyTradeHistory"))),
         maxAmount(make_variable(pb, ethsnarks::FieldT(MAX_AMOUNT), FMT(prefix, ".maxAmount"))),
         maxConcurrentOrderIDs(make_variable(pb, ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS), FMT(prefix, ".maxConcurrentOrderIDs"))),
-        base(make_variable(pb, ethsnarks::FieldT(BASE), FMT(prefix, ".base"))),
+        txTypeTransfer(make_variable(pb, ethsnarks::FieldT(int(TransactionType::Transfer)), FMT(prefix, ".txTypeTransfer"))),
         zeroAccount(NUM_BITS_ACCOUNT, zero)
     {
         assert(NUM_BITS_MAX_VALUE == FieldT::size_in_bits());
@@ -112,7 +112,78 @@ public:
         pb.add_r1cs_constraint(ConstraintT(emptyTradeHistory, FieldT::one(), ethsnarks::FieldT(EMPTY_TRADE_HISTORY)), ".emptyTradeHistory");
         pb.add_r1cs_constraint(ConstraintT(maxAmount, FieldT::one(), ethsnarks::FieldT(MAX_AMOUNT)), ".maxAmount");
         pb.add_r1cs_constraint(ConstraintT(maxConcurrentOrderIDs, FieldT::one(), ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS)), ".maxConcurrentOrderIDs");
-        pb.add_r1cs_constraint(ConstraintT(base, FieldT::one(), ethsnarks::FieldT(BASE)), ".base");
+        pb.add_r1cs_constraint(ConstraintT(txTypeTransfer, FieldT::one(), ethsnarks::FieldT(int(TransactionType::Transfer))), ".txTypeTransfer");
+    }
+};
+
+class DualVariableGadget : public libsnark::dual_variable_gadget<FieldT>
+{
+public:
+    bool fromPacked = false;
+    bool fromBits = false;
+
+    DualVariableGadget(
+        ProtoboardT& pb,
+        const size_t width,
+        const std::string& prefix
+    ) :
+        libsnark::dual_variable_gadget<FieldT>(pb, width, prefix)
+    {
+
+    }
+
+    DualVariableGadget(
+        ProtoboardT& pb,
+        const VariableT& value,
+        const size_t width,
+        const std::string& prefix
+    ) :
+        libsnark::dual_variable_gadget<FieldT>(pb, value, width, prefix)
+    {
+        fromPacked = true;
+    }
+
+    DualVariableGadget(
+        ProtoboardT& pb,
+        const VariableArrayT& bits,
+        const std::string& prefix
+    ) :
+        libsnark::dual_variable_gadget<FieldT>(pb, bits, prefix)
+    {
+        fromBits = true;
+    }
+
+    void generate_r1cs_witness()
+    {
+        if (fromPacked)
+        {
+            generate_r1cs_witness_from_packed();
+        }
+        if (fromBits)
+        {
+            generate_r1cs_witness_from_bits();
+        }
+    }
+
+    void generate_r1cs_witness(ProtoboardT& pb, const FieldT& value)
+    {
+        pb.val(packed) = value;
+        generate_r1cs_witness_from_packed();
+    }
+
+    void generate_r1cs_witness(ProtoboardT& pb, const LimbT& value)
+    {
+        assert(value.max_bits() == 256);
+        for (unsigned int i = 0; i < 256; i++)
+        {
+            pb.val(bits[255 - i]) = value.test_bit(i);
+        }
+        generate_r1cs_witness_from_bits();
+    }
+
+    void generate_r1cs_constraints(bool enforce = true)
+    {
+        libsnark::dual_variable_gadget<FieldT>::generate_r1cs_constraints(enforce);
     }
 };
 
@@ -756,6 +827,7 @@ public:
     libsnark::comparison_gadget<ethsnarks::FieldT> comparison;
     NotGadget _gt;
     NotGadget _gte;
+    AndGadget _eq;
 
     LeqGadget(
         ProtoboardT& pb,
@@ -770,10 +842,11 @@ public:
         _leq(make_variable(pb, 1, FMT(prefix, ".leq"))),
         comparison(pb, n, A, B, _lt, _leq, FMT(prefix, ".A <(=) B")),
         _gt(pb, _leq, FMT(prefix, ".gt")),
-        _gte(pb, _lt, FMT(prefix, ".gte"))
+        _gte(pb, _lt, FMT(prefix, ".gte")),
+        _eq(pb, {_leq, _gte.result()}, FMT(prefix, ".eq"))
     {
         // The comparison gadget is only guaranteed to work correctly on values in the field capacity - 1
-        //assert(n <= NUM_BITS_FIELD_CAPACITY - 1);
+        assert(n <= NUM_BITS_FIELD_CAPACITY - 1);
     }
 
     const VariableT& lt() const
@@ -786,9 +859,9 @@ public:
         return _leq;
     }
 
-    const VariableT& gt() const
+    const VariableT& eq() const
     {
-        return _gt.result();
+        return _eq.result();
     }
 
     const VariableT& gte() const
@@ -796,11 +869,17 @@ public:
         return _gte.result();
     }
 
+    const VariableT& gt() const
+    {
+        return _gt.result();
+    }
+
     void generate_r1cs_witness()
     {
         comparison.generate_r1cs_witness();
         _gt.generate_r1cs_witness();
         _gte.generate_r1cs_witness();
+        _eq.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
@@ -808,6 +887,144 @@ public:
         comparison.generate_r1cs_constraints();
         _gt.generate_r1cs_constraints();
         _gte.generate_r1cs_constraints();
+        _eq.generate_r1cs_constraints();
+    }
+};
+
+// (A < B)
+class LtFieldGadget : public GadgetT
+{
+public:
+
+    field2bits_strict Abits;
+    field2bits_strict Bbits;
+    DualVariableGadget Alo;
+    DualVariableGadget Ahi;
+    DualVariableGadget Blo;
+    DualVariableGadget Bhi;
+    LeqGadget partLo;
+    LeqGadget partHi;
+    TernaryGadget res;
+
+    LtFieldGadget(
+        ProtoboardT& pb,
+        const VariableT& A,
+        const VariableT& B,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        Abits(pb, A, FMT(prefix, ".Abits")),
+        Bbits(pb, B, FMT(prefix, ".Bbits")),
+
+        Alo(pb, subArray(Abits.result(), 0, 254/2), FMT(prefix, ".Alo")),
+        Ahi(pb, subArray(Abits.result(), 254/2, 254/2), FMT(prefix, ".Ahi")),
+        Blo(pb, subArray(Bbits.result(), 0, 254/2), FMT(prefix, ".Blo")),
+        Bhi(pb, subArray(Bbits.result(), 254/2, 254/2), FMT(prefix, ".Bhi")),
+        partLo(pb, Alo.packed, Blo.packed, 254/2, FMT(prefix, ".partLo")),
+        partHi(pb, Ahi.packed, Bhi.packed, 254/2, FMT(prefix, ".partHi")),
+        res(pb, partHi.eq(), partLo.lt(), partHi.lt(), FMT(prefix, ".res"))
+    {
+
+    }
+
+    const VariableT& lt() const
+    {
+        return res.result();
+    }
+
+    void generate_r1cs_witness()
+    {
+        Abits.generate_r1cs_witness();
+        Bbits.generate_r1cs_witness();
+        Alo.generate_r1cs_witness();
+        Ahi.generate_r1cs_witness();
+        Blo.generate_r1cs_witness();
+        Bhi.generate_r1cs_witness();
+        partLo.generate_r1cs_witness();
+        partHi.generate_r1cs_witness();
+        res.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        Abits.generate_r1cs_constraints();
+        Bbits.generate_r1cs_constraints();
+        Alo.generate_r1cs_constraints();
+        Ahi.generate_r1cs_constraints();
+        Blo.generate_r1cs_constraints();
+        Bhi.generate_r1cs_constraints();
+        partLo.generate_r1cs_constraints();
+        partHi.generate_r1cs_constraints();
+        res.generate_r1cs_constraints();
+    }
+};
+
+// (A < B)
+class RequireValidPublicKey : public GadgetT
+{
+public:
+
+    const Params& params;
+
+    // Needs to be a valid point
+    PointValidator requireValidPoint;
+
+    // Point needs to be compressable
+    const VariableT& y;
+    VariableT yy;
+    VariableT lhs;
+    VariableT rhs;
+    VariableT irhs;
+    VariableT xx;
+    VariableT x;
+
+    RequireValidPublicKey(
+        ProtoboardT& pb,
+        const Params& _params,
+        const VariableT& _x,
+        const VariableT& _y,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        params(_params),
+
+        requireValidPoint(pb, params, _x, _y, FMT(prefix, ".requireValidPoint")),
+
+        y(_y),
+        yy(make_variable(pb, FMT(prefix, ".yy"))),
+        lhs(make_variable(pb, FMT(prefix, ".lhs"))),
+        rhs(make_variable(pb, FMT(prefix, ".rhs"))),
+        irhs(make_variable(pb, FMT(prefix, ".irhs"))),
+        xx(make_variable(pb, FMT(prefix, ".xx"))),
+        x(make_variable(pb, FMT(prefix, ".x")))
+    {
+
+    }
+
+    void generate_r1cs_witness()
+    {
+        requireValidPoint.generate_r1cs_witness();
+
+        pb.val(yy) = pb.val(y).squared();
+        pb.val(lhs) = pb.val(yy) - 1;
+        pb.val(rhs) = params.d * pb.val(yy) - params.a;
+        pb.val(irhs) = pb.val(rhs).inverse();
+        pb.val(xx) = pb.val(lhs) * pb.val(irhs);
+        pb.val(x) = pb.val(xx).sqrt();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        requireValidPoint.generate_r1cs_constraints();
+
+        pb.add_r1cs_constraint(ConstraintT(y, y, yy), FMT(annotation_prefix, ".yy"));
+        pb.add_r1cs_constraint(ConstraintT(yy - 1, 1, lhs), FMT(annotation_prefix, ".lhs"));
+        pb.add_r1cs_constraint(ConstraintT((params.d * yy) - params.a, 1, rhs), FMT(annotation_prefix, ".rhs"));
+        pb.add_r1cs_constraint(ConstraintT(rhs, irhs, 1), FMT(annotation_prefix, ".irhs"));
+        pb.add_r1cs_constraint(ConstraintT(lhs, irhs, xx), FMT(annotation_prefix, ".xx"));
+        pb.add_r1cs_constraint(ConstraintT(x, x, xx), FMT(annotation_prefix, ".x"));
     }
 };
 
@@ -915,38 +1132,112 @@ public:
     }
 };
 
-// if (A) then require(B)
+// if (C) then require(A)
 class IfThenRequireGadget : public GadgetT
 {
 public:
-    NotGadget notA;
+    NotGadget notC;
     OrGadget res;
 
     IfThenRequireGadget(
         ProtoboardT& pb,
+        const VariableT& C,
         const VariableT& A,
-        const VariableT& B,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
-        notA(pb, A, FMT(prefix, ".notA")),
-        res(pb, {notA.result(), B}, FMT(prefix, ".res"))
+        notC(pb, C, FMT(prefix, ".notC")),
+        res(pb, {notC.result(), A}, FMT(prefix, ".res"))
     {
 
     }
 
     void generate_r1cs_witness()
     {
-        notA.generate_r1cs_witness();
+        notC.generate_r1cs_witness();
         res.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
-        notA.generate_r1cs_constraints();
+        notC.generate_r1cs_constraints();
         res.generate_r1cs_constraints();
         pb.add_r1cs_constraint(ConstraintT(res.result(), FieldT::one(), FieldT::one()), FMT(annotation_prefix, ".valid"));
+    }
+};
+
+// if (C) then require(A == B)
+class IfThenRequireEqualGadget : public GadgetT
+{
+public:
+    EqualGadget eq;
+    IfThenRequireGadget res;
+
+    IfThenRequireEqualGadget(
+        ProtoboardT& pb,
+        const VariableT& C,
+        const VariableT& A,
+        const VariableT& B,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        eq(pb, A, B, FMT(prefix, ".eq")),
+        res(pb, C, eq.result(), FMT(prefix, ".res"))
+    {
+
+    }
+
+    void generate_r1cs_witness()
+    {
+        eq.generate_r1cs_witness();
+        res.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        eq.generate_r1cs_constraints();
+        res.generate_r1cs_constraints();
+    }
+};
+
+// if (C) then require(A != B)
+class IfThenRequireNotEqualGadget : public GadgetT
+{
+public:
+    EqualGadget eq;
+    NotGadget notEq;
+    IfThenRequireGadget res;
+
+    IfThenRequireNotEqualGadget(
+        ProtoboardT& pb,
+        const VariableT& C,
+        const VariableT& A,
+        const VariableT& B,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        eq(pb, A, B, FMT(prefix, ".eq")),
+        notEq(pb, eq.result(), FMT(prefix, ".notEq")),
+        res(pb, C, notEq.result(), FMT(prefix, ".res"))
+    {
+
+    }
+
+    void generate_r1cs_witness()
+    {
+        eq.generate_r1cs_witness();
+        notEq.generate_r1cs_witness();
+        res.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        eq.generate_r1cs_constraints();
+        notEq.generate_r1cs_constraints();
+        res.generate_r1cs_constraints();
     }
 };
 
@@ -1499,57 +1790,6 @@ public:
     const VariableArrayT& result() const
     {
         return dualVariable.bits;
-    }
-};
-
-class DualVariableGadget : public libsnark::dual_variable_gadget<FieldT>
-{
-public:
-    DualVariableGadget(
-        ProtoboardT& pb,
-        const size_t width,
-        const std::string& prefix
-    ) :
-        libsnark::dual_variable_gadget<FieldT>(pb, width, prefix)
-    {
-
-    }
-
-    DualVariableGadget(
-        ProtoboardT& pb,
-        const VariableT& value,
-        const size_t width,
-        const std::string& prefix
-    ) :
-        libsnark::dual_variable_gadget<FieldT>(pb, value, width, prefix)
-    {
-
-    }
-
-    void generate_r1cs_witness()
-    {
-        generate_r1cs_witness_from_packed();
-    }
-
-    void generate_r1cs_witness(ProtoboardT& pb, const FieldT& value)
-    {
-        pb.val(packed) = value;
-        generate_r1cs_witness_from_packed();
-    }
-
-    void generate_r1cs_witness(ProtoboardT& pb, const LimbT& value)
-    {
-        assert(value.max_bits() == 256);
-        for (unsigned int i = 0; i < 256; i++)
-        {
-            pb.val(bits[255 - i]) = value.test_bit(i);
-        }
-        generate_r1cs_witness_from_bits();
-    }
-
-    void generate_r1cs_constraints(bool enforce = true)
-    {
-        libsnark::dual_variable_gadget<FieldT>::generate_r1cs_constraints(enforce);
     }
 };
 

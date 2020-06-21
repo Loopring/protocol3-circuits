@@ -14,6 +14,24 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
+/*
+    Default: ownerTo != 0 and accountID_To != 0
+    New account: ownerTo != 0 and accountID_To == 0
+    Open: ownerTo == 0 and accountID_To == 0
+    Invalid: ownerTo == 0 and accountID_To != 0
+
+    // Allow the payer to use dual authoring
+    if (payer_owner_To != 0) {
+        require(payer_owner_To == owner_To);
+        require(payer_accountID_To == payee_accountID_To);
+    }
+    // Allow sending to an address instead of a specific accountID.
+    if (payee_accountID_To != 0) {
+        require(payee_accountID_To == accountID_To);
+    }
+    require (owner_To != 0);
+    require (accountID_To > 1);
+*/
 class TransferCircuit : public BaseTransactionCircuit
 {
 public:
@@ -25,13 +43,37 @@ public:
     DualVariableGadget amount;
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
+    DualVariableGadget validUntil;
     DualVariableGadget type;
     DualVariableGadget owner_From;
     DualVariableGadget owner_To;
     DualVariableGadget nonce;
+    VariableT dualAuthorX;
+    VariableT dualAuthorY;
+    DualVariableGadget payer_accountID_To;
+    DualVariableGadget payer_owner_To;
+    DualVariableGadget payee_accountID_To;
+
+    // Check if the inputs are valid
+    EqualGadget isTransfer;
+    IsNonZero isNonZero_payer_owner_To;
+    IfThenRequireEqualGadget ifrequire_payer_owner_To_eq_owner_To;
+    IfThenRequireEqualGadget ifrequire_payer_accountID_To_eq_payee_accountID_To;
+    IsNonZero isNonZero_payee_accountID_To;
+    IfThenRequireEqualGadget ifrequire_payee_accountID_To_eq_accountID_To;
+    RequireLtGadget one_lt_accountID_To;
+    IfThenRequireNotEqualGadget ifrequire_NotZero_owner_To;
+
+    // Fill in standard dual author key if none is given
+    IsNonZero isNonZero_dualAuthorX;
+    IsNonZero isNonZero_dualAuthorY;
+    OrGadget isNonZero_dualAuthor;
+    TernaryGadget resolvedDualAuthorX;
+    TernaryGadget resolvedDualAuthorY;
 
     // Signature
-    Poseidon_gadget_T<9, 1, 6, 53, 8, 1> hash;
+    Poseidon_gadget_T<13, 1, 6, 53, 12, 1> hashPayer;
+    Poseidon_gadget_T<13, 1, 6, 53, 12, 1> hashDual;
 
     // Balances
     DynamicVariableGadget balanceS_A;
@@ -77,21 +119,63 @@ public:
         amount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amount")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
+        validUntil(pb, NUM_BITS_TIMESTAMP, FMT(prefix, ".validUntil")),
         type(pb, NUM_BITS_TYPE, FMT(prefix, ".type")),
         owner_From(pb, state.accountA.account.owner, NUM_BITS_ADDRESS, FMT(prefix, ".owner_From")),
         owner_To(pb, NUM_BITS_ADDRESS, FMT(prefix, ".owner_To")),
         nonce(pb, state.accountA.account.nonce, NUM_BITS_NONCE, FMT(prefix, ".nonce")),
+        dualAuthorX(make_variable(pb, FMT(prefix, ".dualAuthorX"))),
+        dualAuthorY(make_variable(pb, FMT(prefix, ".dualAuthorY"))),
+        payer_accountID_To(pb, NUM_BITS_ADDRESS, FMT(prefix, ".payer_accountID_To")),
+        payer_owner_To(pb, NUM_BITS_ADDRESS, FMT(prefix, ".payer_owner_To")),
+        payee_accountID_To(pb, NUM_BITS_ADDRESS, FMT(prefix, ".payee_accountID_To")),
 
-        hash(pb, var_array({
+        // Check if the inputs are valid
+        isTransfer(pb, state.type, state.constants.txTypeTransfer, FMT(prefix, ".isTransfer")),
+        isNonZero_payer_owner_To(pb, payer_owner_To.packed, FMT(prefix, ".isNonZero_payer_owner_To")),
+        ifrequire_payer_owner_To_eq_owner_To(pb, isNonZero_payer_owner_To.result(), payer_owner_To.packed, owner_To.packed, FMT(prefix, ".ifrequire_payer_owner_To_eq_owner_To")),
+        ifrequire_payer_accountID_To_eq_payee_accountID_To(pb, isNonZero_payer_owner_To.result(), payer_accountID_To.packed, accountID_To.packed, FMT(prefix, ".ifrequire_payer_accountID_To_eq_payee_accountID_To")),
+        isNonZero_payee_accountID_To(pb, payee_accountID_To.packed, FMT(prefix, ".isNonZero_payee_accountID_To")),
+        ifrequire_payee_accountID_To_eq_accountID_To(pb, isNonZero_payee_accountID_To.result(), payee_accountID_To.packed, accountID_To.packed, FMT(prefix, ".ifrequire_payee_accountID_To_eq_accountID_To")),
+        one_lt_accountID_To(pb, state.constants.one, accountID_To.packed, NUM_BITS_ACCOUNT, FMT(prefix, ".one_lt_accountID_To")),
+        ifrequire_NotZero_owner_To(pb, isTransfer.result(), owner_To.packed, state.constants.zero, FMT(prefix, ".ifrequire_NotZero_owner_To")),
+
+        // Fill in standard dual author key if none is given
+        isNonZero_dualAuthorX(pb, dualAuthorX, FMT(prefix, ".isNonZero_dualAuthorX")),
+        isNonZero_dualAuthorY(pb, dualAuthorY, FMT(prefix, ".isNonZero_dualAuthorY")),
+        isNonZero_dualAuthor(pb, {isNonZero_dualAuthorX.result(), isNonZero_dualAuthorY.result()}, FMT(prefix, ".isNonZero_dualAuthor")),
+        resolvedDualAuthorX(pb, isNonZero_dualAuthor.result(), dualAuthorX, state.accountA.account.publicKey.x, FMT(prefix, ".resolvedDualAuthorX")),
+        resolvedDualAuthorY(pb, isNonZero_dualAuthor.result(), dualAuthorY, state.accountA.account.publicKey.y, FMT(prefix, ".resolvedDualAuthorY")),
+
+        // Hashes
+        hashPayer(pb, var_array({
             state.exchangeID,
             accountID_From.packed,
-            accountID_To.packed,
+            payer_accountID_To.packed,
             tokenID.packed,
             amount.packed,
             feeTokenID.packed,
             fee.packed,
+            validUntil.packed,
+            payer_owner_To.packed,
+            dualAuthorX,
+            dualAuthorY,
             nonce.packed
-        }), FMT(this->annotation_prefix, ".hash")),
+        }), FMT(this->annotation_prefix, ".hashPayer")),
+        hashDual(pb, var_array({
+            state.exchangeID,
+            accountID_From.packed,
+            payee_accountID_To.packed,
+            tokenID.packed,
+            amount.packed,
+            feeTokenID.packed,
+            fee.packed,
+            validUntil.packed,
+            owner_To.packed,
+            dualAuthorX,
+            dualAuthorY,
+            nonce.packed
+        }), FMT(this->annotation_prefix, ".hashDual")),
 
         // Balances
         balanceS_A(pb, state.accountA.balanceS.balance, FMT(prefix, ".balanceS_A")),
@@ -100,7 +184,7 @@ public:
         balanceA_O(pb, state.oper.balanceA.balance, FMT(prefix, ".balanceA_O")),
 
         // Owner
-        ownerValid(pb, state.constants, state.accountB.account.owner, owner_To.packed, FMT(prefix, ".owner_To_equal_accountID_To_owner")),
+        ownerValid(pb, state.constants, state.accountB.account.owner, owner_To.packed, FMT(prefix, ".ownerValid")),
         //owner_delta(pb, owner_To_equal_accountID_To_owner.result(), VariableArrayT(NUM_BITS_ADDRESS, state.constants.zero), owner_To.bits, FMT(prefix, ".owner_delta")),
 
         // Type
@@ -139,10 +223,14 @@ public:
 
         setOutput(balanceO_A_Balance, balanceA_O.back());
 
-        setOutput(hash_A, hash.result());
+        setOutput(hash_A, hashPayer.result());
+
+        setOutput(hash_B, hashDual.result());
+        setOutput(publicKeyX_B, resolvedDualAuthorX.result());
+        setOutput(publicKeyY_B, resolvedDualAuthorY.result());
 
         setOutput(signatureRequired_A, needsSignature.result());
-        setOutput(signatureRequired_B, state.constants.zero);
+        setOutput(signatureRequired_B, needsSignature.result());
 
         setOutput(misc_NumConditionalTransactions, numConditionalTransactionsAfter.result());
     }
@@ -156,13 +244,37 @@ public:
         amount.generate_r1cs_witness(pb, transfer.amount);
         feeTokenID.generate_r1cs_witness(pb, transfer.feeTokenID);
         fee.generate_r1cs_witness(pb, transfer.fee);
+        validUntil.generate_r1cs_witness(pb, transfer.validUntil);
         type.generate_r1cs_witness(pb, transfer.type);
         owner_From.generate_r1cs_witness();
         owner_To.generate_r1cs_witness(pb, transfer.ownerTo);
         nonce.generate_r1cs_witness();
+        pb.val(dualAuthorX) = transfer.dualAuthorX;
+        pb.val(dualAuthorY) = transfer.dualAuthorY;
+        payer_accountID_To.generate_r1cs_witness(pb, transfer.payerAccountToID);
+        payer_owner_To.generate_r1cs_witness(pb, transfer.payerOwnerTo);
+        payee_accountID_To.generate_r1cs_witness(pb, transfer.payeeAccountToID);
 
-        // Signature
-        hash.generate_r1cs_witness();
+        // Check if the inputs are valid
+        isTransfer.generate_r1cs_witness();
+        isNonZero_payer_owner_To.generate_r1cs_witness();
+        ifrequire_payer_owner_To_eq_owner_To.generate_r1cs_witness();
+        ifrequire_payer_accountID_To_eq_payee_accountID_To.generate_r1cs_witness();
+        isNonZero_payee_accountID_To.generate_r1cs_witness();
+        ifrequire_payee_accountID_To_eq_accountID_To.generate_r1cs_witness();
+        one_lt_accountID_To.generate_r1cs_witness();
+        ifrequire_NotZero_owner_To.generate_r1cs_witness();
+
+        // Fill in standard dual author key if none is given
+        isNonZero_dualAuthorX.generate_r1cs_witness();
+        isNonZero_dualAuthorY.generate_r1cs_witness();
+        isNonZero_dualAuthor.generate_r1cs_witness();
+        resolvedDualAuthorX.generate_r1cs_witness();
+        resolvedDualAuthorY.generate_r1cs_witness();
+
+        // Signatures
+        hashPayer.generate_r1cs_witness();
+        hashDual.generate_r1cs_witness();
 
         // Owner
         ownerValid.generate_r1cs_witness();
@@ -204,8 +316,26 @@ public:
         owner_To.generate_r1cs_constraints(true);
         nonce.generate_r1cs_constraints(true);
 
+        // Check if the inputs are valid
+        isTransfer.generate_r1cs_constraints();
+        isNonZero_payer_owner_To.generate_r1cs_constraints();
+        ifrequire_payer_owner_To_eq_owner_To.generate_r1cs_constraints();
+        ifrequire_payer_accountID_To_eq_payee_accountID_To.generate_r1cs_constraints();
+        isNonZero_payee_accountID_To.generate_r1cs_constraints();
+        ifrequire_payee_accountID_To_eq_accountID_To.generate_r1cs_constraints();
+        one_lt_accountID_To.generate_r1cs_constraints();
+        ifrequire_NotZero_owner_To.generate_r1cs_constraints();
+
+        // Fill in standard dual author key if none is given
+        isNonZero_dualAuthorX.generate_r1cs_constraints();
+        isNonZero_dualAuthorY.generate_r1cs_constraints();
+        isNonZero_dualAuthor.generate_r1cs_constraints();
+        resolvedDualAuthorX.generate_r1cs_constraints();
+        resolvedDualAuthorY.generate_r1cs_constraints();
+
         // Signature
-        hash.generate_r1cs_constraints();
+        hashPayer.generate_r1cs_constraints();
+        hashDual.generate_r1cs_constraints();
 
         // Owner
         ownerValid.generate_r1cs_constraints();

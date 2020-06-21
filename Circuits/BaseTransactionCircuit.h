@@ -70,6 +70,8 @@ struct TransactionAccountBalancesState : public GadgetT
 
 struct TransactionState : public GadgetT
 {
+    const jubjub::Params& params;
+
     const Constants& constants;
 
     const VariableT& exchangeID;
@@ -77,6 +79,7 @@ struct TransactionState : public GadgetT
     const VariableT& protocolTakerFeeBips;
     const VariableT& protocolMakerFeeBips;
     const VariableT& numConditionalTransactions;
+    const VariableT& type;
 
     TransactionAccountState accountA;
     TransactionAccountState accountB;
@@ -85,15 +88,19 @@ struct TransactionState : public GadgetT
 
     TransactionState(
         ProtoboardT& pb,
+        const jubjub::Params& _params,
         const Constants& _constants,
         const VariableT& _exchangeID,
         const VariableT& _timestamp,
         const VariableT& _protocolTakerFeeBips,
         const VariableT& _protocolMakerFeeBips,
         const VariableT& _numConditionalTransactions,
+        const VariableT& _type,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
+
+        params(_params),
 
         constants(_constants),
 
@@ -102,6 +109,7 @@ struct TransactionState : public GadgetT
         protocolTakerFeeBips(_protocolTakerFeeBips),
         protocolMakerFeeBips(_protocolMakerFeeBips),
         numConditionalTransactions(_numConditionalTransactions),
+        type(_type),
 
         accountA(pb, FMT(prefix, ".accountA")),
         accountB(pb, FMT(prefix, ".accountB")),
@@ -219,9 +227,13 @@ enum TxVariable
 
 
     hash_A,
+    publicKeyX_A,
+    publicKeyY_A,
     signatureRequired_A,
 
     hash_B,
+    publicKeyX_B,
+    publicKeyY_B,
     signatureRequired_B,
 
 
@@ -288,9 +300,13 @@ public:
 
 
         uOutputs[hash_A] = state.constants.zero;
+        uOutputs[publicKeyX_A] = state.accountA.account.publicKey.x;
+        uOutputs[publicKeyY_A] = state.accountA.account.publicKey.y;
         uOutputs[signatureRequired_A] = state.constants.one;
 
         uOutputs[hash_B] = state.constants.zero;
+        uOutputs[publicKeyX_B] = state.accountB.account.publicKey.x;
+        uOutputs[publicKeyY_B] = state.accountB.account.publicKey.y;
         uOutputs[signatureRequired_B] = state.constants.one;
 
 
