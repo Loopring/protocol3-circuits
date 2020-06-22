@@ -144,7 +144,7 @@ public:
         setOutput(misc_NumConditionalTransactions, numConditionalTransactionsAfter.result());
     }
 
-    void generate_r1cs_witness(const OffchainWithdrawal& withdrawal)
+    void generate_r1cs_witness(const Withdrawal& withdrawal)
     {
         // Inputs
         owner.generate_r1cs_witness();
@@ -156,6 +156,7 @@ public:
         fee.generate_r1cs_witness(pb, withdrawal.fee);
         to.generate_r1cs_witness(pb, withdrawal.to);
         type.generate_r1cs_witness(pb, withdrawal.type);
+
         // Signature
         hash.generate_r1cs_witness();
 

@@ -44,6 +44,7 @@ public:
     const VariableT emptyTradeHistory;
     const VariableT maxAmount;
     const VariableT txTypeTransfer;
+    const VariableT txTypeNewAccount;
     const VariableArrayT zeroAccount;
 
     const VariableT maxConcurrentOrderIDs;
@@ -73,6 +74,7 @@ public:
         maxAmount(make_variable(pb, ethsnarks::FieldT(MAX_AMOUNT), FMT(prefix, ".maxAmount"))),
         maxConcurrentOrderIDs(make_variable(pb, ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS), FMT(prefix, ".maxConcurrentOrderIDs"))),
         txTypeTransfer(make_variable(pb, ethsnarks::FieldT(int(TransactionType::Transfer)), FMT(prefix, ".txTypeTransfer"))),
+        txTypeNewAccount(make_variable(pb, ethsnarks::FieldT(int(TransactionType::NewAccount)), FMT(prefix, ".txTypeNewAccount"))),
         zeroAccount(NUM_BITS_ACCOUNT, zero)
     {
         assert(NUM_BITS_MAX_VALUE == FieldT::size_in_bits());
@@ -113,6 +115,7 @@ public:
         pb.add_r1cs_constraint(ConstraintT(maxAmount, FieldT::one(), ethsnarks::FieldT(MAX_AMOUNT)), ".maxAmount");
         pb.add_r1cs_constraint(ConstraintT(maxConcurrentOrderIDs, FieldT::one(), ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS)), ".maxConcurrentOrderIDs");
         pb.add_r1cs_constraint(ConstraintT(txTypeTransfer, FieldT::one(), ethsnarks::FieldT(int(TransactionType::Transfer))), ".txTypeTransfer");
+        pb.add_r1cs_constraint(ConstraintT(txTypeNewAccount, FieldT::one(), ethsnarks::FieldT(int(TransactionType::NewAccount))), ".txTypeNewAccount");
     }
 };
 
@@ -960,7 +963,6 @@ public:
     }
 };
 
-// (A < B)
 class RequireValidPublicKey : public GadgetT
 {
 public:
@@ -1025,6 +1027,73 @@ public:
         pb.add_r1cs_constraint(ConstraintT(rhs, irhs, 1), FMT(annotation_prefix, ".irhs"));
         pb.add_r1cs_constraint(ConstraintT(lhs, irhs, xx), FMT(annotation_prefix, ".xx"));
         pb.add_r1cs_constraint(ConstraintT(x, x, xx), FMT(annotation_prefix, ".x"));
+    }
+};
+
+class CompressPublicKey : public GadgetT
+{
+public:
+
+    const Params& params;
+    const Constants& constants;
+
+    // Check if the public key is valid
+    RequireValidPublicKey requireValidPublicKey;
+
+    // Point compression
+    UnsafeSubGadget negPublicKeyX;
+    LtFieldGadget isNegativeX;
+    field2bits_strict publicKeyYBits;
+
+    CompressPublicKey(
+        ProtoboardT& pb,
+        const Params& _params,
+        const Constants& _constants,
+        const VariableT& publicKeyX,
+        const VariableT& publicKeyY,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        params(_params),
+        constants(_constants),
+
+        // Check if the public key is valid
+        requireValidPublicKey(pb, params, publicKeyX, publicKeyY, FMT(this->annotation_prefix, ".requireValidPublicKey")),
+
+        // Point compression
+        negPublicKeyX(pb, constants.zero, publicKeyX, FMT(prefix, ".negPublicKeyX")),
+        isNegativeX(pb, negPublicKeyX.result(), publicKeyX, FMT(prefix, ".isNegativeX")),
+        publicKeyYBits(pb, publicKeyY, FMT(prefix, ".publicKeyYBits"))
+    {
+
+    }
+
+    void generate_r1cs_witness()
+    {
+        // Check if the public key is valid
+        requireValidPublicKey.generate_r1cs_witness();
+
+        // Point compression
+        negPublicKeyX.generate_r1cs_witness();
+        isNegativeX.generate_r1cs_witness();
+        publicKeyYBits.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        // Check if the public key is valid
+        requireValidPublicKey.generate_r1cs_constraints();
+
+        // Point compression
+        negPublicKeyX.generate_r1cs_constraints();
+        isNegativeX.generate_r1cs_constraints();
+        publicKeyYBits.generate_r1cs_constraints();
+    }
+
+    VariableArrayT result() const
+    {
+        return reverse(flattenReverse({VariableArrayT(1, isNegativeX.lt()), VariableArrayT(1, constants.zero), publicKeyYBits.result()}));
     }
 };
 

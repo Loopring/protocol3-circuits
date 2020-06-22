@@ -55,7 +55,7 @@ public:
     DualVariableGadget payee_accountID_To;
 
     // Check if the inputs are valid
-    EqualGadget isTransfer;
+    EqualGadget isTransferTx;
     IsNonZero isNonZero_payer_owner_To;
     IfThenRequireEqualGadget ifrequire_payer_owner_To_eq_owner_To;
     IfThenRequireEqualGadget ifrequire_payer_accountID_To_eq_payee_accountID_To;
@@ -63,6 +63,7 @@ public:
     IfThenRequireEqualGadget ifrequire_payee_accountID_To_eq_accountID_To;
     RequireLtGadget one_lt_accountID_To;
     IfThenRequireNotEqualGadget ifrequire_NotZero_owner_To;
+    RequireLtGadget requireValidUntil;
 
     // Fill in standard dual author key if none is given
     IsNonZero isNonZero_dualAuthorX;
@@ -131,14 +132,15 @@ public:
         payee_accountID_To(pb, NUM_BITS_ADDRESS, FMT(prefix, ".payee_accountID_To")),
 
         // Check if the inputs are valid
-        isTransfer(pb, state.type, state.constants.txTypeTransfer, FMT(prefix, ".isTransfer")),
+        isTransferTx(pb, state.type, state.constants.txTypeTransfer, FMT(prefix, ".isTransferTx")),
         isNonZero_payer_owner_To(pb, payer_owner_To.packed, FMT(prefix, ".isNonZero_payer_owner_To")),
         ifrequire_payer_owner_To_eq_owner_To(pb, isNonZero_payer_owner_To.result(), payer_owner_To.packed, owner_To.packed, FMT(prefix, ".ifrequire_payer_owner_To_eq_owner_To")),
         ifrequire_payer_accountID_To_eq_payee_accountID_To(pb, isNonZero_payer_owner_To.result(), payer_accountID_To.packed, accountID_To.packed, FMT(prefix, ".ifrequire_payer_accountID_To_eq_payee_accountID_To")),
         isNonZero_payee_accountID_To(pb, payee_accountID_To.packed, FMT(prefix, ".isNonZero_payee_accountID_To")),
         ifrequire_payee_accountID_To_eq_accountID_To(pb, isNonZero_payee_accountID_To.result(), payee_accountID_To.packed, accountID_To.packed, FMT(prefix, ".ifrequire_payee_accountID_To_eq_accountID_To")),
         one_lt_accountID_To(pb, state.constants.one, accountID_To.packed, NUM_BITS_ACCOUNT, FMT(prefix, ".one_lt_accountID_To")),
-        ifrequire_NotZero_owner_To(pb, isTransfer.result(), owner_To.packed, state.constants.zero, FMT(prefix, ".ifrequire_NotZero_owner_To")),
+        ifrequire_NotZero_owner_To(pb, isTransferTx.result(), owner_To.packed, state.constants.zero, FMT(prefix, ".ifrequire_NotZero_owner_To")),
+        requireValidUntil(pb, state.timestamp, validUntil.packed, NUM_BITS_TIMESTAMP, FMT(prefix, ".requireValidUntil")),
 
         // Fill in standard dual author key if none is given
         isNonZero_dualAuthorX(pb, dualAuthorX, FMT(prefix, ".isNonZero_dualAuthorX")),
@@ -256,7 +258,7 @@ public:
         payee_accountID_To.generate_r1cs_witness(pb, transfer.payeeAccountToID);
 
         // Check if the inputs are valid
-        isTransfer.generate_r1cs_witness();
+        isTransferTx.generate_r1cs_witness();
         isNonZero_payer_owner_To.generate_r1cs_witness();
         ifrequire_payer_owner_To_eq_owner_To.generate_r1cs_witness();
         ifrequire_payer_accountID_To_eq_payee_accountID_To.generate_r1cs_witness();
@@ -264,6 +266,7 @@ public:
         ifrequire_payee_accountID_To_eq_accountID_To.generate_r1cs_witness();
         one_lt_accountID_To.generate_r1cs_witness();
         ifrequire_NotZero_owner_To.generate_r1cs_witness();
+        requireValidUntil.generate_r1cs_witness();
 
         // Fill in standard dual author key if none is given
         isNonZero_dualAuthorX.generate_r1cs_witness();
@@ -317,7 +320,7 @@ public:
         nonce.generate_r1cs_constraints(true);
 
         // Check if the inputs are valid
-        isTransfer.generate_r1cs_constraints();
+        isTransferTx.generate_r1cs_constraints();
         isNonZero_payer_owner_To.generate_r1cs_constraints();
         ifrequire_payer_owner_To_eq_owner_To.generate_r1cs_constraints();
         ifrequire_payer_accountID_To_eq_payee_accountID_To.generate_r1cs_constraints();
@@ -325,6 +328,7 @@ public:
         ifrequire_payee_accountID_To_eq_accountID_To.generate_r1cs_constraints();
         one_lt_accountID_To.generate_r1cs_constraints();
         ifrequire_NotZero_owner_To.generate_r1cs_constraints();
+        requireValidUntil.generate_r1cs_constraints();
 
         // Fill in standard dual author key if none is given
         isNonZero_dualAuthorX.generate_r1cs_constraints();

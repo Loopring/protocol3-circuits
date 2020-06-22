@@ -16,6 +16,7 @@
 #include "./PublicKeyUpdateCircuit.h"
 #include "./WithdrawCircuit.h"
 #include "./NoopCircuit.h"
+#include "./NewAccountCircuit.h"
 
 #include "ethsnarks.hpp"
 #include "utils.hpp"
@@ -148,7 +149,7 @@ public:
     NoopCircuit noop;
     SpotTradeCircuit spotTrade;
     DepositCircuit deposit;
-    WithdrawCircuit withdrawB;
+    NewAccountCircuit newAccount;
     WithdrawCircuit withdraw;
     PublicKeyUpdateCircuit publicKeyUpdate;
     TransferCircuit transfer;
@@ -204,11 +205,11 @@ public:
         noop(pb, state, FMT(prefix, ".noop")),
         spotTrade(pb, state, FMT(prefix, ".spotTrade")),
         deposit(pb, state, FMT(prefix, ".deposit")),
-        withdrawB(pb, state, FMT(prefix, ".withdrawB")),
+        newAccount(pb, state, FMT(prefix, ".newAccount")),
         withdraw(pb, state, FMT(prefix, ".withdraw")),
         publicKeyUpdate(pb, state, FMT(prefix, ".publicKeyUpdate")),
         transfer(pb, state, FMT(prefix, ".transfer")),
-        tx(pb, state, selectorBits.result(), {&noop, &spotTrade, &deposit, &withdrawB, &withdraw, &publicKeyUpdate, &transfer}, FMT(prefix, ".tx")),
+        tx(pb, state, selectorBits.result(), {&noop, &spotTrade, &deposit, &newAccount, &withdraw, &publicKeyUpdate, &transfer}, FMT(prefix, ".tx")),
 
         signatureVerifierA(pb, params, state.constants, jubjub::VariablePointT(tx.getOutput(publicKeyX_A), tx.getOutput(publicKeyY_A)), tx.getOutput(hash_A), tx.getOutput(signatureRequired_A), FMT(prefix, ".signatureVerifierA")),
         signatureVerifierB(pb, params, state.constants, jubjub::VariablePointT(tx.getOutput(publicKeyX_B), tx.getOutput(publicKeyY_B)), tx.getOutput(hash_B), tx.getOutput(signatureRequired_B), FMT(prefix, ".signatureVerifierB")),
@@ -293,7 +294,7 @@ public:
         noop.generate_r1cs_witness();
         spotTrade.generate_r1cs_witness(uTx.spotTrade);
         deposit.generate_r1cs_witness(uTx.deposit);
-        withdrawB.generate_r1cs_witness(uTx.withdraw);
+        newAccount.generate_r1cs_witness(uTx.newAccount);
         withdraw.generate_r1cs_witness(uTx.withdraw);
         publicKeyUpdate.generate_r1cs_witness(uTx.publicKeyUpdate);
         transfer.generate_r1cs_witness(uTx.transfer);
@@ -357,7 +358,7 @@ public:
         noop.generate_r1cs_constraints();
         spotTrade.generate_r1cs_constraints();
         deposit.generate_r1cs_constraints();
-        withdrawB.generate_r1cs_constraints();
+        newAccount.generate_r1cs_constraints();
         withdraw.generate_r1cs_constraints();
         publicKeyUpdate.generate_r1cs_constraints();
         transfer.generate_r1cs_constraints();

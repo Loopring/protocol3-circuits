@@ -18,25 +18,20 @@ class PublicKeyUpdateCircuit : public BaseTransactionCircuit
 public:
 
     // Inputs
-    ToBitsGadget owner;
+    DualVariableGadget owner;
     DualVariableGadget accountID;
-    ToBitsGadget nonce;
+    DualVariableGadget nonce;
     VariableT publicKeyX;
     VariableT publicKeyY;
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
 
-    // Check if the public key is valid
-    RequireValidPublicKey requireValidPublicKey;
+    // Compress the public key
+    CompressPublicKey compressPublicKey;
 
     // Balances
     DynamicVariableGadget balanceS_A;
     DynamicVariableGadget balanceB_O;
-
-    // Point compression
-    UnsafeSubGadget negPublicKeyX;
-    LtFieldGadget isNegativeX;
-    field2bits_strict publicKeyYBits;
 
     // Fee as float
     FloatGadget fFee;
@@ -66,17 +61,12 @@ public:
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
 
-        // Check if the public key is valid
-        requireValidPublicKey(pb, state.params, publicKeyX, publicKeyY, FMT(this->annotation_prefix, ".requireValidPublicKey")),
+        // Compress the public key
+        compressPublicKey(pb, state.params, state.constants, publicKeyX, publicKeyY, FMT(this->annotation_prefix, ".compressPublicKey")),
 
         // Balances
         balanceS_A(pb, state.accountA.balanceS.balance, FMT(prefix, ".balanceS_A")),
         balanceB_O(pb, state.oper.balanceB.balance, FMT(prefix, ".balanceB_O")),
-
-        // Point compression
-        negPublicKeyX(pb, state.constants.zero, publicKeyX, FMT(prefix, ".negPublicKeyX")),
-        isNegativeX(pb, negPublicKeyX.result(), publicKeyX, FMT(prefix, ".isNegativeX")),
-        publicKeyYBits(pb, publicKeyY, FMT(prefix, ".publicKeyYBits")),
 
         // Fee as float
         fFee(pb, state.constants, Float16Encoding, FMT(prefix, ".fFee")),
@@ -98,7 +88,7 @@ public:
         setArrayOutput(balanceA_S_Address, feeTokenID.bits);
         setOutput(balanceA_S_Balance, balanceS_A.back());
 
-        //setOutput(balanceO_B_Balance, balanceB_O.back());
+        setOutput(balanceO_B_Balance, balanceB_O.back());
 
         setOutput(signatureRequired_A, state.constants.zero);
         setOutput(signatureRequired_B, state.constants.zero);
@@ -117,13 +107,8 @@ public:
         feeTokenID.generate_r1cs_witness(pb, update.feeTokenID);
         fee.generate_r1cs_witness(pb, update.fee);
 
-        // Check if the public key is valid
-        requireValidPublicKey.generate_r1cs_witness();
-
-        // Point compression
-        negPublicKeyX.generate_r1cs_witness();
-        isNegativeX.generate_r1cs_witness();
-        publicKeyYBits.generate_r1cs_witness();
+        // Compress the public key
+        compressPublicKey.generate_r1cs_witness();
 
         // Fee as float
         fFee.generate_r1cs_witness(toFloat(update.fee, Float16Encoding));
@@ -147,13 +132,8 @@ public:
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
 
-        // Check if the public key is valid
-        requireValidPublicKey.generate_r1cs_constraints();
-
-        // Point compression
-        negPublicKeyX.generate_r1cs_constraints();
-        isNegativeX.generate_r1cs_constraints();
-        publicKeyYBits.generate_r1cs_constraints();
+        // Compress the public key
+        compressPublicKey.generate_r1cs_constraints();
 
         // Fee as float
         fFee.generate_r1cs_constraints();
@@ -171,10 +151,10 @@ public:
     const VariableArrayT getPublicData() const
     {
         return flattenReverse({
-            owner.result(),
+            owner.bits,
             accountID.bits,
-            nonce.result(),
-            VariableArrayT(1, isNegativeX.lt()), VariableArrayT(1, state.constants.zero), publicKeyYBits.result(),
+            nonce.bits,
+            compressPublicKey.result(),
             VariableArrayT(4, state.constants.zero), feeTokenID.bits,
             fFee.bits(),
         });
