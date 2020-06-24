@@ -20,8 +20,8 @@ auto dummySpotTrade = R"({
     "orderA": {
         "accountID": 0,
         "allOrNone": false,
-        "amountB": "1",
-        "amountS": "1",
+        "amountB": "79228162514264337593543950335",
+        "amountS": "79228162514264337593543950335",
         "buy": true,
         "exchangeID": 0,
         "feeBips": 0,
@@ -36,8 +36,8 @@ auto dummySpotTrade = R"({
     "orderB": {
         "accountID": 0,
         "allOrNone": false,
-        "amountB": "1",
-        "amountS": "1",
+        "amountB": "79228162514264337593543950335",
+        "amountS": "79228162514264337593543950335",
         "buy": true,
         "exchangeID": 2,
         "feeBips": 0,
@@ -58,7 +58,7 @@ auto dummyTransfer = R"({
     "amount": "0",
     "fee": "0",
     "feeTokenID": 0,
-    "transTokenID": 0,
+    "tokenID": 0,
     "validUntil": 4294967295,
     "type": 0,
     "ownerFrom": "0",
@@ -415,6 +415,22 @@ static void from_json(const json& j, NewAccount& create)
     create.newPublicKeyY = ethsnarks::FieldT(j["newPublicKeyY"].get<std::string>().c_str());
 }
 
+class OwnerChange
+{
+public:
+    ethsnarks::FieldT accountID;
+    ethsnarks::FieldT feeTokenID;
+    ethsnarks::FieldT fee;
+    ethsnarks::FieldT newOwner;
+};
+
+static void from_json(const json& j, OwnerChange& change)
+{
+    change.accountID = ethsnarks::FieldT(j.at("accountID"));
+    change.feeTokenID = ethsnarks::FieldT(j.at("feeTokenID"));
+    change.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
+    change.newOwner = ethsnarks::FieldT(j["newOwner"].get<std::string>().c_str());
+}
 
 class Transfer
 {
@@ -440,7 +456,7 @@ static void from_json(const json& j, Transfer& transfer)
 {
     transfer.accountFromID = ethsnarks::FieldT(j.at("accountFromID"));
     transfer.accountToID = ethsnarks::FieldT(j.at("accountToID"));
-    transfer.tokenID = ethsnarks::FieldT(j.at("transTokenID"));
+    transfer.tokenID = ethsnarks::FieldT(j.at("tokenID"));
     transfer.amount = ethsnarks::FieldT(j["amount"].get<std::string>().c_str());
     transfer.feeTokenID = ethsnarks::FieldT(j.at("feeTokenID"));
     transfer.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());

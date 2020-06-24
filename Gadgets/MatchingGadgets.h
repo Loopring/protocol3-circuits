@@ -303,7 +303,7 @@ public:
         fillAmount.generate_r1cs_constraints();
         fillLimit.generate_r1cs_constraints();
         filledAfter.generate_r1cs_constraints();
-        //filledAfter_leq_fillLimit.generate_r1cs_constraints();
+        filledAfter_leq_fillLimit.generate_r1cs_constraints();
     }
 
     const VariableT& getFilledAfter() const

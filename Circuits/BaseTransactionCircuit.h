@@ -131,53 +131,6 @@ struct TransactionState : public GadgetT
     }
 };
 
-
-struct SelectorBitsGadget : public GadgetT
-{
-    std::vector<EqualGadget> bits;
-
-    SelectorBitsGadget(
-        ProtoboardT& pb,
-        const Constants& constants,
-        const VariableT& type,
-        unsigned int maxBits,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix)
-    {
-        for (unsigned int i = 0; i < maxBits; i++)
-        {
-            bits.emplace_back(pb, type, constants.values[i], FMT(annotation_prefix, ".bits"));
-        }
-    }
-
-    void generate_r1cs_witness()
-    {
-        for (unsigned int i = 0; i < bits.size(); i++)
-        {
-            bits[i].generate_r1cs_witness();
-        }
-    }
-
-    void generate_r1cs_constraints()
-    {
-        for (unsigned int i = 0; i < bits.size(); i++)
-        {
-            bits[i].generate_r1cs_constraints();
-        }
-    }
-
-    std::vector<VariableT> result() const
-    {
-        std::vector<VariableT> res;
-        for (unsigned int i = 0; i < bits.size(); i++)
-        {
-            res.emplace_back(bits[i].result());
-        }
-        return res;
-    }
-};
-
 enum TxVariable
 {
     tradeHistoryA_Address,

@@ -473,6 +473,54 @@ public:
     }
 };
 
+// b ? A : B
+class ArrayTernaryGadget : public GadgetT
+{
+public:
+
+    std::vector<TernaryGadget> results;
+    VariableArrayT res;
+
+    ArrayTernaryGadget(
+        ProtoboardT& pb,
+        const VariableT& b,
+        const VariableArrayT& x,
+        const VariableArrayT& y,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix)
+    {
+        assert(x.size() == y.size());
+        results.reserve(x.size());
+        for (unsigned int i = 0; i < x.size(); i++)
+        {
+            results.emplace_back(TernaryGadget(pb, b, x[i], y[i], FMT(prefix, ".results")));
+            res.emplace_back(results.back().result());
+        }
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (unsigned int i = 0; i < results.size(); i++)
+        {
+            results[i].generate_r1cs_witness();
+        }
+    }
+
+    void generate_r1cs_constraints()
+    {
+        for (unsigned int i = 0; i < results.size(); i++)
+        {
+            results[i].generate_r1cs_constraints(false);
+        }
+    }
+
+    const VariableArrayT& result() const
+    {
+        return res;
+    }
+};
+
 // (input[0] && input[1] && ...) (all inputs need to be boolean)
 class AndGadget : public GadgetT
 {
@@ -963,140 +1011,6 @@ public:
     }
 };
 
-class RequireValidPublicKey : public GadgetT
-{
-public:
-
-    const Params& params;
-
-    // Needs to be a valid point
-    PointValidator requireValidPoint;
-
-    // Point needs to be compressable
-    const VariableT& y;
-    VariableT yy;
-    VariableT lhs;
-    VariableT rhs;
-    VariableT irhs;
-    VariableT xx;
-    VariableT x;
-
-    RequireValidPublicKey(
-        ProtoboardT& pb,
-        const Params& _params,
-        const VariableT& _x,
-        const VariableT& _y,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix),
-
-        params(_params),
-
-        requireValidPoint(pb, params, _x, _y, FMT(prefix, ".requireValidPoint")),
-
-        y(_y),
-        yy(make_variable(pb, FMT(prefix, ".yy"))),
-        lhs(make_variable(pb, FMT(prefix, ".lhs"))),
-        rhs(make_variable(pb, FMT(prefix, ".rhs"))),
-        irhs(make_variable(pb, FMT(prefix, ".irhs"))),
-        xx(make_variable(pb, FMT(prefix, ".xx"))),
-        x(make_variable(pb, FMT(prefix, ".x")))
-    {
-
-    }
-
-    void generate_r1cs_witness()
-    {
-        requireValidPoint.generate_r1cs_witness();
-
-        pb.val(yy) = pb.val(y).squared();
-        pb.val(lhs) = pb.val(yy) - 1;
-        pb.val(rhs) = params.d * pb.val(yy) - params.a;
-        pb.val(irhs) = pb.val(rhs).inverse();
-        pb.val(xx) = pb.val(lhs) * pb.val(irhs);
-        pb.val(x) = pb.val(xx).sqrt();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        requireValidPoint.generate_r1cs_constraints();
-
-        pb.add_r1cs_constraint(ConstraintT(y, y, yy), FMT(annotation_prefix, ".yy"));
-        pb.add_r1cs_constraint(ConstraintT(yy - 1, 1, lhs), FMT(annotation_prefix, ".lhs"));
-        pb.add_r1cs_constraint(ConstraintT((params.d * yy) - params.a, 1, rhs), FMT(annotation_prefix, ".rhs"));
-        pb.add_r1cs_constraint(ConstraintT(rhs, irhs, 1), FMT(annotation_prefix, ".irhs"));
-        pb.add_r1cs_constraint(ConstraintT(lhs, irhs, xx), FMT(annotation_prefix, ".xx"));
-        pb.add_r1cs_constraint(ConstraintT(x, x, xx), FMT(annotation_prefix, ".x"));
-    }
-};
-
-class CompressPublicKey : public GadgetT
-{
-public:
-
-    const Params& params;
-    const Constants& constants;
-
-    // Check if the public key is valid
-    RequireValidPublicKey requireValidPublicKey;
-
-    // Point compression
-    UnsafeSubGadget negPublicKeyX;
-    LtFieldGadget isNegativeX;
-    field2bits_strict publicKeyYBits;
-
-    CompressPublicKey(
-        ProtoboardT& pb,
-        const Params& _params,
-        const Constants& _constants,
-        const VariableT& publicKeyX,
-        const VariableT& publicKeyY,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix),
-
-        params(_params),
-        constants(_constants),
-
-        // Check if the public key is valid
-        requireValidPublicKey(pb, params, publicKeyX, publicKeyY, FMT(this->annotation_prefix, ".requireValidPublicKey")),
-
-        // Point compression
-        negPublicKeyX(pb, constants.zero, publicKeyX, FMT(prefix, ".negPublicKeyX")),
-        isNegativeX(pb, negPublicKeyX.result(), publicKeyX, FMT(prefix, ".isNegativeX")),
-        publicKeyYBits(pb, publicKeyY, FMT(prefix, ".publicKeyYBits"))
-    {
-
-    }
-
-    void generate_r1cs_witness()
-    {
-        // Check if the public key is valid
-        requireValidPublicKey.generate_r1cs_witness();
-
-        // Point compression
-        negPublicKeyX.generate_r1cs_witness();
-        isNegativeX.generate_r1cs_witness();
-        publicKeyYBits.generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        // Check if the public key is valid
-        requireValidPublicKey.generate_r1cs_constraints();
-
-        // Point compression
-        negPublicKeyX.generate_r1cs_constraints();
-        isNegativeX.generate_r1cs_constraints();
-        publicKeyYBits.generate_r1cs_constraints();
-    }
-
-    VariableArrayT result() const
-    {
-        return reverse(flattenReverse({VariableArrayT(1, isNegativeX.lt()), VariableArrayT(1, constants.zero), publicKeyYBits.result()}));
-    }
-};
-
 // min(A, B)
 class MinGadget : public GadgetT
 {
@@ -1464,199 +1378,6 @@ public:
     }
 };
 
-class EdDSA_HashRAM_Poseidon_gadget : public GadgetT
-{
-public:
-    Poseidon_gadget_T<6, 1, 6, 52, 5, 1> m_hash_RAM;      // hash_RAM = H(R, A, M)
-    libsnark::dual_variable_gadget<FieldT> hash;
-
-    EdDSA_HashRAM_Poseidon_gadget(
-        ProtoboardT& in_pb,
-        const Params& in_params,
-        const VariablePointT& in_R,
-        const VariablePointT& in_A,
-        const VariableT& in_M,
-        const std::string& annotation_prefix
-    ) :
-        GadgetT(in_pb, annotation_prefix),
-        // Prefix the message with R and A.
-        m_hash_RAM(in_pb, var_array({in_R.x, in_R.y, in_A.x, in_A.y, in_M}), FMT(annotation_prefix, ".hash_RAM")),
-        hash(pb, NUM_BITS_MAX_VALUE, FMT(annotation_prefix, ".hash"))
-    {
-
-    }
-
-    void generate_r1cs_constraints()
-    {
-        m_hash_RAM.generate_r1cs_constraints();
-        hash.generate_r1cs_constraints(true);
-    }
-
-    void generate_r1cs_witness()
-    {
-        m_hash_RAM.generate_r1cs_witness();
-        hash.bits.fill_with_bits_of_field_element(pb, pb.val(m_hash_RAM.result()));
-        hash.generate_r1cs_witness_from_bits();
-    }
-
-    const VariableArrayT& result()
-    {
-        return hash.bits;
-    }
-};
-
-class EdDSA_Poseidon: public GadgetT
-{
-public:
-    PointValidator m_validator_R;                       // IsValid(R)
-    fixed_base_mul m_lhs;                               // lhs = B*s
-    EdDSA_HashRAM_Poseidon_gadget m_hash_RAM;           // hash_RAM = H(R,A,M)
-    ScalarMult m_At;                                    // A*hash_RAM
-    PointAdder m_rhs;                                   // rhs = R + (A*hash_RAM)
-
-    EqualGadget equalX;
-    EqualGadget equalY;
-    AndGadget valid;
-
-    EdDSA_Poseidon(
-        ProtoboardT& in_pb,
-        const Params& in_params,
-        const EdwardsPoint& in_base,     // B
-        const VariablePointT& in_A,      // A
-        const VariablePointT& in_R,      // R
-        const VariableArrayT& in_s,      // s
-        const VariableT& in_msg,         // m
-        const std::string& annotation_prefix
-    ) :
-        GadgetT(in_pb, annotation_prefix),
-        // IsValid(R)
-        m_validator_R(in_pb, in_params, in_R.x, in_R.y, FMT(this->annotation_prefix, ".validator_R")),
-
-        // lhs = ScalarMult(B, s)
-        m_lhs(in_pb, in_params, in_base.x, in_base.y, in_s, FMT(this->annotation_prefix, ".lhs")),
-
-        // hash_RAM = H(R, A, M)
-        m_hash_RAM(in_pb, in_params, in_R, in_A, in_msg, FMT(this->annotation_prefix, ".hash_RAM")),
-
-        // At = ScalarMult(A,hash_RAM)
-        m_At(in_pb, in_params, in_A.x, in_A.y, m_hash_RAM.result(), FMT(this->annotation_prefix, ".At = A * hash_RAM")),
-
-        // rhs = PointAdd(R, At)
-        m_rhs(in_pb, in_params, in_R.x, in_R.y, m_At.result_x(), m_At.result_y(), FMT(this->annotation_prefix, ".rhs")),
-
-        // Verify the two points are equal
-        equalX(in_pb, m_lhs.result_x(), m_rhs.result_x(), ".equalX"),
-        equalY(in_pb, m_lhs.result_y(), m_rhs.result_y(), ".equalY"),
-        valid(in_pb, {equalX.result(), equalY.result()}, ".valid")
-    {
-
-    }
-
-    void generate_r1cs_constraints()
-    {
-        m_validator_R.generate_r1cs_constraints();
-        m_lhs.generate_r1cs_constraints();
-        m_hash_RAM.generate_r1cs_constraints();
-        m_At.generate_r1cs_constraints();
-        m_rhs.generate_r1cs_constraints();
-
-        // Verify the two points are equal
-        equalX.generate_r1cs_constraints();
-        equalY.generate_r1cs_constraints();
-        valid.generate_r1cs_constraints();
-    }
-
-    void generate_r1cs_witness()
-    {
-        m_validator_R.generate_r1cs_witness();
-        m_lhs.generate_r1cs_witness();
-        m_hash_RAM.generate_r1cs_witness();
-        m_At.generate_r1cs_witness();
-        m_rhs.generate_r1cs_witness();
-
-        // Verify the two points are equal
-        equalX.generate_r1cs_witness();
-        equalY.generate_r1cs_witness();
-        valid.generate_r1cs_witness();
-    }
-
-    const VariableT& result() const
-    {
-        return valid.result();
-    }
-};
-
-// Verifies a signature hashed with Poseidon
-class SignatureVerifier : public GadgetT
-{
-public:
-    const Constants& constants;
-    const jubjub::VariablePointT sig_R;
-    const VariableArrayT sig_s;
-    const VariableT sig_m;
-    EdDSA_Poseidon signatureVerifier;
-
-    NotGadget notRequired;
-    OrGadget valid;
-
-    bool requireValid;
-
-    SignatureVerifier(
-        ProtoboardT& pb,
-        const jubjub::Params& params,
-        const Constants& _constants,
-        const jubjub::VariablePointT& publicKey,
-        const VariableT& message,
-        const VariableT& required,
-        const std::string& prefix,
-        bool _requireValid = true
-    ) :
-        GadgetT(pb, prefix),
-
-        constants(_constants),
-        sig_R(pb, FMT(prefix, ".R")),
-        sig_s(make_var_array(pb, FieldT::size_in_bits(), FMT(prefix, ".s"))),
-        sig_m(message),
-        signatureVerifier(pb, params, jubjub::EdwardsPoint(params.Gx, params.Gy), publicKey, sig_R, sig_s, sig_m, FMT(prefix, ".signatureVerifier")),
-        notRequired(pb, required, FMT(prefix, ".notRequired")),
-        valid(pb, {notRequired.result(), signatureVerifier.result()}, FMT(prefix, ".valid")),
-        requireValid(_requireValid)
-    {
-
-    }
-
-    void generate_r1cs_witness(Signature sig)
-    {
-        pb.val(sig_R.x) = sig.R.x;
-        pb.val(sig_R.y) = sig.R.y;
-        sig_s.fill_with_bits_of_field_element(pb, sig.s);
-        signatureVerifier.generate_r1cs_witness();
-        notRequired.generate_r1cs_witness();
-        valid.generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        signatureVerifier.generate_r1cs_constraints();
-        notRequired.generate_r1cs_constraints();
-        valid.generate_r1cs_constraints();
-        if (requireValid)
-        {
-            requireEqual(pb, valid.result(), constants.one, FMT(annotation_prefix, ".isSignatureCheckValid"));
-        }
-    }
-
-    const VariableT& result() const
-    {
-        return valid.result();
-    }
-
-    const VariableArrayT& getHash()
-    {
-        return signatureVerifier.m_hash_RAM.result();
-    }
-};
-
 // Public data helper class.
 // Will hash all public data with sha256 to a single public input of NUM_BITS_FIELD_CAPACITY bits
 class PublicDataGadget : public GadgetT
@@ -1828,41 +1549,189 @@ public:
     }
 };
 
-class ToBitsGadget : public GadgetT
+struct SelectorGadget : public GadgetT
 {
-public:
+    const Constants& constants;
 
-    libsnark::dual_variable_gadget<FieldT> dualVariable;
+    std::vector<EqualGadget> bits;
+    std::vector<UnsafeAddGadget> sum;
 
-    ToBitsGadget(
+    VariableArrayT res;
+
+    SelectorGadget(
         ProtoboardT& pb,
-        const VariableT& value,
-        const size_t width,
+        const Constants& _constants,
+        const VariableT& type,
+        unsigned int maxBits,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
-        dualVariable(pb, value, width, FMT(prefix, ".dualVariable"))
+        constants(_constants)
+    {
+        for (unsigned int i = 0; i < maxBits; i++)
+        {
+            bits.emplace_back(pb, type, constants.values[i], FMT(annotation_prefix, ".bits"));
+            sum.emplace_back(pb, (i == 0) ? constants.zero : sum.back().result(), bits.back().result(), FMT(annotation_prefix, ".sum"));
+            res.emplace_back(bits.back().result());
+        }
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (unsigned int i = 0; i < bits.size(); i++)
+        {
+            bits[i].generate_r1cs_witness();
+            sum[i].generate_r1cs_witness();
+        }
+    }
+
+    void generate_r1cs_constraints()
+    {
+        for (unsigned int i = 0; i < bits.size(); i++)
+        {
+            bits[i].generate_r1cs_constraints();
+            sum[i].generate_r1cs_constraints();
+        }
+        // Sum needs to equal 1
+        requireEqual(pb, sum.back().result(), constants.one, FMT(annotation_prefix, ".selector_sum_one"));
+    }
+
+    const VariableArrayT& result() const
+    {
+        return res;
+    }
+};
+
+class SelectGadget : public GadgetT
+{
+public:
+
+    std::vector<TernaryGadget> results;
+
+    SelectGadget(
+        ProtoboardT& pb,
+        const VariableArrayT& selector,
+        const std::vector<VariableT>& values,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix)
+    {
+        assert(values.size() == selector.size());
+        for (unsigned int i = 0; i < values.size(); i++)
+        {
+            results.emplace_back(TernaryGadget(pb, selector[i], values[i], (i == 0) ? values[0] : results.back().result(), FMT(prefix, ".results")));
+        }
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (unsigned int i = 0; i < results.size(); i++)
+        {
+            results[i].generate_r1cs_witness();
+        }
+    }
+
+    void generate_r1cs_constraints()
+    {
+        for (unsigned int i = 0; i < results.size(); i++)
+        {
+            results[i].generate_r1cs_constraints(false);
+        }
+    }
+
+    const VariableT& result() const
+    {
+        return results.back().result();
+    }
+};
+
+class ArraySelectGadget : public GadgetT
+{
+public:
+
+    std::vector<ArrayTernaryGadget> results;
+
+    ArraySelectGadget(
+        ProtoboardT& pb,
+        const VariableArrayT& selector,
+        const std::vector<VariableArrayT>& values,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix)
+    {
+        assert(values.size() == selector.size());
+        for (unsigned int i = 0; i < values.size(); i++)
+        {
+            results.emplace_back(ArrayTernaryGadget(pb, selector[i], values[i], (i == 0) ? values[0] : results.back().result(), FMT(prefix, ".results")));
+        }
+    }
+
+    void generate_r1cs_witness()
+    {
+        for (unsigned int i = 0; i < results.size(); i++)
+        {
+            results[i].generate_r1cs_witness();
+        }
+    }
+
+    void generate_r1cs_constraints()
+    {
+        for (unsigned int i = 0; i < results.size(); i++)
+        {
+            results[i].generate_r1cs_constraints();
+        }
+    }
+
+    const VariableArrayT& result() const
+    {
+        return results.back().result();
+    }
+};
+
+class OwnerValidGadget : public GadgetT
+{
+public:
+
+    EqualGadget newOwner_equal_oldOwner;
+    EqualGadget no_oldOwner;
+    OrGadget equal_owner_or_no_owner;
+    RequireEqualGadget equal_owner_or_no_owner_eq_true;
+
+    OwnerValidGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const VariableT& oldOwner,
+        const VariableT& newOwner,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        newOwner_equal_oldOwner(pb, newOwner, oldOwner, FMT(prefix, ".newOwner_equal_oldOwner")),
+        no_oldOwner(pb, oldOwner, constants.zero, FMT(prefix, ".no_oldOwner")),
+        equal_owner_or_no_owner(pb, {newOwner_equal_oldOwner.result(), no_oldOwner.result()}, FMT(prefix, ".equal_owner_or_no_owner")),
+        equal_owner_or_no_owner_eq_true(pb, equal_owner_or_no_owner.result(), constants.one, FMT(prefix, ".equal_owner_or_no_owner_eq_true"))
     {
 
     }
 
     void generate_r1cs_witness()
     {
-        dualVariable.generate_r1cs_witness_from_packed();
+        newOwner_equal_oldOwner.generate_r1cs_witness();
+        no_oldOwner.generate_r1cs_witness();
+        equal_owner_or_no_owner.generate_r1cs_witness();
+        equal_owner_or_no_owner_eq_true.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
-        dualVariable.generate_r1cs_constraints(true);
-    }
-
-    const VariableArrayT& result() const
-    {
-        return dualVariable.bits;
+        newOwner_equal_oldOwner.generate_r1cs_constraints();
+        no_oldOwner.generate_r1cs_constraints();
+        equal_owner_or_no_owner.generate_r1cs_constraints();
+        equal_owner_or_no_owner_eq_true.generate_r1cs_constraints();
     }
 };
 
-class SelectorGadget : public GadgetT
+/*class MapSelectorGadget : public GadgetT
 {
 public:
 
@@ -1871,7 +1740,7 @@ public:
 
     std::unique_ptr<EqualGadget> valid;
 
-    SelectorGadget(
+    MapSelectorGadget(
         ProtoboardT& pb,
         const Constants& constants,
         const std::vector<VariableT>& keys,
@@ -1922,198 +1791,6 @@ public:
     const VariableT& isValid() const
     {
         return valid->result();
-    }
-};
-
-class SelectGadget : public GadgetT
-{
-public:
-
-    std::vector<TernaryGadget> results;
-
-    SelectGadget(
-        ProtoboardT& pb,
-        const std::vector<VariableT>& selector,
-        const std::vector<VariableT>& values,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix)
-    {
-        assert(values.size() == selector.size());
-        for (unsigned int i = 0; i < values.size(); i++)
-        {
-            results.emplace_back(TernaryGadget(pb, selector[i], values[i], (i == 0) ? values[0] : results.back().result(), FMT(prefix, ".results")));
-        }
-    }
-
-    void generate_r1cs_witness()
-    {
-        for (unsigned int i = 0; i < results.size(); i++)
-        {
-            results[i].generate_r1cs_witness();
-        }
-    }
-
-    void generate_r1cs_constraints()
-    {
-        for (unsigned int i = 0; i < results.size(); i++)
-        {
-            results[i].generate_r1cs_constraints(false);
-        }
-    }
-
-    const VariableT& result() const
-    {
-        return results.back().result();
-    }
-};
-
-class ArraySelectGadget : public GadgetT
-{
-public:
-
-    std::vector<std::vector<TernaryGadget>> results;
-    VariableArrayT res;
-
-    ArraySelectGadget(
-        ProtoboardT& pb,
-        const std::vector<VariableT>& selector,
-        const std::vector<VariableArrayT>& values,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix)
-    {
-        assert(values.size() == selector.size());
-
-        results.reserve(values.size());
-        for (unsigned int n = 0; n < values[0].size(); n++)
-        {
-            results.emplace_back();
-            results.back().reserve(values.size());
-            for (unsigned int i = 0; i < values.size(); i++)
-            {
-                results.back().emplace_back(TernaryGadget(pb, selector[i], values[i][n], (i == 0) ? values[i][n] : results.back().back().result(), FMT(prefix, ".results")));
-            }
-            res.emplace_back(results.back().back().result());
-        }
-    }
-
-    void generate_r1cs_witness()
-    {
-        for (unsigned int i = 0; i < results.size(); i++)
-        {
-            for (unsigned int j = 0; j < results[i].size(); j++)
-            {
-                results[i][j].generate_r1cs_witness();
-            }
-        }
-    }
-
-    void generate_r1cs_constraints()
-    {
-        for (unsigned int i = 0; i < results.size(); i++)
-        {
-            for (unsigned int j = 0; j < results[i].size(); j++)
-            {
-                results[i][j].generate_r1cs_constraints(false);
-            }
-        }
-    }
-
-    const VariableArrayT& result() const
-    {
-        return res;
-    }
-};
-
-class OwnerValidGadget : public GadgetT
-{
-public:
-
-    EqualGadget newOwner_equal_oldOwner;
-    EqualGadget no_oldOwner;
-    OrGadget equal_owner_or_no_owner;
-    RequireEqualGadget equal_owner_or_no_owner_eq_true;
-
-    OwnerValidGadget(
-        ProtoboardT& pb,
-        const Constants& constants,
-        const VariableT& oldOwner,
-        const VariableT& newOwner,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix),
-
-        newOwner_equal_oldOwner(pb, newOwner, oldOwner, FMT(prefix, ".newOwner_equal_oldOwner")),
-        no_oldOwner(pb, oldOwner, constants.zero, FMT(prefix, ".no_oldOwner")),
-        equal_owner_or_no_owner(pb, {newOwner_equal_oldOwner.result(), no_oldOwner.result()}, FMT(prefix, ".equal_owner_or_no_owner")),
-        equal_owner_or_no_owner_eq_true(pb, equal_owner_or_no_owner.result(), constants.one, FMT(prefix, ".equal_owner_or_no_owner_eq_true"))
-    {
-
-    }
-
-    void generate_r1cs_witness()
-    {
-        newOwner_equal_oldOwner.generate_r1cs_witness();
-        no_oldOwner.generate_r1cs_witness();
-        equal_owner_or_no_owner.generate_r1cs_witness();
-        equal_owner_or_no_owner_eq_true.generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        newOwner_equal_oldOwner.generate_r1cs_constraints();
-        no_oldOwner.generate_r1cs_constraints();
-        equal_owner_or_no_owner.generate_r1cs_constraints();
-        equal_owner_or_no_owner_eq_true.generate_r1cs_constraints();
-    }
-};
-
-// b ? A : B
-/*class SelectorGadget : public GadgetT
-{
-public:
-    VariableT b;
-    VariableT x;
-    VariableT y;
-
-    VariableT selected;
-
-    std::vector<UnsafeAddGadget> sum;
-
-    SelectGadget(
-        ProtoboardT& pb,
-        const std::vector<VariableT>& bits,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix),
-
-        b(_b),
-        x(_x),
-        y(_y),
-
-        selected(make_variable(pb, FMT(prefix, ".selected")))
-    {
-
-    }
-
-    const VariableT& result() const
-    {
-        return selected;
-    }
-
-    void generate_r1cs_witness()
-    {
-        pb.val(selected) = (pb.val(b) == FieldT::one()) ? pb.val(x) : pb.val(y);
-    }
-
-    void generate_r1cs_constraints(bool enforceBitness = true)
-    {
-        if (enforceBitness)
-        {
-            libsnark::generate_boolean_r1cs_constraint<ethsnarks::FieldT>(pb, b, FMT(annotation_prefix, ".bitness"));
-        }
-        pb.add_r1cs_constraint(ConstraintT(b, y - x, y - selected), FMT(annotation_prefix, ".b * (y - x) == (y - selected)"));
     }
 };*/
 

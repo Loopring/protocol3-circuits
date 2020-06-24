@@ -38,7 +38,7 @@ public:
     SelectTransactionGadget(
         ProtoboardT& pb,
         const TransactionState& state,
-        const std::vector<VariableT>& selector,
+        const VariableArrayT& selector,
         const std::vector<BaseTransactionCircuit*>& transactions,
         const std::string& prefix
     ) :
@@ -141,7 +141,7 @@ public:
     const Constants& constants;
 
     DualVariableGadget type;
-    SelectorBitsGadget selectorBits;
+    SelectorGadget selector;
 
     TransactionState state;
 
@@ -197,7 +197,7 @@ public:
         constants(_constants),
 
         type(pb, NUM_BITS_TX_TYPE, FMT(prefix, ".type")),
-        selectorBits(pb, constants, type.packed, (unsigned int) TransactionType::COUNT, FMT(prefix, ".selectorBits")),
+        selector(pb, constants, type.packed, (unsigned int) TransactionType::COUNT, FMT(prefix, ".selector")),
 
         state(pb, params, constants, exchangeID, timestamp, protocolTakerFeeBips, protocolMakerFeeBips, numConditionalTransactionsBefore, type.packed, FMT(prefix, ".transactionState")),
 
@@ -209,7 +209,7 @@ public:
         withdraw(pb, state, FMT(prefix, ".withdraw")),
         publicKeyUpdate(pb, state, FMT(prefix, ".publicKeyUpdate")),
         transfer(pb, state, FMT(prefix, ".transfer")),
-        tx(pb, state, selectorBits.result(), {&noop, &spotTrade, &deposit, &newAccount, &withdraw, &publicKeyUpdate, &transfer}, FMT(prefix, ".tx")),
+        tx(pb, state, selector.result(), {&noop, &spotTrade, &deposit, &newAccount, &withdraw, &publicKeyUpdate, &transfer}, FMT(prefix, ".tx")),
 
         signatureVerifierA(pb, params, state.constants, jubjub::VariablePointT(tx.getOutput(publicKeyX_A), tx.getOutput(publicKeyY_A)), tx.getOutput(hash_A), tx.getOutput(signatureRequired_A), FMT(prefix, ".signatureVerifierA")),
         signatureVerifierB(pb, params, state.constants, jubjub::VariablePointT(tx.getOutput(publicKeyX_B), tx.getOutput(publicKeyY_B)), tx.getOutput(hash_B), tx.getOutput(signatureRequired_B), FMT(prefix, ".signatureVerifierB")),
@@ -276,7 +276,7 @@ public:
     void generate_r1cs_witness(const UniversalTransaction& uTx)
     {
         type.generate_r1cs_witness(pb, uTx.type);
-        selectorBits.generate_r1cs_witness();
+        selector.generate_r1cs_witness();
 
         state.generate_r1cs_witness(uTx.witness.accountUpdate_A.before,
                                     uTx.witness.balanceUpdateS_A.before,
@@ -353,7 +353,7 @@ public:
     void generate_r1cs_constraints()
     {
         type.generate_r1cs_constraints(true);
-        selectorBits.generate_r1cs_constraints();
+        selector.generate_r1cs_constraints();
 
         noop.generate_r1cs_constraints();
         spotTrade.generate_r1cs_constraints();
