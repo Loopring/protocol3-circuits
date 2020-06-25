@@ -322,6 +322,13 @@ public:
         //print(pb, "tx.getOutput(balanceA_S_Balance)", tx.getOutput(balanceA_S_Balance));
         //print(pb, "updateTradeHistory_A.result()", updateTradeHistory_A.result());
 
+
+        /*std::cout << "------" << std::endl;
+        print(pb, "state.accountB.tradeHistory.filled", state.accountB.tradeHistory.filled);
+        print(pb, "state.accountB.tradeHistory.orderID", state.accountB.tradeHistory.orderID);
+        print(pb, "tx.getOutput(tradeHistoryB_Filled)", tx.getOutput(tradeHistoryB_Filled));
+        print(pb, "tx.getOutput(tradeHistoryB_OrderId)", tx.getOutput(tradeHistoryB_OrderId));*/
+
         // Update UserB
         updateTradeHistory_B.generate_r1cs_witness(uTx.witness.tradeHistoryUpdate_B.proof);
         updateBalanceS_B.generate_r1cs_witness(uTx.witness.balanceUpdateS_B.proof);

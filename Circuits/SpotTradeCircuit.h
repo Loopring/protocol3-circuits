@@ -85,7 +85,7 @@ public:
 
         // Trade history
         tradeHistory_A(pb, state.constants, state.accountA.tradeHistory, orderA.orderID, FMT(prefix, ".tradeHistoryA")),
-        tradeHistory_B(pb, state.constants, state.accountB.tradeHistory, orderA.orderID, FMT(prefix, ".tradeHistoryB")),
+        tradeHistory_B(pb, state.constants, state.accountB.tradeHistory, orderB.orderID, FMT(prefix, ".tradeHistoryB")),
 
         // Match orders
         orderMatching(pb, state.constants, state.timestamp, orderA, orderB, tradeHistory_A, tradeHistory_B, fillS_A.value(), fillS_B.value(), FMT(prefix, ".orderMatching")),
