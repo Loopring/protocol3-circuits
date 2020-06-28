@@ -139,17 +139,18 @@ enum TxVariable
 
     balanceA_S_Address,
     balanceA_S_Balance,
-    balanceA_S_Position,
-    balanceA_S_FundingIndex,
+    balanceA_S_Index,
 
     balanceA_B_Address,
     balanceA_B_Balance,
+    balanceA_B_Index,
 
     accountA_Address,
     accountA_Owner,
     accountA_PublicKeyX,
     accountA_PublicKeyY,
     accountA_Nonce,
+    accountA_WalletHash,
 
 
     tradeHistoryB_Address,
@@ -158,25 +159,30 @@ enum TxVariable
 
     balanceB_S_Address,
     balanceB_S_Balance,
-    balanceB_S_Position,
-    balanceB_S_FundingIndex,
+    balanceB_S_Index,
 
     balanceB_B_Address,
     balanceB_B_Balance,
+    balanceB_B_Index,
 
     accountB_Address,
     accountB_Owner,
     accountB_PublicKeyX,
     accountB_PublicKeyY,
     accountB_Nonce,
+    accountB_WalletHash,
 
 
     balanceP_A_Balance,
+    balanceP_A_Index,
     balanceP_B_Balance,
+    balanceP_B_Index,
 
 
     balanceO_A_Balance,
+    balanceO_A_Index,
     balanceO_B_Balance,
+    balanceO_B_Index,
 
 
     hash_A,
@@ -215,15 +221,18 @@ public:
 
         aOutputs[balanceA_S_Address] = VariableArrayT(NUM_BITS_TOKEN, state.constants.zero);
         uOutputs[balanceA_S_Balance] = state.accountA.balanceS.balance;
+        uOutputs[balanceA_S_Index] = state.accountA.balanceS.index;
 
         aOutputs[balanceA_B_Address] = VariableArrayT(NUM_BITS_TOKEN, state.constants.zero);
         uOutputs[balanceA_B_Balance] = state.accountA.balanceB.balance;
+        uOutputs[balanceA_B_Index] = state.accountA.balanceB.index;
 
         aOutputs[accountA_Address] = flatten({VariableArrayT(1, state.constants.one), VariableArrayT(NUM_BITS_ACCOUNT - 1, state.constants.zero)});
         uOutputs[accountA_Owner] = state.accountA.account.owner;
         uOutputs[accountA_PublicKeyX] = state.accountA.account.publicKey.x;
         uOutputs[accountA_PublicKeyY] = state.accountA.account.publicKey.y;
         uOutputs[accountA_Nonce] = state.accountA.account.nonce;
+        uOutputs[accountA_WalletHash] = state.accountA.account.walletHash;
 
 
         aOutputs[tradeHistoryB_Address] = VariableArrayT(NUM_BITS_TRADING_HISTORY, state.constants.zero);
@@ -232,9 +241,11 @@ public:
 
         aOutputs[balanceB_S_Address] = VariableArrayT(NUM_BITS_TOKEN, state.constants.zero);
         uOutputs[balanceB_S_Balance] = state.accountB.balanceS.balance;
+        uOutputs[balanceB_S_Index] = state.accountB.balanceS.index;
 
         aOutputs[balanceB_B_Address] = VariableArrayT(NUM_BITS_TOKEN, state.constants.zero);
         uOutputs[balanceB_B_Balance] = state.accountB.balanceB.balance;
+        uOutputs[balanceB_B_Index] = state.accountB.balanceB.index;
 
 
         aOutputs[accountB_Address] = flatten({VariableArrayT(1, state.constants.one), VariableArrayT(NUM_BITS_ACCOUNT - 1, state.constants.zero)});
@@ -242,14 +253,19 @@ public:
         uOutputs[accountB_PublicKeyX] = state.accountB.account.publicKey.x;
         uOutputs[accountB_PublicKeyY] = state.accountB.account.publicKey.y;
         uOutputs[accountB_Nonce] = state.accountB.account.nonce;
+        uOutputs[accountB_WalletHash] = state.accountB.account.walletHash;
 
 
         uOutputs[balanceP_A_Balance] = state.pool.balanceA.balance;
+        uOutputs[balanceP_A_Index] = state.pool.balanceA.index;
         uOutputs[balanceP_B_Balance] = state.pool.balanceB.balance;
+        uOutputs[balanceP_B_Index] = state.pool.balanceB.index;
 
 
         uOutputs[balanceO_A_Balance] = state.oper.balanceA.balance;
+        uOutputs[balanceO_A_Index] = state.oper.balanceA.index;
         uOutputs[balanceO_B_Balance] = state.oper.balanceB.balance;
+        uOutputs[balanceO_B_Index] = state.oper.balanceB.index;
 
 
         uOutputs[hash_A] = state.constants.zero;

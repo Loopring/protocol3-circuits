@@ -88,6 +88,7 @@ auto dummyPublicKeyUpdate = R"({
     "nonce": 0,
     "publicKeyX": "13060336632196495412858530687189935300033555341384637843571668213752389743866",
     "publicKeyY": "4915883150652842217472446614681036440072632592629277920562695676195366802174",
+    "walletHash": "0",
     "feeTokenID": 0,
     "fee": "0"
 })"_json;
@@ -100,7 +101,15 @@ auto dummyNewAccount = R"({
     "newAccountID": 2,
     "newOwner": "1",
     "newPublicKeyX": "13060336632196495412858530687189935300033555341384637843571668213752389743866",
-    "newPublicKeyY": "4915883150652842217472446614681036440072632592629277920562695676195366802174"
+    "newPublicKeyY": "4915883150652842217472446614681036440072632592629277920562695676195366802174",
+    "newWalletHash": "0"
+})"_json;
+
+auto dummyOwnerChange = R"({
+    "accountID": 0,
+    "feeTokenID": 0,
+    "fee": "0",
+    "newOwner": "0"
 })"_json;
 
 auto dummyDeposit = R"({
@@ -125,6 +134,7 @@ enum class TransactionType
     Withdrawal,
     PublicKeyUpdate,
     Transfer,
+    OwnerChange,
 
     COUNT
 };
@@ -160,12 +170,14 @@ class BalanceLeaf
 {
 public:
     ethsnarks::FieldT balance;
+    ethsnarks::FieldT index;
     ethsnarks::FieldT tradingHistoryRoot;
 };
 
 static void from_json(const json& j, BalanceLeaf& leaf)
 {
     leaf.balance = ethsnarks::FieldT(j.at("balance").get<std::string>().c_str());
+    leaf.index = ethsnarks::FieldT(j.at("index").get<std::string>().c_str());
     leaf.tradingHistoryRoot = ethsnarks::FieldT(j.at("tradingHistoryRoot").get<std::string>().c_str());
 }
 
@@ -175,6 +187,7 @@ public:
     ethsnarks::FieldT owner;
     ethsnarks::jubjub::EdwardsPoint publicKey;
     ethsnarks::FieldT nonce;
+    ethsnarks::FieldT walletHash;
     ethsnarks::FieldT balancesRoot;
 };
 
@@ -184,6 +197,7 @@ static void from_json(const json& j, Account& account)
     account.publicKey.x = ethsnarks::FieldT(j.at("publicKeyX").get<std::string>().c_str());
     account.publicKey.y = ethsnarks::FieldT(j.at("publicKeyY").get<std::string>().c_str());
     account.nonce = ethsnarks::FieldT(j.at("nonce"));
+    account.walletHash = ethsnarks::FieldT(j.at("walletHash").get<std::string>().c_str());
     account.balancesRoot = ethsnarks::FieldT(j.at("balancesRoot").get<std::string>().c_str());
 }
 
@@ -378,6 +392,7 @@ public:
     ethsnarks::FieldT accountID;
     ethsnarks::FieldT publicKeyX;
     ethsnarks::FieldT publicKeyY;
+    ethsnarks::FieldT walletHash;
     ethsnarks::FieldT feeTokenID;
     ethsnarks::FieldT fee;
 };
@@ -387,6 +402,7 @@ static void from_json(const json& j, PublicKeyUpdate& update)
     update.accountID = ethsnarks::FieldT(j.at("accountID"));
     update.publicKeyX = ethsnarks::FieldT(j["publicKeyX"].get<std::string>().c_str());
     update.publicKeyY = ethsnarks::FieldT(j["publicKeyY"].get<std::string>().c_str());
+    update.walletHash = ethsnarks::FieldT(j["walletHash"].get<std::string>().c_str());
     update.feeTokenID = ethsnarks::FieldT(j.at("feeTokenID"));
     update.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
 }
@@ -402,6 +418,7 @@ public:
     ethsnarks::FieldT newOwner;
     ethsnarks::FieldT newPublicKeyX;
     ethsnarks::FieldT newPublicKeyY;
+    ethsnarks::FieldT newWalletHash;
 };
 
 static void from_json(const json& j, NewAccount& create)
@@ -413,6 +430,7 @@ static void from_json(const json& j, NewAccount& create)
     create.newOwner = ethsnarks::FieldT(j["newOwner"].get<std::string>().c_str());
     create.newPublicKeyX = ethsnarks::FieldT(j["newPublicKeyX"].get<std::string>().c_str());
     create.newPublicKeyY = ethsnarks::FieldT(j["newPublicKeyY"].get<std::string>().c_str());
+    create.newWalletHash = ethsnarks::FieldT(j["newWalletHash"].get<std::string>().c_str());
 }
 
 class OwnerChange
@@ -545,6 +563,7 @@ public:
     Withdrawal withdraw;
     Deposit deposit;
     PublicKeyUpdate publicKeyUpdate;
+    OwnerChange ownerChange;
 };
 
 static void from_json(const json& j, UniversalTransaction& transaction)
@@ -558,6 +577,7 @@ static void from_json(const json& j, UniversalTransaction& transaction)
     transaction.deposit = dummyDeposit.get<Loopring::Deposit>();
     transaction.publicKeyUpdate = dummyPublicKeyUpdate.get<Loopring::PublicKeyUpdate>();
     transaction.newAccount = dummyNewAccount.get<Loopring::NewAccount>();
+    transaction.ownerChange = dummyOwnerChange.get<Loopring::OwnerChange>();
 
     // Patch some of the dummy tx's so they are valid against the current state
     // Deposit
@@ -600,6 +620,11 @@ static void from_json(const json& j, UniversalTransaction& transaction)
     {
         transaction.type = ethsnarks::FieldT(int(Loopring::TransactionType::NewAccount));
         transaction.newAccount = j.at("newAccount").get<Loopring::NewAccount>();
+    }
+    else if (j.contains("ownerChange"))
+    {
+        transaction.type = ethsnarks::FieldT(int(Loopring::TransactionType::OwnerChange));
+        transaction.ownerChange = j.at("ownerChange").get<Loopring::OwnerChange>();
     }
 }
 

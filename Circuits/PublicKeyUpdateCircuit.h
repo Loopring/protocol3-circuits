@@ -25,6 +25,8 @@ public:
     DualVariableGadget nonce;
     VariableT publicKeyX;
     VariableT publicKeyY;
+    DualVariableGadget walletHash;
+
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
 
@@ -60,6 +62,7 @@ public:
         nonce(pb, state.accountA.account.nonce, NUM_BITS_NONCE, FMT(prefix, ".nonce")),
         publicKeyX(make_variable(pb, FMT(prefix, ".publicKeyX"))),
         publicKeyY(make_variable(pb, FMT(prefix, ".publicKeyY"))),
+        walletHash(pb, NUM_BITS_HASH, FMT(prefix, ".walletHash")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
 
@@ -85,6 +88,7 @@ public:
         setArrayOutput(accountA_Address, accountID.bits);
         setOutput(accountA_PublicKeyX, publicKeyX);
         setOutput(accountA_PublicKeyY, publicKeyY);
+        setOutput(accountA_WalletHash, walletHash.packed);
         setOutput(accountA_Nonce, nonce_after.result());
 
         setArrayOutput(balanceA_S_Address, feeTokenID.bits);
@@ -106,6 +110,7 @@ public:
         nonce.generate_r1cs_witness();
         pb.val(publicKeyX) = update.publicKeyX;
         pb.val(publicKeyY) = update.publicKeyY;
+        walletHash.generate_r1cs_witness(pb, update.walletHash);
         feeTokenID.generate_r1cs_witness(pb, update.feeTokenID);
         fee.generate_r1cs_witness(pb, update.fee);
 
@@ -131,6 +136,7 @@ public:
         owner.generate_r1cs_constraints();
         accountID.generate_r1cs_constraints(true);
         nonce.generate_r1cs_constraints();
+        walletHash.generate_r1cs_constraints();
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
 
@@ -157,6 +163,7 @@ public:
             accountID.bits,
             nonce.bits,
             compressPublicKey.result(),
+            walletHash.bits,
             VariableArrayT(4, state.constants.zero), feeTokenID.bits,
             fFee.bits(),
         });

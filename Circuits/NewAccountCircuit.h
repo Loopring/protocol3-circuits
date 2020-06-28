@@ -26,6 +26,7 @@ public:
     DualVariableGadget newOwner;
     VariableT newPublicKeyX;
     VariableT newPublicKeyY;
+    DualVariableGadget walletHash;
 
     // Signature
     Poseidon_gadget_T<10, 1, 6, 53, 9, 1> hash;
@@ -69,6 +70,7 @@ public:
         newOwner(pb, NUM_BITS_ADDRESS, FMT(prefix, ".newOwner")),
         newPublicKeyX(make_variable(pb, FMT(prefix, ".newPublicKeyX"))),
         newPublicKeyY(make_variable(pb, FMT(prefix, ".newPublicKeyY"))),
+        walletHash(pb, NUM_BITS_HASH, FMT(prefix, ".walletHash")),
 
         // Signature
         hash(pb, var_array({
@@ -113,6 +115,7 @@ public:
         setOutput(accountB_Owner, newOwner.packed);
         setOutput(accountB_PublicKeyX, newPublicKeyX);
         setOutput(accountB_PublicKeyY, newPublicKeyY);
+        setOutput(accountB_WalletHash, walletHash.packed);
 
         setArrayOutput(balanceA_S_Address, feeTokenID.bits);
         setOutput(balanceA_S_Balance, balanceS_A.back());
@@ -135,6 +138,7 @@ public:
         newOwner.generate_r1cs_witness(pb, create.newOwner);
         pb.val(newPublicKeyX) = create.newPublicKeyX;
         pb.val(newPublicKeyY) = create.newPublicKeyY;
+        walletHash.generate_r1cs_witness(pb, create.newWalletHash);
 
         // Signature
         hash.generate_r1cs_witness();
@@ -168,6 +172,7 @@ public:
         nonce.generate_r1cs_constraints();
         newAccountID.generate_r1cs_constraints();
         newOwner.generate_r1cs_constraints();
+        walletHash.generate_r1cs_constraints();
 
         // Signature
         hash.generate_r1cs_constraints();
@@ -196,12 +201,12 @@ public:
     {
         return flattenReverse({
             payerAccountID.bits,
-            nonce.bits,
             VariableArrayT(4, state.constants.zero), feeTokenID.bits,
             fFee.bits(),
             newAccountID.bits,
             newOwner.bits,
-            compressPublicKey.result()
+            compressPublicKey.result(),
+            walletHash.bits
         });
     }
 };

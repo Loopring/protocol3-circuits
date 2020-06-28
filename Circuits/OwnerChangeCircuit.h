@@ -24,6 +24,7 @@ public:
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
     DualVariableGadget newOwner;
+    DualVariableGadget walletHash;
 
     // Balances
     DynamicVariableGadget balanceS_A;
@@ -53,6 +54,7 @@ public:
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         newOwner(pb, NUM_BITS_ADDRESS, FMT(prefix, ".owner")),
+        walletHash(pb, state.accountA.account.walletHash, NUM_BITS_HASH, FMT(prefix, ".walletHash")),
 
         // Balances
         balanceS_A(pb, state.accountA.balanceS.balance, FMT(prefix, ".balanceS_A")),
@@ -69,8 +71,7 @@ public:
         numConditionalTransactionsAfter(pb, state.numConditionalTransactions, state.constants.one, FMT(prefix, ".numConditionalTransactionsAfter"))
     {
         setArrayOutput(accountA_Address, accountID.bits);
-        setOutput(accountA_Owner, publicKeyX);
-        setOutput(accountA_PublicKeyY, publicKeyY);
+        setOutput(accountA_Owner, newOwner.packed);
         setOutput(accountA_Nonce, nonce_after.result());
 
         setArrayOutput(balanceA_S_Address, feeTokenID.bits);
@@ -93,9 +94,10 @@ public:
         feeTokenID.generate_r1cs_witness(pb, change.feeTokenID);
         fee.generate_r1cs_witness(pb, change.fee);
         newOwner.generate_r1cs_witness(pb, change.newOwner);
+        walletHash.generate_r1cs_witness();
 
         // Fee as float
-        fFee.generate_r1cs_witness(toFloat(update.fee, Float16Encoding));
+        fFee.generate_r1cs_witness(toFloat(change.fee, Float16Encoding));
         requireAccuracyFee.generate_r1cs_witness();
         // Fee payment from to the operator
         feePayment.generate_r1cs_witness();
@@ -115,6 +117,7 @@ public:
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
         newOwner.generate_r1cs_constraints(true);
+        walletHash.generate_r1cs_constraints(true);
 
         // Fee as float
         fFee.generate_r1cs_constraints();
@@ -137,6 +140,7 @@ public:
             VariableArrayT(4, state.constants.zero), feeTokenID.bits,
             fFee.bits(),
             newOwner.bits,
+            walletHash.bits
         });
     }
 };
