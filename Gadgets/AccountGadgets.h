@@ -206,6 +206,131 @@ public:
     }
 };
 
+// Calculcates the state of a user's open position
+class ApplyInterestGadget : public GadgetT
+{
+public:
+
+    // TODO: make safe
+    UnsafeSubGadget indexDiff;
+    MulDivGadget balanceDiff;
+    AddGadget newBalance;
+
+    ApplyInterestGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const VariableT& balance,
+        const VariableT& oldIndex,
+        const VariableT& newIndex,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        indexDiff(pb, newIndex, oldIndex, FMT(prefix, ".indexDiff")),
+        balanceDiff(pb, constants, balance, indexDiff.result(), constants.indexBase, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".balanceDiff")),
+        newBalance(pb, balance, balanceDiff.result(), NUM_BITS_AMOUNT, FMT(prefix, ".newBalance"))
+    {
+    }
+
+    ApplyInterestGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const BalanceGadget& balance,
+        const VariableT& index,
+        const std::string& prefix
+    ) :
+        ApplyInterestGadget(pb, constants, balance.balance, balance.index, index, prefix)
+    {
+    }
+
+    void generate_r1cs_witness()
+    {
+        indexDiff.generate_r1cs_witness();
+        balanceDiff.generate_r1cs_witness();
+        newBalance.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        indexDiff.generate_r1cs_constraints();
+        balanceDiff.generate_r1cs_constraints();
+        newBalance.generate_r1cs_constraints();
+    }
+
+    const VariableT result() const
+    {
+        return newBalance.result();
+    }
+};
+
+// Calculcates the state of a user's open position
+class DynamicBalanceGadget : public DynamicVariableGadget
+{
+public:
+
+    const VariableT& newIndex;
+
+    ApplyInterestGadget applyInterest;
+
+    DynamicBalanceGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const VariableT& balance,
+        const VariableT& oldIndex,
+        const VariableT& _index,
+        const std::string& prefix
+    ) :
+        DynamicVariableGadget(pb, prefix),
+        newIndex(_index),
+        applyInterest(pb, constants, balance, oldIndex, newIndex, FMT(prefix, ".applyInterest"))
+    {
+        add(applyInterest.result());
+        allowGeneratingWitness = false;
+    }
+
+    DynamicBalanceGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const BalanceGadget& balance,
+        const VariableT& _index,
+        const std::string& prefix
+    ) :
+        DynamicBalanceGadget(pb, constants, balance.balance, balance.index, _index, prefix)
+    {
+    }
+
+    DynamicBalanceGadget(
+        ProtoboardT& pb,
+        const Constants& constants,
+        const BalanceGadget& balance,
+        const BalanceGadget& _index,
+        const std::string& prefix
+    ) :
+        DynamicBalanceGadget(pb, constants, balance, _index.index, prefix)
+    {
+    }
+
+    void generate_r1cs_witness()
+    {
+        applyInterest.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        applyInterest.generate_r1cs_constraints();
+    }
+
+    const VariableT& balance() const
+    {
+        return back();
+    }
+
+    const VariableT& index() const
+    {
+        return newIndex;
+    }
+};
+
 }
 
 #endif

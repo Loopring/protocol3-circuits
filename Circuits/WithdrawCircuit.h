@@ -34,10 +34,6 @@ public:
     // Signature
     Poseidon_gadget_T<8, 1, 6, 53, 7, 1> hash;
 
-    // Balances
-    DynamicVariableGadget balanceB_A;
-    DynamicVariableGadget balanceA_O;
-
     // Type
     IsNonZero isConditional;
     UnsafeAddGadget numConditionalTransactionsAfter;
@@ -51,14 +47,17 @@ public:
     IfThenRequireGadget checkValidFullWithdrawal;
     IfThenRequireGadget checkInvalidFullWithdrawal;
 
+    // Balances
+    DynamicBalanceGadget balanceB_A;
+    DynamicBalanceGadget balanceA_O;
     // Fee as float
     FloatGadget fFee;
     RequireAccuracyGadget requireAccuracyFee;
-
     // Fee payment from From to the operator
     TransferGadget feePayment;
 
     // Calculate the new balance
+    DynamicBalanceGadget balanceS_A;
     UnsafeSubGadget balance_after;
 
     // Increase the nonce of the user by 1
@@ -95,9 +94,6 @@ public:
             state.accountA.account.nonce
         }), FMT(this->annotation_prefix, ".hash")),
 
-        balanceB_A(pb, state.accountA.balanceB.balance, FMT(prefix, ".balanceB_A")),
-        balanceA_O(pb, state.oper.balanceA.balance, FMT(prefix, ".balanceA_O")),
-
         // Type
         isConditional(pb, type.packed, FMT(prefix, ".isConditional")),
         numConditionalTransactionsAfter(pb, state.numConditionalTransactions, state.constants.one, FMT(prefix, ".numConditionalTransactionsAfter")),
@@ -111,15 +107,18 @@ public:
         checkValidFullWithdrawal(pb, validFullWithdrawalType.result(), amountIsFullBalance.result(), FMT(prefix, ".checkValidFullWithdrawal")),
         checkInvalidFullWithdrawal(pb, invalidFullWithdrawalType.result(), amountIsZero.result(), FMT(prefix, ".checkInvalidFullWithdrawal")),
 
+        // Balances
+        balanceB_A(pb, state.constants, state.accountA.balanceB, state.index.balanceA, FMT(prefix, ".balanceB_A")),
+        balanceA_O(pb, state.constants, state.oper.balanceA, state.index.balanceA, FMT(prefix, ".balanceA_O")),
         // Fee as float
         fFee(pb, state.constants, Float16Encoding, FMT(prefix, ".fFee")),
         requireAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFee")),
-
-        // Fee payment from From to the operator
+        // Fee payment from to the operator
         feePayment(pb, balanceB_A, balanceA_O, fFee.value(), FMT(prefix, ".feePayment")),
 
         // Calculate the new balance
-        balance_after(pb, state.accountA.balanceS.balance, amount.packed, FMT(prefix, ".balance_after")),
+        balanceS_A(pb, state.constants, state.accountA.balanceS, state.index.balanceB, FMT(prefix, ".balanceS_A")),
+        balance_after(pb, balanceS_A.balance(), amount.packed, FMT(prefix, ".balance_after")),
 
         // Increase the nonce by 1 (unless it's a forced withdrawal)
         isForcedWithdrawal(pb, {validFullWithdrawalType.result(), invalidFullWithdrawalType.result()}, FMT(prefix, ".isForcedWithdrawal")),
@@ -131,10 +130,13 @@ public:
 
         setArrayOutput(balanceA_S_Address, tokenID.bits);
         setOutput(balanceA_S_Balance, balance_after.result());
-        setArrayOutput(balanceA_B_Address, feeTokenID.bits);
-        setOutput(balanceA_B_Balance, balanceB_A.back());
+        setOutput(balanceA_S_Index, balanceS_A.index());
+        setArrayOutput(balanceB_S_Address, feeTokenID.bits);
+        setOutput(balanceA_B_Balance, balanceB_A.balance());
+        setOutput(balanceA_B_Index, balanceB_A.index());
 
-        setOutput(balanceO_A_Balance, balanceA_O.back());
+        setOutput(balanceO_A_Balance, balanceA_O.balance());
+        setOutput(balanceO_A_Index, balanceA_O.index());
 
         setOutput(hash_A, hash.result());
 
@@ -174,14 +176,17 @@ public:
         checkValidFullWithdrawal.generate_r1cs_witness();
         checkInvalidFullWithdrawal.generate_r1cs_witness();
 
+        // Balances
+        balanceB_A.generate_r1cs_witness();
+        balanceA_O.generate_r1cs_witness();
         // Fee as float
         fFee.generate_r1cs_witness(toFloat(withdrawal.fee, Float16Encoding));
         requireAccuracyFee.generate_r1cs_witness();
-
-        // Fee payment from From to the operator
+        // Fee payment from to the operator
         feePayment.generate_r1cs_witness();
 
         // Calculate the new balance
+        balanceS_A.generate_r1cs_witness();
         balance_after.generate_r1cs_witness();
 
         // Increase the nonce by 1 (unless it's a forced withdrawal)
@@ -219,14 +224,17 @@ public:
         checkValidFullWithdrawal.generate_r1cs_constraints();
         checkInvalidFullWithdrawal.generate_r1cs_constraints();
 
+        // Balances
+        balanceB_A.generate_r1cs_constraints();
+        balanceA_O.generate_r1cs_constraints();
         // Fee as float
         fFee.generate_r1cs_constraints();
         requireAccuracyFee.generate_r1cs_constraints();
-
-        // Fee payment from From to the operator
+        // Fee payment from to the operator
         feePayment.generate_r1cs_constraints();
 
         // Calculate the new balance
+        balanceS_A.generate_r1cs_constraints();
         balance_after.generate_r1cs_constraints();
 
         // Increase the nonce by 1 (unless it's a forced withdrawal)

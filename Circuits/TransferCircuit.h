@@ -77,10 +77,10 @@ public:
     Poseidon_gadget_T<13, 1, 6, 53, 12, 1> hashDual;
 
     // Balances
-    DynamicVariableGadget balanceS_A;
-    DynamicVariableGadget balanceB_A;
-    DynamicVariableGadget balanceB_B;
-    DynamicVariableGadget balanceA_O;
+    DynamicBalanceGadget balanceS_A;
+    DynamicBalanceGadget balanceB_A;
+    DynamicBalanceGadget balanceB_B;
+    DynamicBalanceGadget balanceA_O;
 
     // Addresses
     OwnerValidGadget ownerValid;
@@ -180,10 +180,10 @@ public:
         }), FMT(this->annotation_prefix, ".hashDual")),
 
         // Balances
-        balanceS_A(pb, state.accountA.balanceS.balance, FMT(prefix, ".balanceS_A")),
-        balanceB_A(pb, state.accountA.balanceB.balance, FMT(prefix, ".balanceB_A")),
-        balanceB_B(pb, state.accountB.balanceB.balance, FMT(prefix, ".balanceB_B")),
-        balanceA_O(pb, state.oper.balanceA.balance, FMT(prefix, ".balanceA_O")),
+        balanceS_A(pb, state.constants, state.accountA.balanceS, state.index.balanceB, FMT(prefix, ".balanceS_A")),
+        balanceB_A(pb, state.constants, state.accountA.balanceB, state.index.balanceA, FMT(prefix, ".balanceB_A")),
+        balanceB_B(pb, state.constants, state.accountB.balanceB, state.index.balanceB, FMT(prefix, ".balanceB_B")),
+        balanceA_O(pb, state.constants, state.oper.balanceA, state.index.balanceA, FMT(prefix, ".balanceA_O")),
 
         // Owner
         ownerValid(pb, state.constants, state.accountB.account.owner, owner_To.packed, FMT(prefix, ".ownerValid")),
@@ -206,24 +206,28 @@ public:
         // Transfer from From to To
         transferPayment(pb, balanceS_A, balanceB_B, fAmount.value(), FMT(prefix, ".transferPayment")),
 
-        // Increase the nonce of From by 1 (unless it's a conditional transfer)
+        // Increase the nonce of From by 1
         nonce_From_after(pb, state.accountA.account.nonce, state.constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_From_after"))
     {
         setArrayOutput(accountA_Address, accountID_From.bits);
         setOutput(accountA_Nonce, nonce_From_after.result());
 
         setArrayOutput(balanceA_S_Address, tokenID.bits);
-        setOutput(balanceA_S_Balance, balanceS_A.back());
-        setArrayOutput(balanceA_B_Address, feeTokenID.bits);
-        setOutput(balanceA_B_Balance, balanceB_A.back());
+        setOutput(balanceA_S_Balance, balanceS_A.balance());
+        setOutput(balanceA_S_Index, balanceS_A.index());
+        setArrayOutput(balanceB_S_Address, feeTokenID.bits);
+        setOutput(balanceA_B_Balance, balanceB_A.balance());
+        setOutput(balanceA_B_Index, balanceB_A.index());
 
         setArrayOutput(accountB_Address, accountID_To.bits);
         setOutput(accountB_Owner, owner_To.packed);
 
-        setArrayOutput(balanceB_B_Address, tokenID.bits);
-        setOutput(balanceB_B_Balance, balanceB_B.back());
+        setArrayOutput(balanceA_S_Address, tokenID.bits);
+        setOutput(balanceB_B_Balance, balanceB_B.balance());
+        setOutput(balanceB_B_Index, balanceB_B.index());
 
-        setOutput(balanceO_A_Balance, balanceA_O.back());
+        setOutput(balanceO_A_Balance, balanceA_O.balance());
+        setOutput(balanceO_A_Index, balanceA_O.index());
 
         setOutput(hash_A, hashPayer.result());
 
@@ -282,6 +286,12 @@ public:
         // Owner
         ownerValid.generate_r1cs_witness();
         //owner_delta.generate_r1cs_witness();
+
+        // Balances
+        balanceS_A.generate_r1cs_witness();
+        balanceB_A.generate_r1cs_witness();
+        balanceB_B.generate_r1cs_witness();
+        balanceA_O.generate_r1cs_witness();
 
         // Type
         isConditional.generate_r1cs_witness();
@@ -344,6 +354,12 @@ public:
         // Owner
         ownerValid.generate_r1cs_constraints();
         //owner_delta.generate_r1cs_constraints();
+
+        // Balances
+        balanceS_A.generate_r1cs_constraints();
+        balanceB_A.generate_r1cs_constraints();
+        balanceB_B.generate_r1cs_constraints();
+        balanceA_O.generate_r1cs_constraints();
 
         // Type
         isConditional.generate_r1cs_constraints();

@@ -21,14 +21,14 @@ public:
     OrderGadget orderB;
 
     // Balances
-    DynamicVariableGadget balanceS_A;
-    DynamicVariableGadget balanceB_A;
-    DynamicVariableGadget balanceS_B;
-    DynamicVariableGadget balanceB_B;
-    DynamicVariableGadget balanceA_P;
-    DynamicVariableGadget balanceB_P;
-    DynamicVariableGadget balanceA_O;
-    DynamicVariableGadget balanceB_O;
+    DynamicBalanceGadget balanceS_A;
+    DynamicBalanceGadget balanceB_A;
+    DynamicBalanceGadget balanceS_B;
+    DynamicBalanceGadget balanceB_B;
+    DynamicBalanceGadget balanceA_P;
+    DynamicBalanceGadget balanceB_P;
+    DynamicBalanceGadget balanceA_O;
+    DynamicBalanceGadget balanceB_O;
 
     // Order fills
     FloatGadget fillS_A;
@@ -70,14 +70,15 @@ public:
         orderA(pb, state.constants, state.exchangeID, FMT(prefix, ".orderA")),
         orderB(pb, state.constants, state.exchangeID, FMT(prefix, ".orderB")),
 
-        balanceS_A(pb, state.accountA.balanceS.balance, FMT(prefix, ".balanceS_A")),
-        balanceB_A(pb, state.accountA.balanceB.balance, FMT(prefix, ".balanceB_A")),
-        balanceS_B(pb, state.accountB.balanceS.balance, FMT(prefix, ".balanceS_B")),
-        balanceB_B(pb, state.accountB.balanceB.balance, FMT(prefix, ".balanceB_B")),
-        balanceA_P(pb, state.pool.balanceA.balance, FMT(prefix, ".balanceA_P")),
-        balanceB_P(pb, state.pool.balanceB.balance, FMT(prefix, ".balanceB_P")),
-        balanceA_O(pb, state.oper.balanceA.balance, FMT(prefix, ".balanceA_O")),
-        balanceB_O(pb, state.oper.balanceB.balance, FMT(prefix, ".balanceB_O")),
+        // Balances
+        balanceS_A(pb, state.constants, state.accountA.balanceS, state.index.balanceB, FMT(prefix, ".balanceS_A")),
+        balanceB_A(pb, state.constants, state.accountA.balanceB, state.index.balanceA, FMT(prefix, ".balanceB_A")),
+        balanceS_B(pb, state.constants, state.accountB.balanceS, state.index.balanceA, FMT(prefix, ".balanceS_B")),
+        balanceB_B(pb, state.constants, state.accountB.balanceB, state.index.balanceB, FMT(prefix, ".balanceB_B")),
+        balanceA_P(pb, state.constants, state.pool.balanceA, state.index.balanceA, FMT(prefix, ".balanceA_P")),
+        balanceB_P(pb, state.constants, state.pool.balanceB, state.index.balanceB, FMT(prefix, ".balanceB_P")),
+        balanceA_O(pb, state.constants, state.oper.balanceA, state.index.balanceA, FMT(prefix, ".balanceA_O")),
+        balanceB_O(pb, state.constants, state.oper.balanceB, state.index.balanceB, FMT(prefix, ".balanceB_O")),
 
         // Order fills
         fillS_A(pb, state.constants, Float24Encoding, FMT(prefix, ".fillS_A")),
@@ -112,25 +113,32 @@ public:
         setOutput(tradeHistoryA_Filled, orderMatching.getFilledAfter_A());
         setOutput(tradeHistoryA_OrderId, orderA.orderID.packed);
         setArrayOutput(balanceA_S_Address, orderA.tokenS.bits);
-        setOutput(balanceA_S_Balance, balanceS_A.back());
-        setArrayOutput(balanceA_B_Address, orderA.tokenB.bits);
-        setOutput(balanceA_B_Balance, balanceB_A.back());
+        setOutput(balanceA_S_Balance, balanceS_A.balance());
+        setOutput(balanceA_S_Index, balanceS_A.index());
+        setArrayOutput(balanceB_S_Address, orderA.tokenB.bits);
+        setOutput(balanceA_B_Balance, balanceB_A.balance());
+        setOutput(balanceA_B_Index, balanceB_A.index());
         setArrayOutput(accountA_Address, orderA.accountID.bits);
 
         setArrayOutput(tradeHistoryB_Address, subArray(orderB.orderID.bits, 0, NUM_BITS_TRADING_HISTORY));
         setOutput(tradeHistoryB_Filled, orderMatching.getFilledAfter_B());
         setOutput(tradeHistoryB_OrderId, orderB.orderID.packed);
         setArrayOutput(balanceB_S_Address, orderB.tokenS.bits);
-        setOutput(balanceB_S_Balance, balanceS_B.back());
-        setArrayOutput(balanceB_B_Address, orderB.tokenB.bits);
-        setOutput(balanceB_B_Balance, balanceB_B.back());
+        setOutput(balanceB_S_Balance, balanceS_B.balance());
+        setOutput(balanceB_S_Index, balanceS_B.index());
+        setOutput(balanceB_B_Balance, balanceB_B.balance());
+        setOutput(balanceB_B_Index, balanceB_B.index());
         setArrayOutput(accountB_Address, orderB.accountID.bits);
 
-        setOutput(balanceP_A_Balance, balanceA_P.back());
-        setOutput(balanceP_B_Balance, balanceB_P.back());
+        setOutput(balanceP_A_Balance, balanceA_P.balance());
+        setOutput(balanceP_A_Index, balanceA_P.index());
+        setOutput(balanceP_B_Balance, balanceB_P.balance());
+        setOutput(balanceP_B_Index, balanceB_P.index());
 
-        setOutput(balanceO_A_Balance, balanceA_O.back());
-        setOutput(balanceO_B_Balance, balanceB_O.back());
+        setOutput(balanceO_A_Balance, balanceA_O.balance());
+        setOutput(balanceO_A_Index, balanceA_O.index());
+        setOutput(balanceO_B_Balance, balanceB_O.balance());
+        setOutput(balanceO_B_Index, balanceB_O.index());
 
         setOutput(hash_A, orderA.hash.result());
         setOutput(hash_B, orderB.hash.result());
@@ -141,6 +149,16 @@ public:
         // Orders
         orderA.generate_r1cs_witness(spotTrade.orderA);
         orderB.generate_r1cs_witness(spotTrade.orderB);
+
+        // Balances
+        balanceS_A.generate_r1cs_witness();
+        balanceB_A.generate_r1cs_witness();
+        balanceS_B.generate_r1cs_witness();
+        balanceB_B.generate_r1cs_witness();
+        balanceA_P.generate_r1cs_witness();
+        balanceB_P.generate_r1cs_witness();
+        balanceA_O.generate_r1cs_witness();
+        balanceB_O.generate_r1cs_witness();
 
         // Order fills
         fillS_A.generate_r1cs_witness(spotTrade.fillS_A);
@@ -177,6 +195,16 @@ public:
         // Orders
         orderA.generate_r1cs_constraints();
         orderB.generate_r1cs_constraints();
+
+        // Balances
+        balanceS_A.generate_r1cs_constraints();
+        balanceB_A.generate_r1cs_constraints();
+        balanceS_B.generate_r1cs_constraints();
+        balanceB_B.generate_r1cs_constraints();
+        balanceA_P.generate_r1cs_constraints();
+        balanceB_P.generate_r1cs_constraints();
+        balanceA_O.generate_r1cs_constraints();
+        balanceB_O.generate_r1cs_constraints();
 
         // Order fills
         fillS_A.generate_r1cs_constraints();

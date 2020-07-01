@@ -116,7 +116,8 @@ auto dummyDeposit = R"({
     "owner": "0",
     "accountID": 0,
     "tokenID": 0,
-    "amount": "0"
+    "amount": "0",
+    "index": "0"
 })"_json;
 
 auto dummySignature = R"({
@@ -352,6 +353,7 @@ public:
     ethsnarks::FieldT accountID;
     ethsnarks::FieldT tokenID;
     ethsnarks::FieldT amount;
+    ethsnarks::FieldT index;
 };
 
 static void from_json(const json& j, Deposit& deposit)
@@ -360,6 +362,7 @@ static void from_json(const json& j, Deposit& deposit)
     deposit.accountID = ethsnarks::FieldT(j.at("accountID"));
     deposit.tokenID = ethsnarks::FieldT(j.at("tokenID"));
     deposit.amount = ethsnarks::FieldT(j.at("amount").get<std::string>().c_str());
+    deposit.index = ethsnarks::FieldT(j.at("index").get<std::string>().c_str());
 }
 
 class Withdrawal
@@ -433,6 +436,7 @@ static void from_json(const json& j, NewAccount& create)
     create.newWalletHash = ethsnarks::FieldT(j["newWalletHash"].get<std::string>().c_str());
 }
 
+
 class OwnerChange
 {
 public:
@@ -502,11 +506,15 @@ public:
     BalanceUpdate balanceUpdateB_B;
     AccountUpdate accountUpdate_B;
 
+    BalanceUpdate balanceUpdateA_O;
+    BalanceUpdate balanceUpdateB_O;
+    AccountUpdate accountUpdate_O;
+
     BalanceUpdate balanceUpdateA_P;
     BalanceUpdate balanceUpdateB_P;
 
-    BalanceUpdate balanceUpdateA_O;
-    BalanceUpdate balanceUpdateB_O;
+    BalanceUpdate balanceUpdateA_I;
+    BalanceUpdate balanceUpdateB_I;
 
     Signature signatureA;
     Signature signatureB;
@@ -527,11 +535,15 @@ static void from_json(const json& j, Witness& state)
     state.balanceUpdateB_B = j.at("balanceUpdateB_B").get<BalanceUpdate>();
     state.accountUpdate_B = j.at("accountUpdate_B").get<AccountUpdate>();
 
+    state.balanceUpdateA_O = j.at("balanceUpdateA_O").get<BalanceUpdate>();
+    state.balanceUpdateB_O = j.at("balanceUpdateB_O").get<BalanceUpdate>();
+    state.accountUpdate_O = j.at("accountUpdate_O").get<AccountUpdate>();
+
     state.balanceUpdateA_P = j.at("balanceUpdateA_P").get<BalanceUpdate>();
     state.balanceUpdateB_P = j.at("balanceUpdateB_P").get<BalanceUpdate>();
 
-    state.balanceUpdateA_O = j.at("balanceUpdateA_O").get<BalanceUpdate>();
-    state.balanceUpdateB_O = j.at("balanceUpdateB_O").get<BalanceUpdate>();
+    state.balanceUpdateA_I = j.at("balanceUpdateA_I").get<BalanceUpdate>();
+    state.balanceUpdateB_I = j.at("balanceUpdateB_I").get<BalanceUpdate>();
 
     state.signatureA = dummySignature.get<Signature>();
     state.signatureB = dummySignature.get<Signature>();
@@ -649,6 +661,8 @@ public:
     ethsnarks::FieldT operatorAccountID;
     AccountUpdate accountUpdate_O;
 
+    AccountUpdate accountUpdate_I;
+
     std::vector<Loopring::UniversalTransaction> transactions;
 };
 
@@ -670,6 +684,8 @@ static void from_json(const json& j, Block& block)
 
     block.operatorAccountID = ethsnarks::FieldT(j.at("operatorAccountID"));
     block.accountUpdate_O = j.at("accountUpdate_O").get<AccountUpdate>();
+
+    block.accountUpdate_I = j.at("accountUpdate_I").get<AccountUpdate>();
 
     // Read transactions
     json jTransactions = j["transactions"];

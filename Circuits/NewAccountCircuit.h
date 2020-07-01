@@ -41,13 +41,11 @@ public:
     CompressPublicKey compressPublicKey;
 
     // Balances
-    DynamicVariableGadget balanceS_A;
-    DynamicVariableGadget balanceB_O;
-
+    DynamicBalanceGadget balanceS_A;
+    DynamicBalanceGadget balanceB_O;
     // Fee as float
     FloatGadget fFee;
     RequireAccuracyGadget requireAccuracyFee;
-
     // Fee payment from From to the operator
     TransferGadget feePayment;
 
@@ -95,13 +93,11 @@ public:
         compressPublicKey(pb, state.params, state.constants, newPublicKeyX, newPublicKeyY, FMT(this->annotation_prefix, ".compressPublicKey")),
 
         // Balances
-        balanceS_A(pb, state.accountA.balanceS.balance, FMT(prefix, ".balanceS_A")),
-        balanceB_O(pb, state.oper.balanceB.balance, FMT(prefix, ".balanceB_O")),
-
+        balanceS_A(pb, state.constants, state.accountA.balanceS, state.index.balanceB, FMT(prefix, ".balanceS_A")),
+        balanceB_O(pb, state.constants, state.oper.balanceB, state.index.balanceB, FMT(prefix, ".balanceB_O")),
         // Fee as float
         fFee(pb, state.constants, Float16Encoding, FMT(prefix, ".fFee")),
         requireAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFee")),
-
         // Fee payment from to the operator
         feePayment(pb, balanceS_A, balanceB_O, fFee.value(), FMT(prefix, ".feePayment")),
 
@@ -118,9 +114,11 @@ public:
         setOutput(accountB_WalletHash, walletHash.packed);
 
         setArrayOutput(balanceA_S_Address, feeTokenID.bits);
-        setOutput(balanceA_S_Balance, balanceS_A.back());
+        setOutput(balanceA_S_Balance, balanceS_A.balance());
+        setOutput(balanceA_S_Index, balanceS_A.index());
 
-        setOutput(balanceO_B_Balance, balanceB_O.back());
+        setOutput(balanceO_B_Balance, balanceB_O.balance());
+        setOutput(balanceO_B_Index, balanceB_O.index());
 
         setOutput(hash_A, hash.result());
         setOutput(signatureRequired_A, state.constants.one);
@@ -152,10 +150,12 @@ public:
         // Compress the public key
         compressPublicKey.generate_r1cs_witness();
 
+        // Balances
+        balanceS_A.generate_r1cs_witness();
+        balanceB_O.generate_r1cs_witness();
         // Fee as float
         fFee.generate_r1cs_witness(toFloat(create.fee, Float16Encoding));
         requireAccuracyFee.generate_r1cs_witness();
-
         // Fee payment from to the operator
         feePayment.generate_r1cs_witness();
 
@@ -186,10 +186,12 @@ public:
         // Compress the public key
         compressPublicKey.generate_r1cs_constraints();
 
+        // Balances
+        balanceS_A.generate_r1cs_constraints();
+        balanceB_O.generate_r1cs_constraints();
         // Fee as float
         fFee.generate_r1cs_constraints();
         requireAccuracyFee.generate_r1cs_constraints();
-
         // Fee payment from to the operator
         feePayment.generate_r1cs_constraints();
 

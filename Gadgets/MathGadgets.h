@@ -40,7 +40,7 @@ public:
     const VariableT _1001;
     const VariableT _10000;
     const VariableT _100000;
-    const VariableT halfP;
+    const VariableT indexBase;
     const VariableT emptyTradeHistory;
     const VariableT maxAmount;
     const VariableT txTypeTransfer;
@@ -69,7 +69,7 @@ public:
         _1001(make_variable(pb, ethsnarks::FieldT(1001), FMT(prefix, "._1001"))),
         _10000(make_variable(pb, ethsnarks::FieldT(10000), FMT(prefix, "._10000"))),
         _100000(make_variable(pb, ethsnarks::FieldT(100000), FMT(prefix, "._100000"))),
-        halfP(make_variable(pb, ethsnarks::FieldT(HALF_P), FMT(prefix, ".halfP"))),
+        indexBase(make_variable(pb, ethsnarks::FieldT(INDEX_BASE), FMT(prefix, ".indexBase"))),
         emptyTradeHistory(make_variable(pb, ethsnarks::FieldT(EMPTY_TRADE_HISTORY), FMT(prefix, ".emptyTradeHistory"))),
         maxAmount(make_variable(pb, ethsnarks::FieldT(MAX_AMOUNT), FMT(prefix, ".maxAmount"))),
         maxConcurrentOrderIDs(make_variable(pb, ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS), FMT(prefix, ".maxConcurrentOrderIDs"))),
@@ -110,7 +110,7 @@ public:
         pb.add_r1cs_constraint(ConstraintT(_1001, FieldT::one(), ethsnarks::FieldT(1001)), "._1001");
         pb.add_r1cs_constraint(ConstraintT(_10000, FieldT::one(), ethsnarks::FieldT(10000)), "._10000");
         pb.add_r1cs_constraint(ConstraintT(_100000, FieldT::one(), ethsnarks::FieldT(100000)), "._100000");
-        pb.add_r1cs_constraint(ConstraintT(halfP, FieldT::one(), ethsnarks::FieldT(HALF_P)), ".halfP");
+        pb.add_r1cs_constraint(ConstraintT(indexBase, FieldT::one(), ethsnarks::FieldT(INDEX_BASE)), ".indexBase");
         pb.add_r1cs_constraint(ConstraintT(emptyTradeHistory, FieldT::one(), ethsnarks::FieldT(EMPTY_TRADE_HISTORY)), ".emptyTradeHistory");
         pb.add_r1cs_constraint(ConstraintT(maxAmount, FieldT::one(), ethsnarks::FieldT(MAX_AMOUNT)), ".maxAmount");
         pb.add_r1cs_constraint(ConstraintT(maxConcurrentOrderIDs, FieldT::one(), ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS)), ".maxConcurrentOrderIDs");
@@ -1051,6 +1051,46 @@ public:
     }
 };
 
+// max(A, B)
+class MaxGadget : public GadgetT
+{
+public:
+    LeqGadget A_lt_B;
+    TernaryGadget maximum;
+
+    MaxGadget(
+        ProtoboardT& pb,
+        const VariableT& A,
+        const VariableT& B,
+        const size_t n,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        A_lt_B(pb, A, B, n, FMT(prefix, ".(A < B)")),
+        maximum(pb, A_lt_B.lt(), B, A, FMT(prefix, ".maximum = (A < B) ? B : A"))
+    {
+
+    }
+
+    const VariableT& result() const
+    {
+        return maximum.result();
+    }
+
+    void generate_r1cs_witness()
+    {
+        A_lt_B.generate_r1cs_witness();
+        maximum.generate_r1cs_witness();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        A_lt_B.generate_r1cs_constraints();
+        maximum.generate_r1cs_constraints();
+    }
+};
+
 // require(A <= B)
 class RequireLeqGadget : public GadgetT
 {
@@ -1730,69 +1770,6 @@ public:
         equal_owner_or_no_owner_eq_true.generate_r1cs_constraints();
     }
 };
-
-/*class MapSelectorGadget : public GadgetT
-{
-public:
-
-    std::vector<EqualGadget> selectors;
-    std::vector<OrGadget> matched;
-
-    std::unique_ptr<EqualGadget> valid;
-
-    MapSelectorGadget(
-        ProtoboardT& pb,
-        const Constants& constants,
-        const std::vector<VariableT>& keys,
-        const VariableT& key,
-        const std::string& prefix
-    ) :
-        GadgetT(pb, prefix)
-    {
-        for (unsigned int i = 0; i < keys.size(); i++)
-        {
-            selectors.emplace_back(EqualGadget(pb, key, keys[i], FMT(prefix, ".selectors")));
-            matched.emplace_back(OrGadget(pb, {selectors.back().result(), (i == 0) ? constants.zero : matched.back().result()}, FMT(prefix, ".matched")));
-        }
-        // Make sure the key was found
-        valid.reset(new EqualGadget(pb, matched.back().result(), constants.one, FMT(prefix, ".key_not_found")));
-    }
-
-    void generate_r1cs_witness()
-    {
-        for (unsigned int i = 0; i < selectors.size(); i++)
-        {
-            selectors[i].generate_r1cs_witness();
-            matched[i].generate_r1cs_witness();
-        }
-        valid->generate_r1cs_witness();
-    }
-
-    void generate_r1cs_constraints()
-    {
-        for (unsigned int i = 0; i < selectors.size(); i++)
-        {
-            selectors[i].generate_r1cs_constraints();
-            matched[i].generate_r1cs_constraints();
-        }
-        valid->generate_r1cs_constraints();
-    }
-
-    const std::vector<VariableT> result() const
-    {
-        std::vector<VariableT> results;
-        for (unsigned int i = 0; i < selectors.size(); i++)
-        {
-            results.emplace_back(selectors[i].result());
-        }
-        return results;
-    }
-
-    const VariableT& isValid() const
-    {
-        return valid->result();
-    }
-};*/
 
 }
 

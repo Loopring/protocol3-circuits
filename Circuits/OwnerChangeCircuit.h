@@ -27,8 +27,8 @@ public:
     DualVariableGadget walletHash;
 
     // Balances
-    DynamicVariableGadget balanceS_A;
-    DynamicVariableGadget balanceB_O;
+    DynamicBalanceGadget balanceS_A;
+    DynamicBalanceGadget balanceB_O;
     // Fee as float
     FloatGadget fFee;
     RequireAccuracyGadget requireAccuracyFee;
@@ -57,8 +57,8 @@ public:
         walletHash(pb, state.accountA.account.walletHash, NUM_BITS_HASH, FMT(prefix, ".walletHash")),
 
         // Balances
-        balanceS_A(pb, state.accountA.balanceS.balance, FMT(prefix, ".balanceS_A")),
-        balanceB_O(pb, state.oper.balanceB.balance, FMT(prefix, ".balanceB_O")),
+        balanceS_A(pb, state.constants, state.accountA.balanceS, state.index.balanceB, FMT(prefix, ".balanceS_A")),
+        balanceB_O(pb, state.constants, state.oper.balanceB, state.index.balanceB, FMT(prefix, ".balanceB_O")),
         // Fee as float
         fFee(pb, state.constants, Float16Encoding, FMT(prefix, ".fFee")),
         requireAccuracyFee(pb, fFee.value(), fee.packed, Float16Accuracy, NUM_BITS_AMOUNT, FMT(prefix, ".requireAccuracyFee")),
@@ -75,9 +75,11 @@ public:
         setOutput(accountA_Nonce, nonce_after.result());
 
         setArrayOutput(balanceA_S_Address, feeTokenID.bits);
-        setOutput(balanceA_S_Balance, balanceS_A.back());
+        setOutput(balanceA_S_Balance, balanceS_A.balance());
+        setOutput(balanceA_S_Index, balanceS_A.index());
 
-        setOutput(balanceO_B_Balance, balanceB_O.back());
+        setOutput(balanceO_B_Balance, balanceB_O.balance());
+        setOutput(balanceO_B_Index, balanceB_O.index());
 
         setOutput(signatureRequired_A, state.constants.zero);
         setOutput(signatureRequired_B, state.constants.zero);
@@ -96,6 +98,9 @@ public:
         newOwner.generate_r1cs_witness(pb, change.newOwner);
         walletHash.generate_r1cs_witness();
 
+        // Balances
+        balanceS_A.generate_r1cs_witness();
+        balanceB_O.generate_r1cs_witness();
         // Fee as float
         fFee.generate_r1cs_witness(toFloat(change.fee, Float16Encoding));
         requireAccuracyFee.generate_r1cs_witness();
@@ -119,6 +124,9 @@ public:
         newOwner.generate_r1cs_constraints(true);
         walletHash.generate_r1cs_constraints(true);
 
+        // Balances
+        balanceS_A.generate_r1cs_constraints();
+        balanceB_O.generate_r1cs_constraints();
         // Fee as float
         fFee.generate_r1cs_constraints();
         requireAccuracyFee.generate_r1cs_constraints();

@@ -28,10 +28,9 @@ namespace Loopring
     static const unsigned int NUM_BITS_ADDRESS = 160;
     static const unsigned int NUM_BITS_HASH = 256;
 
-    static const char* HALF_P = "10944121435919637611123202872628637544274182200208017171849102093287904247808";
     static const char* EMPTY_TRADE_HISTORY = "6592749167578234498153410564243369229486412054742481069049239297514590357090";
     static const char* MAX_AMOUNT = "79228162514264337593543950335"; // 2^96 - 1
-    static const char* BASE = "1000000000000000000"; // 10^18
+    static const char* INDEX_BASE = "1000000000000000000"; // 10^18
 
     struct FloatEncoding
     {

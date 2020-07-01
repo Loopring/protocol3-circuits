@@ -172,13 +172,19 @@ public:
     UpdateBalanceGadget updateBalanceB_B;
     UpdateAccountGadget updateAccount_B;
 
+    // Update Operator
+    UpdateBalanceGadget updateBalanceB_O;
+    UpdateBalanceGadget updateBalanceA_O;
+    UpdateAccountGadget updateAccount_O;
+
     // Update Protocol pool
     UpdateBalanceGadget updateBalanceA_P;
     UpdateBalanceGadget updateBalanceB_P;
 
-    // Update Operator
-    UpdateBalanceGadget updateBalanceA_O;
-    UpdateBalanceGadget updateBalanceB_O;
+    // Update Index
+    UpdateBalanceGadget updateBalanceB_I;
+    UpdateBalanceGadget updateBalanceA_I;
+
 
     TransactionGadget(
         ProtoboardT& pb,
@@ -189,8 +195,9 @@ public:
         const VariableT& timestamp,
         const VariableT& protocolTakerFeeBips,
         const VariableT& protocolMakerFeeBips,
+        const VariableArrayT& operatorAccountID,
         const VariableT& protocolBalancesRoot,
-        const VariableT& operatorBalancesRoot,
+        const VariableT& indexBalancesRoot,
         const VariableT& numConditionalTransactionsBefore,
         const std::string& prefix
     ) :
@@ -226,7 +233,7 @@ public:
                          {state.accountA.balanceS.balance, state.accountA.balanceS.index, state.accountA.balanceS.tradingHistory},
                          {tx.getOutput(balanceA_S_Balance), tx.getOutput(balanceA_S_Index), updateTradeHistory_A.result()},
                          FMT(prefix, ".updateBalanceS_A")),
-        updateBalanceB_A(pb, updateBalanceS_A.result(), tx.getArrayOutput(balanceA_B_Address),
+        updateBalanceB_A(pb, updateBalanceS_A.result(), tx.getArrayOutput(balanceB_S_Address),
                          {state.accountA.balanceB.balance, state.accountA.balanceB.index, state.accountA.balanceB.tradingHistory},
                          {tx.getOutput(balanceA_B_Balance), tx.getOutput(balanceA_B_Index), state.accountA.balanceB.tradingHistory},
                          FMT(prefix, ".updateBalanceB_A")),
@@ -244,7 +251,7 @@ public:
                          {state.accountB.balanceS.balance, state.accountB.balanceS.index, state.accountB.balanceS.tradingHistory},
                          {tx.getOutput(balanceB_S_Balance), tx.getOutput(balanceB_S_Index), updateTradeHistory_B.result()},
                          FMT(prefix, ".updateBalanceS_B")),
-        updateBalanceB_B(pb, updateBalanceS_B.result(), tx.getArrayOutput(balanceB_B_Address),
+        updateBalanceB_B(pb, updateBalanceS_B.result(), tx.getArrayOutput(balanceA_S_Address),
                          {state.accountB.balanceB.balance, state.accountB.balanceB.index, state.accountB.balanceB.tradingHistory},
                          {tx.getOutput(balanceB_B_Balance), tx.getOutput(balanceB_B_Index), state.accountB.balanceB.tradingHistory},
                          FMT(prefix, ".updateBalanceB_B")),
@@ -253,25 +260,40 @@ public:
                         {tx.getOutput(accountB_Owner), tx.getOutput(accountB_PublicKeyX), tx.getOutput(accountB_PublicKeyY), tx.getOutput(accountB_Nonce), tx.getOutput(accountB_WalletHash), updateBalanceB_B.result()},
                         FMT(prefix, ".updateAccount_B")),
 
+        // Update Operator
+        updateBalanceB_O(pb, state.oper.account.balancesRoot, tx.getArrayOutput(balanceA_S_Address),
+                         {state.oper.balanceB.balance, state.oper.balanceB.index, state.oper.balanceB.tradingHistory},
+                         {tx.getOutput(balanceO_B_Balance), tx.getOutput(balanceO_B_Index), state.oper.balanceB.tradingHistory},
+                         FMT(prefix, ".updateBalanceB_O")),
+        updateBalanceA_O(pb, updateBalanceB_O.result(), tx.getArrayOutput(balanceB_S_Address),
+                         {state.oper.balanceA.balance, state.oper.balanceA.index, state.oper.balanceA.tradingHistory},
+                         {tx.getOutput(balanceO_A_Balance), tx.getOutput(balanceO_A_Index), state.oper.balanceA.tradingHistory},
+                         FMT(prefix, ".updateBalanceA_O")),
+        updateAccount_O(pb, updateAccount_B.result(), operatorAccountID,
+                        {state.oper.account.owner, state.oper.account.publicKey.x, state.oper.account.publicKey.y, state.oper.account.nonce, state.oper.account.walletHash, state.oper.account.balancesRoot},
+                        {state.oper.account.owner, state.oper.account.publicKey.x, state.oper.account.publicKey.y, state.oper.account.nonce, state.oper.account.walletHash, updateBalanceA_O.result()},
+                        FMT(prefix, ".updateAccount_O")),
+
         // Update Protocol pool
-        updateBalanceA_P(pb, protocolBalancesRoot, tx.getArrayOutput(balanceA_B_Address),
+        updateBalanceA_P(pb, protocolBalancesRoot, tx.getArrayOutput(balanceB_S_Address),
                          {state.pool.balanceA.balance, state.pool.balanceA.index, constants.emptyTradeHistory},
                          {tx.getOutput(balanceP_A_Balance), tx.getOutput(balanceP_A_Index), constants.emptyTradeHistory},
                          FMT(prefix, ".updateBalanceA_P")),
-        updateBalanceB_P(pb, updateBalanceA_P.result(), tx.getArrayOutput(balanceB_B_Address),
+        updateBalanceB_P(pb, updateBalanceA_P.result(), tx.getArrayOutput(balanceA_S_Address),
                          {state.pool.balanceB.balance, state.pool.balanceB.index, constants.emptyTradeHistory},
                          {tx.getOutput(balanceP_B_Balance), tx.getOutput(balanceP_B_Index), constants.emptyTradeHistory},
                          FMT(prefix, ".updateBalanceB_P")),
 
-        // Update Operator
-        updateBalanceA_O(pb, operatorBalancesRoot, tx.getArrayOutput(balanceA_B_Address),
-                         {state.oper.balanceA.balance, state.oper.balanceA.index, state.oper.balanceA.tradingHistory},
-                         {tx.getOutput(balanceO_A_Balance), tx.getOutput(balanceO_A_Index), state.oper.balanceA.tradingHistory},
-                         FMT(prefix, ".updateBalanceA_O")),
-        updateBalanceB_O(pb, updateBalanceA_O.result(), tx.getArrayOutput(balanceB_B_Address),
-                         {state.oper.balanceB.balance, state.oper.balanceB.index, state.oper.balanceB.tradingHistory},
-                         {tx.getOutput(balanceO_B_Balance), tx.getOutput(balanceO_B_Index), state.oper.balanceB.tradingHistory},
-                         FMT(prefix, ".updateBalanceB_O"))
+        // Update Index
+        updateBalanceB_I(pb, indexBalancesRoot, tx.getArrayOutput(balanceA_S_Address),
+                         {state.indexBefore.balanceB.balance, state.indexBefore.balanceB.index, state.indexBefore.balanceB.tradingHistory},
+                         {state.indexBefore.balanceB.balance, tx.getOutput(index_B), state.indexBefore.balanceB.tradingHistory},
+                         FMT(prefix, ".updateBalanceB_I")),
+        updateBalanceA_I(pb, updateBalanceB_I.result(), tx.getArrayOutput(balanceB_S_Address),
+                         {state.indexBefore.balanceA.balance, state.indexBefore.balanceA.index, state.indexBefore.balanceA.tradingHistory},
+                         {state.indexBefore.balanceA.balance, tx.getOutput(index_A), state.indexBefore.balanceA.tradingHistory},
+                         FMT(prefix, ".updateBalanceA_I"))
+
     {
 
     }
@@ -289,10 +311,15 @@ public:
                                     uTx.witness.balanceUpdateS_B.before,
                                     uTx.witness.balanceUpdateB_B.before,
                                     uTx.witness.tradeHistoryUpdate_B.before,
+                                    uTx.witness.accountUpdate_O.before,
+                                    uTx.witness.balanceUpdateA_O.before,
+                                    uTx.witness.balanceUpdateB_O.before,
                                     uTx.witness.balanceUpdateA_P.before,
                                     uTx.witness.balanceUpdateB_P.before,
-                                    uTx.witness.balanceUpdateA_O.before,
-                                    uTx.witness.balanceUpdateB_O.before);
+                                    uTx.witness.balanceUpdateA_I.before,
+                                    uTx.witness.balanceUpdateB_I.before,
+                                    uTx.witness.balanceUpdateA_I.after,
+                                    uTx.witness.balanceUpdateB_I.after);
 
         noop.generate_r1cs_witness();
         spotTrade.generate_r1cs_witness(uTx.spotTrade);
@@ -339,13 +366,28 @@ public:
         updateBalanceB_B.generate_r1cs_witness(uTx.witness.balanceUpdateB_B.proof);
         updateAccount_B.generate_r1cs_witness(uTx.witness.accountUpdate_B.proof);
 
+        // Update Operator
+        updateBalanceB_O.generate_r1cs_witness(uTx.witness.balanceUpdateB_O.proof);
+        updateBalanceA_O.generate_r1cs_witness(uTx.witness.balanceUpdateA_O.proof);
+        updateAccount_O.generate_r1cs_witness(uTx.witness.accountUpdate_O.proof);
+
+
+        /*print(pb, "state.oper.account.balancesRoot", state.oper.account.balancesRoot);
+        print(pb, "state.oper.balanceB.balance", state.oper.balanceA.balance);
+        print(pb, "state.oper.balanceB.index", state.oper.balanceB.index);
+        print(pb, "tx.getOutput(balanceO_B_Balance)", tx.getOutput(balanceO_B_Balance));
+        print(pb, "tx.getOutput(balanceO_B_Index)", tx.getOutput(balanceO_B_Index));
+        print(pb, "updateBalanceB_O.result()", updateBalanceB_O.result());
+        print(pb, "state.oper.balanceA.balance", state.oper.balanceA.balance);
+        print(pb, "state.oper.balanceA.index", state.oper.balanceA.index);*/
+
         // Update Protocol pool
         updateBalanceA_P.generate_r1cs_witness(uTx.witness.balanceUpdateA_P.proof);
         updateBalanceB_P.generate_r1cs_witness(uTx.witness.balanceUpdateB_P.proof);
 
-        // Update Operator
-        updateBalanceA_O.generate_r1cs_witness(uTx.witness.balanceUpdateA_O.proof);
-        updateBalanceB_O.generate_r1cs_witness(uTx.witness.balanceUpdateB_O.proof);
+        // Update Index
+        updateBalanceB_I.generate_r1cs_witness(uTx.witness.balanceUpdateB_I.proof);
+        updateBalanceA_I.generate_r1cs_witness(uTx.witness.balanceUpdateA_I.proof);
 
         /*print(pb, "updateTradeHistory_B", updateTradeHistory_B.result());
 
@@ -391,13 +433,18 @@ public:
         updateBalanceB_B.generate_r1cs_constraints();
         updateAccount_B.generate_r1cs_constraints();
 
+        // Update Operator
+        updateBalanceB_O.generate_r1cs_constraints();
+        updateBalanceA_O.generate_r1cs_constraints();
+        updateAccount_O.generate_r1cs_constraints();
+
         // Update Protocol fee pool
         updateBalanceA_P.generate_r1cs_constraints();
         updateBalanceB_P.generate_r1cs_constraints();
 
-        // Update Operator
-        updateBalanceA_O.generate_r1cs_constraints();
-        updateBalanceB_O.generate_r1cs_constraints();
+        // Update Index
+        updateBalanceB_I.generate_r1cs_constraints();
+        updateBalanceA_I.generate_r1cs_constraints();
     }
 
     const VariableArrayT getPublicData() const
@@ -407,7 +454,7 @@ public:
 
     const VariableT& getNewAccountsRoot() const
     {
-        return updateAccount_B.result();
+        return updateAccount_O.result();
     }
 
     const VariableT& getNewProtocolBalancesRoot() const
@@ -415,9 +462,9 @@ public:
         return updateBalanceB_P.result();
     }
 
-    const VariableT& getNewOperatorBalancesRoot() const
+    const VariableT& getNewIndexBalancesRoot() const
     {
-        return updateBalanceB_O.result();
+        return updateBalanceA_I.result();
     }
 };
 
@@ -430,8 +477,9 @@ public:
     jubjub::Params params;
 
     // State
-    AccountGadget accountBefore_O;
     AccountGadget accountBefore_P;
+    AccountGadget accountBefore_I;
+    AccountGadget accountBefore_O;
 
     // Inputs
     DualVariableGadget exchangeID;
@@ -458,8 +506,12 @@ public:
     // Update Protocol pool
     std::unique_ptr<UpdateAccountGadget> updateAccount_P;
 
+    // Update Index
+    std::unique_ptr<UpdateAccountGadget> updateAccount_I;
+
     // Update Operator
     std::unique_ptr<UpdateAccountGadget> updateAccount_O;
+
 
     UniversalCircuit(ProtoboardT& pb, const std::string& prefix) :
         Circuit(pb, prefix),
@@ -468,8 +520,9 @@ public:
         constants(pb, FMT(prefix, ".constants")),
 
         // State
-        accountBefore_O(pb, FMT(prefix, ".accountBefore_O")),
+        accountBefore_I(pb, FMT(prefix, ".accountBefore_I")),
         accountBefore_P(pb, FMT(prefix, ".accountBefore_P")),
+        accountBefore_O(pb, FMT(prefix, ".accountBefore_O")),
 
         // Inputs
         exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
@@ -516,9 +569,10 @@ public:
         transactions.reserve(numRings);
         for (size_t j = 0; j < numRings; j++)
         {
+            std::cout << "------------------- tx: " << j << std::endl;
             const VariableT ringAccountsRoot = (j == 0) ? merkleRootBefore.packed : transactions.back().getNewAccountsRoot();
             const VariableT& ringProtocolBalancesRoot = (j == 0) ? accountBefore_P.balancesRoot : transactions.back().getNewProtocolBalancesRoot();
-            const VariableT& ringOperatorBalancesRoot = (j == 0) ? accountBefore_O.balancesRoot : transactions.back().getNewOperatorBalancesRoot();
+            const VariableT& ringIndexBalancesRoot = (j == 0) ? accountBefore_I.balancesRoot : transactions.back().getNewIndexBalancesRoot();
             transactions.emplace_back(
                 pb,
                 params,
@@ -528,8 +582,9 @@ public:
                 timestamp.packed,
                 protocolTakerFeeBips.packed,
                 protocolMakerFeeBips.packed,
+                operatorAccountID.bits,
                 ringProtocolBalancesRoot,
-                ringOperatorBalancesRoot,
+                ringIndexBalancesRoot,
                 (j == 0) ? constants.zero : transactions.back().tx.getOutput(misc_NumConditionalTransactions),
                 std::string("tx_") + std::to_string(j)
             );
@@ -543,12 +598,20 @@ public:
                       FMT(annotation_prefix, ".updateAccount_P")));
         updateAccount_P->generate_r1cs_constraints();
 
+        // Update Index
+        updateAccount_I.reset(new UpdateAccountGadget(pb, updateAccount_P->result(), flatten({VariableArrayT(1, constants.one), VariableArrayT(NUM_BITS_ACCOUNT - 1, constants.zero)}),
+                      {accountBefore_I.owner, accountBefore_I.publicKey.x, accountBefore_I.publicKey.y, accountBefore_I.nonce, accountBefore_I.walletHash, accountBefore_I.balancesRoot},
+                      {accountBefore_I.owner, accountBefore_I.publicKey.x, accountBefore_I.publicKey.y, accountBefore_I.nonce, accountBefore_I.walletHash, transactions.back().getNewIndexBalancesRoot()},
+                      FMT(annotation_prefix, ".updateAccount_I")));
+        updateAccount_I->generate_r1cs_constraints();
+
         // Update Operator
-        updateAccount_O.reset(new UpdateAccountGadget(pb, updateAccount_P->result(), operatorAccountID.bits,
+        updateAccount_O.reset(new UpdateAccountGadget(pb, updateAccount_I->result(), operatorAccountID.bits,
                       {accountBefore_O.owner, accountBefore_O.publicKey.x, accountBefore_O.publicKey.y, accountBefore_O.nonce, accountBefore_O.walletHash, accountBefore_O.balancesRoot},
-                      {accountBefore_O.owner, accountBefore_O.publicKey.x, accountBefore_O.publicKey.y, nonce_after.result(), accountBefore_O.walletHash, transactions.back().getNewOperatorBalancesRoot()},
+                      {accountBefore_O.owner, accountBefore_O.publicKey.x, accountBefore_O.publicKey.y, nonce_after.result(), accountBefore_O.walletHash, accountBefore_O.balancesRoot},
                       FMT(annotation_prefix, ".updateAccount_O")));
         updateAccount_O->generate_r1cs_constraints();
+
 
         // Num conditional transactions
         numConditionalTransactions.reset(new libsnark::dual_variable_gadget<FieldT>(
@@ -593,8 +656,9 @@ public:
         constants.generate_r1cs_witness();
 
         // State
-        accountBefore_O.generate_r1cs_witness(block.accountUpdate_O.before);
         accountBefore_P.generate_r1cs_witness(block.accountUpdate_P.before);
+        accountBefore_I.generate_r1cs_witness(block.accountUpdate_I.before);
+        accountBefore_O.generate_r1cs_witness(block.accountUpdate_O.before);
 
         // Inputs
         exchangeID.generate_r1cs_witness(pb, block.exchangeID);
@@ -614,11 +678,15 @@ public:
 #endif
         for(unsigned int i = 0; i < block.transactions.size(); i++)
         {
+            std::cout << "--------------- tx: " << i << std::endl;
             transactions[i].generate_r1cs_witness(block.transactions[i]);
         }
 
         // Update Protocol pool
         updateAccount_P->generate_r1cs_witness(block.accountUpdate_P.proof);
+
+        // Update Index
+        updateAccount_I->generate_r1cs_witness(block.accountUpdate_I.proof);
 
         // Update Operator
         updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
