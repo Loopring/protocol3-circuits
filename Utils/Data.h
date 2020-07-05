@@ -79,6 +79,8 @@ auto dummyWithdraw = R"({
     "feeTokenID": 0,
     "fee": "0",
     "to": "0",
+    "dataHash": "0",
+    "minGas": 0,
     "type": 0
 })"_json;
 
@@ -374,6 +376,8 @@ public:
     ethsnarks::FieldT feeTokenID;
     ethsnarks::FieldT fee;
     ethsnarks::FieldT to;
+    ethsnarks::FieldT dataHash;
+    ethsnarks::FieldT minGas;
     ethsnarks::FieldT type;
 };
 
@@ -385,6 +389,8 @@ static void from_json(const json& j, Withdrawal& withdrawal)
     withdrawal.feeTokenID = ethsnarks::FieldT(j.at("feeTokenID"));
     withdrawal.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
     withdrawal.to = ethsnarks::FieldT(j["to"].get<std::string>().c_str());
+    withdrawal.dataHash = ethsnarks::FieldT(j["dataHash"].get<std::string>().c_str());
+    withdrawal.minGas = ethsnarks::FieldT(j.at("minGas"));
     withdrawal.type = ethsnarks::FieldT(j.at("type"));
 }
 

@@ -157,6 +157,13 @@ public:
     OwnerChangeCircuit ownerChange;
     SelectTransactionGadget tx;
 
+    // General validation
+    DualVariableGadget accountA;
+    DualVariableGadget accountB;
+    RequireLtGadget one_lt_accountA;
+    RequireLtGadget one_lt_accountB;
+
+    // Check signatures
     SignatureVerifier signatureVerifierA;
     SignatureVerifier signatureVerifierB;
 
@@ -221,6 +228,13 @@ public:
         ownerChange(pb, state, FMT(prefix, ".ownerChange")),
         tx(pb, state, selector.result(), {&noop, &spotTrade, &deposit, &newAccount, &withdraw, &publicKeyUpdate, &transfer, &ownerChange}, FMT(prefix, ".tx")),
 
+        // General validation
+        accountA(pb, tx.getArrayOutput(accountA_Address), FMT(prefix, ".packAccountA")),
+        accountB(pb, tx.getArrayOutput(accountB_Address), FMT(prefix, ".packAccountA")),
+        one_lt_accountA(pb, state.constants.one, accountA.packed, NUM_BITS_ACCOUNT, FMT(prefix, ".one_lt_accountA")),
+        one_lt_accountB(pb, state.constants.one, accountB.packed, NUM_BITS_ACCOUNT, FMT(prefix, ".one_lt_accountB")),
+
+        // Check signatures
         signatureVerifierA(pb, params, state.constants, jubjub::VariablePointT(tx.getOutput(publicKeyX_A), tx.getOutput(publicKeyY_A)), tx.getOutput(hash_A), tx.getOutput(signatureRequired_A), FMT(prefix, ".signatureVerifierA")),
         signatureVerifierB(pb, params, state.constants, jubjub::VariablePointT(tx.getOutput(publicKeyX_B), tx.getOutput(publicKeyY_B)), tx.getOutput(hash_B), tx.getOutput(signatureRequired_B), FMT(prefix, ".signatureVerifierB")),
 
@@ -331,75 +345,40 @@ public:
         ownerChange.generate_r1cs_witness(uTx.ownerChange);
         tx.generate_r1cs_witness();
 
+        // General validation
+        accountA.generate_r1cs_witness();
+        accountB.generate_r1cs_witness();
+        one_lt_accountA.generate_r1cs_witness();
+        one_lt_accountB.generate_r1cs_witness();
+
+        // Check signatures
         signatureVerifierA.generate_r1cs_witness(uTx.witness.signatureA);
         signatureVerifierB.generate_r1cs_witness(uTx.witness.signatureB);
 
         // Update UserA
-        updateTradeHistory_A.generate_r1cs_witness(uTx.witness.tradeHistoryUpdate_A.proof);
-        updateBalanceS_A.generate_r1cs_witness(uTx.witness.balanceUpdateS_A.proof);
-        updateBalanceB_A.generate_r1cs_witness(uTx.witness.balanceUpdateB_A.proof);
-        updateAccount_A.generate_r1cs_witness(uTx.witness.accountUpdate_A.proof);
-
-        //print(pb, "updateTradeHistory_A", updateTradeHistory_A.result());
-        //print(pb, "state.accountA.account.balancesRoot", state.accountA.account.balancesRoot);
-        //print(pb, "state.accountA.balanceS.balance", state.accountA.balanceS.balance);
-        //print(pb, "state.accountA.account.balancesRoot", state.accountA.account.balancesRoot);
-        //print(pb, "updateBalanceS_A", updateBalanceS_A.result());
-        //print(pb, "updateBalanceB_A", updateBalanceB_A.result());
-
-        //print(pb, "state.accountA.balanceS.balance", state.accountA.balanceS.balance);
-        //print(pb, "state.accountA.balanceS.tradingHistory", state.accountA.balanceS.tradingHistory);
-
-        //print(pb, "tx.getOutput(balanceA_S_Balance)", tx.getOutput(balanceA_S_Balance));
-        //print(pb, "updateTradeHistory_A.result()", updateTradeHistory_A.result());
-
-
-        /*std::cout << "------" << std::endl;
-        print(pb, "state.accountB.tradeHistory.filled", state.accountB.tradeHistory.filled);
-        print(pb, "state.accountB.tradeHistory.orderID", state.accountB.tradeHistory.orderID);
-        print(pb, "tx.getOutput(tradeHistoryB_Filled)", tx.getOutput(tradeHistoryB_Filled));
-        print(pb, "tx.getOutput(tradeHistoryB_OrderId)", tx.getOutput(tradeHistoryB_OrderId));*/
+        updateTradeHistory_A.generate_r1cs_witness(uTx.witness.tradeHistoryUpdate_A);
+        updateBalanceS_A.generate_r1cs_witness(uTx.witness.balanceUpdateS_A);
+        updateBalanceB_A.generate_r1cs_witness(uTx.witness.balanceUpdateB_A);
+        updateAccount_A.generate_r1cs_witness(uTx.witness.accountUpdate_A);
 
         // Update UserB
-        updateTradeHistory_B.generate_r1cs_witness(uTx.witness.tradeHistoryUpdate_B.proof);
-        updateBalanceS_B.generate_r1cs_witness(uTx.witness.balanceUpdateS_B.proof);
-        updateBalanceB_B.generate_r1cs_witness(uTx.witness.balanceUpdateB_B.proof);
-        updateAccount_B.generate_r1cs_witness(uTx.witness.accountUpdate_B.proof);
+        updateTradeHistory_B.generate_r1cs_witness(uTx.witness.tradeHistoryUpdate_B);
+        updateBalanceS_B.generate_r1cs_witness(uTx.witness.balanceUpdateS_B);
+        updateBalanceB_B.generate_r1cs_witness(uTx.witness.balanceUpdateB_B);
+        updateAccount_B.generate_r1cs_witness(uTx.witness.accountUpdate_B);
 
         // Update Operator
-        updateBalanceB_O.generate_r1cs_witness(uTx.witness.balanceUpdateB_O.proof);
-        updateBalanceA_O.generate_r1cs_witness(uTx.witness.balanceUpdateA_O.proof);
-        updateAccount_O.generate_r1cs_witness(uTx.witness.accountUpdate_O.proof);
-
-
-        /*print(pb, "state.oper.account.balancesRoot", state.oper.account.balancesRoot);
-        print(pb, "state.oper.balanceB.balance", state.oper.balanceA.balance);
-        print(pb, "state.oper.balanceB.index", state.oper.balanceB.index);
-        print(pb, "tx.getOutput(balanceO_B_Balance)", tx.getOutput(balanceO_B_Balance));
-        print(pb, "tx.getOutput(balanceO_B_Index)", tx.getOutput(balanceO_B_Index));
-        print(pb, "updateBalanceB_O.result()", updateBalanceB_O.result());
-        print(pb, "state.oper.balanceA.balance", state.oper.balanceA.balance);
-        print(pb, "state.oper.balanceA.index", state.oper.balanceA.index);*/
+        updateBalanceB_O.generate_r1cs_witness(uTx.witness.balanceUpdateB_O);
+        updateBalanceA_O.generate_r1cs_witness(uTx.witness.balanceUpdateA_O);
+        updateAccount_O.generate_r1cs_witness(uTx.witness.accountUpdate_O);
 
         // Update Protocol pool
-        updateBalanceA_P.generate_r1cs_witness(uTx.witness.balanceUpdateA_P.proof);
-        updateBalanceB_P.generate_r1cs_witness(uTx.witness.balanceUpdateB_P.proof);
+        updateBalanceA_P.generate_r1cs_witness(uTx.witness.balanceUpdateA_P);
+        updateBalanceB_P.generate_r1cs_witness(uTx.witness.balanceUpdateB_P);
 
         // Update Index
-        updateBalanceB_I.generate_r1cs_witness(uTx.witness.balanceUpdateB_I.proof);
-        updateBalanceA_I.generate_r1cs_witness(uTx.witness.balanceUpdateA_I.proof);
-
-        /*print(pb, "updateTradeHistory_B", updateTradeHistory_B.result());
-
-        print(pb, "state.accountB.balanceS.balance", state.accountB.balanceS.balance.value);
-        print(pb, "state.accountB.balanceS.position", state.accountB.balanceS.position.value);
-        print(pb, "state.accountB.balanceS.fundingIndex", state.accountB.balanceS.fundingIndex.value);
-        print(pb, "state.accountB.balanceS.tradingHistory", state.accountB.balanceS.tradingHistory);
-
-        for (unsigned int i = 0; i < 10; i++)
-        {
-            print(pb, "tx.getArrayOutput(balanceB_S_Address)", tx.getArrayOutput(balanceB_S_Address)[i]);
-        }*/
+        updateBalanceB_I.generate_r1cs_witness(uTx.witness.balanceUpdateB_I);
+        updateBalanceA_I.generate_r1cs_witness(uTx.witness.balanceUpdateA_I);
     }
 
 
@@ -418,6 +397,13 @@ public:
         ownerChange.generate_r1cs_constraints();
         tx.generate_r1cs_constraints();
 
+        // General validation
+        accountA.generate_r1cs_constraints();
+        accountB.generate_r1cs_constraints();
+        one_lt_accountA.generate_r1cs_constraints();
+        one_lt_accountB.generate_r1cs_constraints();
+
+        // Check signatures
         signatureVerifierA.generate_r1cs_constraints();
         signatureVerifierB.generate_r1cs_constraints();
 
@@ -683,13 +669,13 @@ public:
         }
 
         // Update Protocol pool
-        updateAccount_P->generate_r1cs_witness(block.accountUpdate_P.proof);
+        updateAccount_P->generate_r1cs_witness(block.accountUpdate_P);
 
         // Update Index
-        updateAccount_I->generate_r1cs_witness(block.accountUpdate_I.proof);
+        updateAccount_I->generate_r1cs_witness(block.accountUpdate_I);
 
         // Update Operator
-        updateAccount_O->generate_r1cs_witness(block.accountUpdate_O.proof);
+        updateAccount_O->generate_r1cs_witness(block.accountUpdate_O);
 
         // Num conditional transactions
         numConditionalTransactions->generate_r1cs_witness_from_packed();

@@ -425,6 +425,46 @@ public:
     }
 };
 
+// A - B = sub with A, B and sub >= 0
+class SubGadget : public GadgetT
+{
+public:
+    UnsafeSubGadget unsafeSub;
+    libsnark::dual_variable_gadget<FieldT> rangeCheck;
+
+    SubGadget(
+        ProtoboardT& pb,
+        const VariableT& A,
+        const VariableT& B,
+        unsigned int n,
+        const std::string& prefix
+    ) :
+        GadgetT(pb, prefix),
+
+        unsafeSub(pb, A, B, FMT(prefix, ".unsafeAdd")),
+        rangeCheck(pb, unsafeSub.result(), n, FMT(prefix, ".rangeCheck"))
+    {
+        assert(n + 1 <= NUM_BITS_FIELD_CAPACITY);
+    }
+
+    void generate_r1cs_witness()
+    {
+        unsafeSub.generate_r1cs_witness();
+        rangeCheck.generate_r1cs_witness_from_packed();
+    }
+
+    void generate_r1cs_constraints()
+    {
+        unsafeSub.generate_r1cs_constraints();
+        rangeCheck.generate_r1cs_constraints(true);
+    }
+
+    const VariableT& result() const
+    {
+        return unsafeSub.result();
+    }
+};
+
 // b ? A : B
 class TernaryGadget : public GadgetT
 {

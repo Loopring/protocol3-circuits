@@ -26,6 +26,16 @@ struct AccountState
     VariableT balancesRoot;
 };
 
+void printAccount(const ProtoboardT& pb, const AccountState& state)
+{
+    std::cout << "- owner: " << pb.val(state.owner) << std::endl;
+    std::cout << "- publicKeyX: " << pb.val(state.publicKeyX) << std::endl;
+    std::cout << "- publicKeyY: " << pb.val(state.publicKeyY) << std::endl;
+    std::cout << "- nonce: " << pb.val(state.nonce) << std::endl;
+    std::cout << "- walletHash: " << pb.val(state.walletHash) << std::endl;
+    std::cout << "- balancesRoot: " << pb.val(state.balancesRoot) << std::endl;
+}
+
 class AccountGadget : public GadgetT
 {
 public:
@@ -67,6 +77,9 @@ public:
     HashAccountLeaf leafBefore;
     HashAccountLeaf leafAfter;
 
+    AccountState valuesBefore;
+    AccountState valuesAfter;
+
     const VariableArrayT proof;
     MerklePathCheckT proofVerifierBefore;
     MerklePathT rootCalculatorAfter;
@@ -81,6 +94,9 @@ public:
     ) :
         GadgetT(pb, prefix),
 
+        valuesBefore(before),
+        valuesAfter(after),
+
         leafBefore(pb, var_array({before.owner, before.publicKeyX, before.publicKeyY, before.nonce, before.walletHash, before.balancesRoot}), FMT(prefix, ".leafBefore")),
         leafAfter(pb, var_array({after.owner, after.publicKeyX, after.publicKeyY, after.nonce, after.walletHash, after.balancesRoot}), FMT(prefix, ".leafAfter")),
 
@@ -91,14 +107,24 @@ public:
 
     }
 
-    void generate_r1cs_witness(const Proof& _proof)
+    void generate_r1cs_witness(const AccountUpdate& update)
     {
         leafBefore.generate_r1cs_witness();
         leafAfter.generate_r1cs_witness();
 
-        proof.fill_with_field_elements(pb, _proof.data);
+        proof.fill_with_field_elements(pb, update.proof.data);
         proofVerifierBefore.generate_r1cs_witness();
         rootCalculatorAfter.generate_r1cs_witness();
+
+        ASSERT(pb.val(proofVerifierBefore.m_expected_root) == update.rootBefore,  annotation_prefix);
+        if (pb.val(rootCalculatorAfter.result()) != update.rootAfter)
+        {
+            std::cout << "Before:" << std::endl;
+            printAccount(pb, valuesBefore);
+            std::cout << "After:" << std::endl;
+            printAccount(pb, valuesAfter);
+            ASSERT(pb.val(rootCalculatorAfter.result()) == update.rootAfter, annotation_prefix);
+        }
     }
 
     void generate_r1cs_constraints()
@@ -122,6 +148,13 @@ struct BalanceState
     VariableT index;
     VariableT tradingHistory;
 };
+
+void printBalance(const ProtoboardT& pb, const BalanceState& state)
+{
+    std::cout << "- balance: " << pb.val(state.balance) << std::endl;
+    std::cout << "- index: " << pb.val(state.index) << std::endl;
+    std::cout << "- tradingHistory: " << pb.val(state.tradingHistory) << std::endl;
+}
 
 class BalanceGadget : public GadgetT
 {
@@ -157,6 +190,9 @@ public:
     HashBalanceLeaf leafBefore;
     HashBalanceLeaf leafAfter;
 
+    BalanceState valuesBefore;
+    BalanceState valuesAfter;
+
     const VariableArrayT proof;
     MerklePathCheckT proofVerifierBefore;
     MerklePathT rootCalculatorAfter;
@@ -171,6 +207,9 @@ public:
     ) :
         GadgetT(pb, prefix),
 
+        valuesBefore(before),
+        valuesAfter(after),
+
         leafBefore(pb, var_array({before.balance, before.index, before.tradingHistory}), FMT(prefix, ".leafBefore")),
         leafAfter(pb, var_array({after.balance, after.index, after.tradingHistory}), FMT(prefix, ".leafAfter")),
 
@@ -181,14 +220,24 @@ public:
 
     }
 
-    void generate_r1cs_witness(const Proof& _proof)
+    void generate_r1cs_witness(const BalanceUpdate& update)
     {
         leafBefore.generate_r1cs_witness();
         leafAfter.generate_r1cs_witness();
 
-        proof.fill_with_field_elements(pb, _proof.data);
+        proof.fill_with_field_elements(pb, update.proof.data);
         proofVerifierBefore.generate_r1cs_witness();
         rootCalculatorAfter.generate_r1cs_witness();
+
+        ASSERT(pb.val(proofVerifierBefore.m_expected_root) == update.rootBefore,  annotation_prefix);
+        if (pb.val(rootCalculatorAfter.result()) != update.rootAfter)
+        {
+            std::cout << "Before:" << std::endl;
+            printBalance(pb, valuesBefore);
+            std::cout << "After:" << std::endl;
+            printBalance(pb, valuesAfter);
+            ASSERT(pb.val(rootCalculatorAfter.result()) == update.rootAfter, annotation_prefix);
+        }
     }
 
     void generate_r1cs_constraints()

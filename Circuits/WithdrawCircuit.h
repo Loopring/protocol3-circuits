@@ -29,17 +29,25 @@ public:
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
     DualVariableGadget to;
+    DualVariableGadget dataHash;
+    DualVariableGadget minGas;
     DualVariableGadget type;
 
     // Signature
-    Poseidon_gadget_T<8, 1, 6, 53, 7, 1> hash;
+    Poseidon_gadget_T<11, 1, 6, 53, 10, 1> hash;
 
     // Type
     IsNonZero isConditional;
     UnsafeAddGadget numConditionalTransactionsAfter;
     NotGadget needsSignature;
 
+    // Balances
+    DynamicBalanceGadget balanceS_A;
+    DynamicBalanceGadget balanceB_P;
+
     // Check how much should be withdrawn
+    EqualGadget isProtocolFeeWithdrawal;
+    TernaryGadget fullBalance;
     EqualGadget amountIsZero;
     EqualGadget amountIsFullBalance;
     EqualGadget validFullWithdrawalType;
@@ -47,7 +55,7 @@ public:
     IfThenRequireGadget checkValidFullWithdrawal;
     IfThenRequireGadget checkInvalidFullWithdrawal;
 
-    // Balances
+    // Fee balances
     DynamicBalanceGadget balanceB_A;
     DynamicBalanceGadget balanceA_O;
     // Fee as float
@@ -57,8 +65,11 @@ public:
     TransferGadget feePayment;
 
     // Calculate the new balance
-    DynamicBalanceGadget balanceS_A;
-    UnsafeSubGadget balance_after;
+    TernaryGadget amountA;
+    TernaryGadget amountP;
+    SubGadget balanceA_after;
+    SubGadget balanceP_after;
+    ArrayTernaryGadget merkleTreeAccountA;
 
     // Increase the nonce of the user by 1
     OrGadget isForcedWithdrawal;
@@ -81,6 +92,8 @@ public:
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
         to(pb, NUM_BITS_ADDRESS, FMT(prefix, ".to")),
+        dataHash(pb, NUM_BITS_HASH, FMT(prefix, ".dataHash")),
+        minGas(pb, NUM_BITS_GAS, FMT(prefix, ".minGas")),
         type(pb, NUM_BITS_TYPE, FMT(prefix, ".type")),
 
         // Signature
@@ -91,6 +104,9 @@ public:
             amount.packed,
             feeTokenID.packed,
             fee.packed,
+            to.packed,
+            dataHash.packed,
+            minGas.packed,
             state.accountA.account.nonce
         }), FMT(this->annotation_prefix, ".hash")),
 
@@ -99,15 +115,21 @@ public:
         numConditionalTransactionsAfter(pb, state.numConditionalTransactions, state.constants.one, FMT(prefix, ".numConditionalTransactionsAfter")),
         needsSignature(pb, isConditional.result(), FMT(prefix, ".needsSignature")),
 
+        // Balances
+        balanceS_A(pb, state.constants, state.accountA.balanceS, state.index.balanceB, FMT(prefix, ".balanceS_A")),
+        balanceB_P(pb, state.constants, state.pool.balanceB, state.index.balanceB, FMT(prefix, ".balanceB_P")),
+
         // Check how much should be withdrawn
+        isProtocolFeeWithdrawal(pb, accountID.packed, state.constants.zero, FMT(prefix, ".isProtocolFeeWithdrawal")),
+        fullBalance(pb, isProtocolFeeWithdrawal.result(), balanceB_P.balance(), balanceS_A.balance(), FMT(prefix, ".fullBalance")),
         amountIsZero(pb, amount.packed, state.constants.zero, FMT(prefix, ".amountIsZero")),
-        amountIsFullBalance(pb, amount.packed, state.accountA.balanceS.balance, FMT(prefix, ".amountIsFullBalance")),
+        amountIsFullBalance(pb, amount.packed, fullBalance.result(), FMT(prefix, ".amountIsFullBalance")),
         validFullWithdrawalType(pb, type.packed, state.constants.two, FMT(prefix, ".validFullWithdrawalType")),
         invalidFullWithdrawalType(pb, type.packed, state.constants.three, FMT(prefix, ".invalidFullWithdrawalType")),
         checkValidFullWithdrawal(pb, validFullWithdrawalType.result(), amountIsFullBalance.result(), FMT(prefix, ".checkValidFullWithdrawal")),
         checkInvalidFullWithdrawal(pb, invalidFullWithdrawalType.result(), amountIsZero.result(), FMT(prefix, ".checkInvalidFullWithdrawal")),
 
-        // Balances
+        // Fee balances
         balanceB_A(pb, state.constants, state.accountA.balanceB, state.index.balanceA, FMT(prefix, ".balanceB_A")),
         balanceA_O(pb, state.constants, state.oper.balanceA, state.index.balanceA, FMT(prefix, ".balanceA_O")),
         // Fee as float
@@ -117,23 +139,29 @@ public:
         feePayment(pb, balanceB_A, balanceA_O, fFee.value(), FMT(prefix, ".feePayment")),
 
         // Calculate the new balance
-        balanceS_A(pb, state.constants, state.accountA.balanceS, state.index.balanceB, FMT(prefix, ".balanceS_A")),
-        balance_after(pb, balanceS_A.balance(), amount.packed, FMT(prefix, ".balance_after")),
+        amountA(pb, isProtocolFeeWithdrawal.result(), state.constants.zero, amount.packed, FMT(prefix, ".amountA")),
+        amountP(pb, isProtocolFeeWithdrawal.result(), amount.packed, state.constants.zero, FMT(prefix, ".amountP")),
+        balanceA_after(pb, balanceS_A.balance(), amountA.result(), NUM_BITS_AMOUNT, FMT(prefix, ".balanceA_after")),
+        balanceP_after(pb, balanceB_P.balance(), amountP.result(), NUM_BITS_AMOUNT, FMT(prefix, ".balanceP_after")),
+        merkleTreeAccountA(pb, isProtocolFeeWithdrawal.result(), flatten({VariableArrayT(1, state.constants.zero), VariableArrayT(1, state.constants.one), VariableArrayT(NUM_BITS_ACCOUNT - 2, state.constants.zero)}), accountID.bits, FMT(prefix, ".merkleTreeAccountA")),
 
         // Increase the nonce by 1 (unless it's a forced withdrawal)
         isForcedWithdrawal(pb, {validFullWithdrawalType.result(), invalidFullWithdrawalType.result()}, FMT(prefix, ".isForcedWithdrawal")),
         isNotForcedWithdrawal(pb, isForcedWithdrawal.result(), FMT(prefix, ".isNotForcedWithdrawal")),
         nonce_after(pb, state.accountA.account.nonce, isNotForcedWithdrawal.result(), NUM_BITS_NONCE, FMT(prefix, ".nonce_after"))
     {
-        setArrayOutput(accountA_Address, accountID.bits);
+        setArrayOutput(accountA_Address, merkleTreeAccountA.result());
         setOutput(accountA_Nonce, nonce_after.result());
 
         setArrayOutput(balanceA_S_Address, tokenID.bits);
-        setOutput(balanceA_S_Balance, balance_after.result());
+        setOutput(balanceA_S_Balance, balanceA_after.result());
         setOutput(balanceA_S_Index, balanceS_A.index());
         setArrayOutput(balanceB_S_Address, feeTokenID.bits);
         setOutput(balanceA_B_Balance, balanceB_A.balance());
         setOutput(balanceA_B_Index, balanceB_A.index());
+
+        setOutput(balanceP_B_Balance, balanceP_after.result());
+        setOutput(balanceP_B_Index, balanceB_P.index());
 
         setOutput(balanceO_A_Balance, balanceA_O.balance());
         setOutput(balanceO_A_Index, balanceA_O.index());
@@ -157,6 +185,8 @@ public:
         feeTokenID.generate_r1cs_witness(pb, withdrawal.feeTokenID);
         fee.generate_r1cs_witness(pb, withdrawal.fee);
         to.generate_r1cs_witness(pb, withdrawal.to);
+        dataHash.generate_r1cs_witness(pb, withdrawal.dataHash);
+        minGas.generate_r1cs_witness(pb, withdrawal.minGas);
         type.generate_r1cs_witness(pb, withdrawal.type);
 
         // Signature
@@ -168,7 +198,13 @@ public:
         //pb.val(numConditionalTransactionsAfter.sum) = transfer.numConditionalTransactionsAfter;
         needsSignature.generate_r1cs_witness();
 
+        // Balances
+        balanceS_A.generate_r1cs_witness();
+        balanceB_P.generate_r1cs_witness();
+
         // Check how much should be withdrawn
+        isProtocolFeeWithdrawal.generate_r1cs_witness();
+        fullBalance.generate_r1cs_witness();
         amountIsZero.generate_r1cs_witness();
         amountIsFullBalance.generate_r1cs_witness();
         validFullWithdrawalType.generate_r1cs_witness();
@@ -176,7 +212,7 @@ public:
         checkValidFullWithdrawal.generate_r1cs_witness();
         checkInvalidFullWithdrawal.generate_r1cs_witness();
 
-        // Balances
+        // Fee balances
         balanceB_A.generate_r1cs_witness();
         balanceA_O.generate_r1cs_witness();
         // Fee as float
@@ -186,8 +222,11 @@ public:
         feePayment.generate_r1cs_witness();
 
         // Calculate the new balance
-        balanceS_A.generate_r1cs_witness();
-        balance_after.generate_r1cs_witness();
+        amountA.generate_r1cs_witness();
+        amountP.generate_r1cs_witness();
+        balanceA_after.generate_r1cs_witness();
+        balanceP_after.generate_r1cs_witness();
+        merkleTreeAccountA.generate_r1cs_witness();
 
         // Increase the nonce by 1 (unless it's a forced withdrawal)
         isForcedWithdrawal.generate_r1cs_witness();
@@ -206,6 +245,8 @@ public:
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
         to.generate_r1cs_constraints(true);
+        dataHash.generate_r1cs_constraints(true);
+        minGas.generate_r1cs_constraints(true);
         type.generate_r1cs_constraints(true);
 
         // Signature
@@ -216,7 +257,13 @@ public:
         numConditionalTransactionsAfter.generate_r1cs_constraints();
         needsSignature.generate_r1cs_constraints();
 
+        // Balances
+        balanceS_A.generate_r1cs_constraints();
+        balanceB_P.generate_r1cs_constraints();
+
         // Check how much should be withdrawn
+        isProtocolFeeWithdrawal.generate_r1cs_constraints();
+        fullBalance.generate_r1cs_constraints();
         amountIsZero.generate_r1cs_constraints();
         amountIsFullBalance.generate_r1cs_constraints();
         validFullWithdrawalType.generate_r1cs_constraints();
@@ -224,7 +271,7 @@ public:
         checkValidFullWithdrawal.generate_r1cs_constraints();
         checkInvalidFullWithdrawal.generate_r1cs_constraints();
 
-        // Balances
+        // Fee balances
         balanceB_A.generate_r1cs_constraints();
         balanceA_O.generate_r1cs_constraints();
         // Fee as float
@@ -234,8 +281,11 @@ public:
         feePayment.generate_r1cs_constraints();
 
         // Calculate the new balance
-        balanceS_A.generate_r1cs_constraints();
-        balance_after.generate_r1cs_constraints();
+        amountA.generate_r1cs_constraints();
+        amountP.generate_r1cs_constraints();
+        balanceA_after.generate_r1cs_constraints();
+        balanceP_after.generate_r1cs_constraints();
+        merkleTreeAccountA.generate_r1cs_constraints();
 
         // Increase the nonce by 1 (unless it's a forced withdrawal)
         isForcedWithdrawal.generate_r1cs_constraints();
@@ -254,7 +304,9 @@ public:
             feeTokenID.bits,
             amount.bits,
             fFee.bits(),
-            to.bits
+            to.bits,
+            dataHash.bits,
+            minGas.bits
         });
     }
 };
