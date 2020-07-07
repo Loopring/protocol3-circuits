@@ -191,7 +191,6 @@ public:
 
         // Type
         isConditional(pb, type.packed, ".isConditional"),
-        numConditionalTransactionsAfter(pb, state.numConditionalTransactions, isConditional.result(), ".numConditionalTransactionsAfter"),
         needsSignature(pb, isConditional.result(), ".needsSignature"),
 
         // Fee as float
@@ -207,7 +206,9 @@ public:
         transferPayment(pb, balanceS_A, balanceB_B, fAmount.value(), FMT(prefix, ".transferPayment")),
 
         // Increase the nonce of From by 1
-        nonce_From_after(pb, state.accountA.account.nonce, state.constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_From_after"))
+        nonce_From_after(pb, state.accountA.account.nonce, state.constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_From_after")),
+        // Increase numConditionalTransactionsAfter
+        numConditionalTransactionsAfter(pb, state.numConditionalTransactions, isConditional.result(), FMT(prefix, ".numConditionalTransactionsAfter"))
     {
         setArrayOutput(accountA_Address, accountID_From.bits);
         setOutput(accountA_Nonce, nonce_From_after.result());
@@ -295,8 +296,6 @@ public:
 
         // Type
         isConditional.generate_r1cs_witness();
-        numConditionalTransactionsAfter.generate_r1cs_witness();
-        //pb.val(numConditionalTransactionsAfter.sum) = transfer.numConditionalTransactionsAfter;
         needsSignature.generate_r1cs_witness();
 
         // Fee as float
@@ -313,6 +312,9 @@ public:
 
         // Increase the nonce of From by 1
         nonce_From_after.generate_r1cs_witness();
+        // Increase numConditionalTransactionsAfter
+        numConditionalTransactionsAfter.generate_r1cs_witness();
+        //pb.val(numConditionalTransactionsAfter.sum) = transfer.numConditionalTransactionsAfter;
     }
 
     void generate_r1cs_constraints()
@@ -363,7 +365,6 @@ public:
 
         // Type
         isConditional.generate_r1cs_constraints();
-        numConditionalTransactionsAfter.generate_r1cs_constraints();
         needsSignature.generate_r1cs_constraints();
 
         // Fee as float
@@ -381,6 +382,8 @@ public:
 
         // Increase the nonce of From by 1
         nonce_From_after.generate_r1cs_constraints();
+        // Increase numConditionalTransactionsAfter
+        numConditionalTransactionsAfter.generate_r1cs_constraints();
     }
 
     const VariableArrayT getPublicData() const

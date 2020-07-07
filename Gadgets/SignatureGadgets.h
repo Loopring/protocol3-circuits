@@ -90,6 +90,13 @@ public:
     const Params& params;
     const Constants& constants;
 
+    // Special case to allow the public key to be 0
+    EqualGadget isZeroX;
+    EqualGadget isZeroY;
+    AndGadget   isZero;
+    TernaryGadget valueX;
+    TernaryGadget valueY;
+
     // Check if the public key is valid
     RequireValidPublicKey requireValidPublicKey;
 
@@ -111,8 +118,15 @@ public:
         params(_params),
         constants(_constants),
 
+        // Special case to allow the public key to be 0
+        isZeroX(pb, publicKeyX, constants.zero, FMT(prefix, ".isZeroX")),
+        isZeroY(pb, publicKeyY, constants.zero, FMT(prefix, ".isZeroY")),
+        isZero(pb, {isZeroX.result(), isZeroY.result()}, FMT(prefix, ".isZero")),
+        valueX(pb, isZero.result(), constants.dummyPublicKeyX, publicKeyX, FMT(prefix, ".valueX")),
+        valueY(pb, isZero.result(), constants.dummyPublicKeyY, publicKeyY, FMT(prefix, ".valueY")),
+
         // Check if the public key is valid
-        requireValidPublicKey(pb, params, publicKeyX, publicKeyY, FMT(this->annotation_prefix, ".requireValidPublicKey")),
+        requireValidPublicKey(pb, params, valueX.result(), valueY.result(), FMT(prefix, ".requireValidPublicKey")),
 
         // Point compression
         negPublicKeyX(pb, constants.zero, publicKeyX, FMT(prefix, ".negPublicKeyX")),
@@ -124,6 +138,13 @@ public:
 
     void generate_r1cs_witness()
     {
+        // Special case to allow the public key to be 0
+        isZeroX.generate_r1cs_witness();
+        isZeroY.generate_r1cs_witness();
+        isZero.generate_r1cs_witness();
+        valueX.generate_r1cs_witness();
+        valueY.generate_r1cs_witness();
+
         // Check if the public key is valid
         requireValidPublicKey.generate_r1cs_witness();
 
@@ -135,6 +156,13 @@ public:
 
     void generate_r1cs_constraints()
     {
+        // Special case to allow the public key to be 0
+        isZeroX.generate_r1cs_constraints();
+        isZeroY.generate_r1cs_constraints();
+        isZero.generate_r1cs_constraints();
+        valueX.generate_r1cs_constraints();
+        valueY.generate_r1cs_constraints();
+
         // Check if the public key is valid
         requireValidPublicKey.generate_r1cs_constraints();
 

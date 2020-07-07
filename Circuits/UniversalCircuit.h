@@ -13,7 +13,7 @@
 #include "./DepositCircuit.h"
 #include "./TransferCircuit.h"
 #include "./SpotTradeCircuit.h"
-#include "./PublicKeyUpdateCircuit.h"
+#include "./AccountUpdateCircuit.h"
 #include "./WithdrawCircuit.h"
 #include "./NoopCircuit.h"
 #include "./NewAccountCircuit.h"
@@ -152,7 +152,7 @@ public:
     DepositCircuit deposit;
     NewAccountCircuit newAccount;
     WithdrawCircuit withdraw;
-    PublicKeyUpdateCircuit publicKeyUpdate;
+    AccountUpdateCircuit accountUpdate;
     TransferCircuit transfer;
     OwnerChangeCircuit ownerChange;
     SelectTransactionGadget tx;
@@ -223,10 +223,10 @@ public:
         deposit(pb, state, FMT(prefix, ".deposit")),
         newAccount(pb, state, FMT(prefix, ".newAccount")),
         withdraw(pb, state, FMT(prefix, ".withdraw")),
-        publicKeyUpdate(pb, state, FMT(prefix, ".publicKeyUpdate")),
+        accountUpdate(pb, state, FMT(prefix, ".accountUpdate")),
         transfer(pb, state, FMT(prefix, ".transfer")),
         ownerChange(pb, state, FMT(prefix, ".ownerChange")),
-        tx(pb, state, selector.result(), {&noop, &spotTrade, &deposit, &newAccount, &withdraw, &publicKeyUpdate, &transfer, &ownerChange}, FMT(prefix, ".tx")),
+        tx(pb, state, selector.result(), {&noop, &spotTrade, &deposit, &newAccount, &withdraw, &accountUpdate, &transfer, &ownerChange}, FMT(prefix, ".tx")),
 
         // General validation
         accountA(pb, tx.getArrayOutput(accountA_Address), FMT(prefix, ".packAccountA")),
@@ -340,7 +340,7 @@ public:
         deposit.generate_r1cs_witness(uTx.deposit);
         newAccount.generate_r1cs_witness(uTx.newAccount);
         withdraw.generate_r1cs_witness(uTx.withdraw);
-        publicKeyUpdate.generate_r1cs_witness(uTx.publicKeyUpdate);
+        accountUpdate.generate_r1cs_witness(uTx.accountUpdate);
         transfer.generate_r1cs_witness(uTx.transfer);
         ownerChange.generate_r1cs_witness(uTx.ownerChange);
         tx.generate_r1cs_witness();
@@ -392,7 +392,7 @@ public:
         deposit.generate_r1cs_constraints();
         newAccount.generate_r1cs_constraints();
         withdraw.generate_r1cs_constraints();
-        publicKeyUpdate.generate_r1cs_constraints();
+        accountUpdate.generate_r1cs_constraints();
         transfer.generate_r1cs_constraints();
         ownerChange.generate_r1cs_constraints();
         tx.generate_r1cs_constraints();

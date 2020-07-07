@@ -29,13 +29,12 @@ public:
     DualVariableGadget walletHash;
 
     // Signature
-    Poseidon_gadget_T<10, 1, 6, 53, 9, 1> hash;
+    Poseidon_gadget_T<11, 1, 6, 53, 10, 1> hash;
 
     // Validate
     EqualGadget isNewAccountTx;
     RequireNotZeroGadget requireNewOwnerNotZero;
     IfThenRequireEqualGadget requireAccountLeafEmpty;
-    RequireLtGadget one_lt_newAccountID;
 
     // Compress the public key
     CompressPublicKey compressPublicKey;
@@ -80,14 +79,14 @@ public:
             newAccountID.packed,
             newOwner.packed,
             newPublicKeyX,
-            newPublicKeyY
+            newPublicKeyY,
+            walletHash.packed
         }), FMT(this->annotation_prefix, ".hash")),
 
         // Validate
         isNewAccountTx(pb, state.type, state.constants.txTypeNewAccount, FMT(prefix, ".isNewAccountTx")),
         requireNewOwnerNotZero(pb, newOwner.packed, FMT(prefix, ".requireNewOwnerNotZero")),
         requireAccountLeafEmpty(pb, isNewAccountTx.result(), state.accountB.account.owner, state.constants.zero, FMT(prefix, ".requireAccountLeafEmpty")),
-        one_lt_newAccountID(pb, state.constants.one, newAccountID.packed, NUM_BITS_ACCOUNT, FMT(prefix, ".one_lt_newAccountID")),
 
         // Compress the public key
         compressPublicKey(pb, state.params, state.constants, newPublicKeyX, newPublicKeyY, FMT(this->annotation_prefix, ".compressPublicKey")),
@@ -145,7 +144,6 @@ public:
         isNewAccountTx.generate_r1cs_witness();
         requireNewOwnerNotZero.generate_r1cs_witness();
         requireAccountLeafEmpty.generate_r1cs_witness();
-        one_lt_newAccountID.generate_r1cs_witness();
 
         // Compress the public key
         compressPublicKey.generate_r1cs_witness();
@@ -181,7 +179,6 @@ public:
         isNewAccountTx.generate_r1cs_constraints();
         requireNewOwnerNotZero.generate_r1cs_constraints();
         requireAccountLeafEmpty.generate_r1cs_constraints();
-        one_lt_newAccountID.generate_r1cs_constraints();
 
         // Compress the public key
         compressPublicKey.generate_r1cs_constraints();

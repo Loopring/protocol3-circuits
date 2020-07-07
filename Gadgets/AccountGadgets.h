@@ -260,8 +260,7 @@ class ApplyInterestGadget : public GadgetT
 {
 public:
 
-    // TODO: make safe
-    UnsafeSubGadget indexDiff;
+    SubGadget indexDiff;
     MulDivGadget balanceDiff;
     AddGadget newBalance;
 
@@ -275,7 +274,7 @@ public:
     ) :
         GadgetT(pb, prefix),
 
-        indexDiff(pb, newIndex, oldIndex, FMT(prefix, ".indexDiff")),
+        indexDiff(pb, newIndex, oldIndex, NUM_BITS_AMOUNT, FMT(prefix, ".indexDiff")),
         balanceDiff(pb, constants, balance, indexDiff.result(), constants.indexBase, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, NUM_BITS_AMOUNT, FMT(prefix, ".balanceDiff")),
         newBalance(pb, balance, balanceDiff.result(), NUM_BITS_AMOUNT, FMT(prefix, ".newBalance"))
     {

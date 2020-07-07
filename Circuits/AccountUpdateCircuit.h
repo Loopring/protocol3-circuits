@@ -1,5 +1,5 @@
-#ifndef _PUBLICKEYUPDATECIRCUIT_H_
-#define _PUBLICKEYUPDATECIRCUIT_H_
+#ifndef _ACCOUNTUPDATECIRCUIT_H_
+#define _ACCOUNTUPDATECIRCUIT_H_
 
 #include "Circuit.h"
 #include "../Utils/Constants.h"
@@ -15,7 +15,7 @@ using namespace ethsnarks;
 namespace Loopring
 {
 
-class PublicKeyUpdateCircuit : public BaseTransactionCircuit
+class AccountUpdateCircuit : public BaseTransactionCircuit
 {
 public:
 
@@ -26,9 +26,16 @@ public:
     VariableT publicKeyX;
     VariableT publicKeyY;
     DualVariableGadget walletHash;
-
     DualVariableGadget feeTokenID;
     DualVariableGadget fee;
+    DualVariableGadget type;
+
+    // Signature
+    Poseidon_gadget_T<9, 1, 6, 53, 8, 1> hash;
+
+    // Type
+    IsNonZero isConditional;
+    NotGadget needsSignature;
 
     // Compress the public key
     CompressPublicKey compressPublicKey;
@@ -47,7 +54,7 @@ public:
 
     UnsafeAddGadget numConditionalTransactionsAfter;
 
-    PublicKeyUpdateCircuit(
+    AccountUpdateCircuit(
         ProtoboardT& pb,
         const TransactionState& state,
         const std::string& prefix
@@ -63,6 +70,23 @@ public:
         walletHash(pb, NUM_BITS_HASH, FMT(prefix, ".walletHash")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
         fee(pb, NUM_BITS_AMOUNT, FMT(prefix, ".fee")),
+        type(pb, NUM_BITS_TYPE, FMT(prefix, ".type")),
+
+        // Signature
+        hash(pb, var_array({
+            state.exchangeID,
+            accountID.packed,
+            feeTokenID.packed,
+            fee.packed,
+            publicKeyX,
+            publicKeyY,
+            walletHash.packed,
+            nonce.packed
+        }), FMT(this->annotation_prefix, ".hash")),
+
+        // Type
+        isConditional(pb, type.packed, ".isConditional"),
+        needsSignature(pb, isConditional.result(), ".needsSignature"),
 
         // Compress the public key
         compressPublicKey(pb, state.params, state.constants, publicKeyX, publicKeyY, FMT(this->annotation_prefix, ".compressPublicKey")),
@@ -78,8 +102,8 @@ public:
 
         // Increase the nonce
         nonce_after(pb, state.accountA.account.nonce, state.constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_after")),
-
-        numConditionalTransactionsAfter(pb, state.numConditionalTransactions, state.constants.one, FMT(prefix, ".numConditionalTransactionsAfter"))
+        // Increase numConditionalTransactionsAfter
+        numConditionalTransactionsAfter(pb, state.numConditionalTransactions, isConditional.result(), FMT(prefix, ".numConditionalTransactionsAfter"))
     {
         setArrayOutput(accountA_Address, accountID.bits);
         setOutput(accountA_PublicKeyX, publicKeyX);
@@ -94,13 +118,14 @@ public:
         setOutput(balanceO_B_Balance, balanceB_O.balance());
         setOutput(balanceO_B_Index, balanceB_O.index());
 
-        setOutput(signatureRequired_A, state.constants.zero);
+        setOutput(hash_A, hash.result());
+        setOutput(signatureRequired_A, needsSignature.result());
         setOutput(signatureRequired_B, state.constants.zero);
 
         setOutput(misc_NumConditionalTransactions, numConditionalTransactionsAfter.result());
     }
 
-    void generate_r1cs_witness(const PublicKeyUpdate& update)
+    void generate_r1cs_witness(const AccountUpdateTx& update)
     {
         // Inputs
         owner.generate_r1cs_witness();
@@ -111,6 +136,14 @@ public:
         walletHash.generate_r1cs_witness(pb, update.walletHash);
         feeTokenID.generate_r1cs_witness(pb, update.feeTokenID);
         fee.generate_r1cs_witness(pb, update.fee);
+        type.generate_r1cs_witness(pb, update.type);
+
+        // Signature
+        hash.generate_r1cs_witness();
+
+        // Type
+        isConditional.generate_r1cs_witness();
+        needsSignature.generate_r1cs_witness();
 
         // Compress the public key
         compressPublicKey.generate_r1cs_witness();
@@ -126,7 +159,7 @@ public:
 
         // Increase the nonce
         nonce_after.generate_r1cs_witness();
-
+        // Increase numConditionalTransactionsAfter
         numConditionalTransactionsAfter.generate_r1cs_witness();
     }
 
@@ -139,6 +172,14 @@ public:
         walletHash.generate_r1cs_constraints();
         feeTokenID.generate_r1cs_constraints(true);
         fee.generate_r1cs_constraints(true);
+        type.generate_r1cs_constraints(true);
+
+        // Signature
+        hash.generate_r1cs_constraints();
+
+         // Type
+        isConditional.generate_r1cs_constraints();
+        needsSignature.generate_r1cs_constraints();
 
         // Compress the public key
         compressPublicKey.generate_r1cs_constraints();
@@ -154,13 +195,14 @@ public:
 
         // Increase the nonce
         nonce_after.generate_r1cs_constraints();
-
+        // Increase numConditionalTransactionsAfter
         numConditionalTransactionsAfter.generate_r1cs_constraints();
     }
 
     const VariableArrayT getPublicData() const
     {
         return flattenReverse({
+            type.bits,
             owner.bits,
             accountID.bits,
             nonce.bits,

@@ -43,11 +43,12 @@ public:
     const VariableT indexBase;
     const VariableT emptyTradeHistory;
     const VariableT maxAmount;
+    const VariableT maxConcurrentOrderIDs;
+    const VariableT dummyPublicKeyX;
+    const VariableT dummyPublicKeyY;
     const VariableT txTypeTransfer;
     const VariableT txTypeNewAccount;
     const VariableArrayT zeroAccount;
-
-    const VariableT maxConcurrentOrderIDs;
 
     std::vector<VariableT> values;
 
@@ -73,6 +74,8 @@ public:
         emptyTradeHistory(make_variable(pb, ethsnarks::FieldT(EMPTY_TRADE_HISTORY), FMT(prefix, ".emptyTradeHistory"))),
         maxAmount(make_variable(pb, ethsnarks::FieldT(MAX_AMOUNT), FMT(prefix, ".maxAmount"))),
         maxConcurrentOrderIDs(make_variable(pb, ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS), FMT(prefix, ".maxConcurrentOrderIDs"))),
+        dummyPublicKeyX(make_variable(pb, ethsnarks::FieldT("132404916167441185773716937639098950030214269269071041759116060313694190797"), FMT(prefix, ".dummyPublicKeyX"))),
+        dummyPublicKeyY(make_variable(pb, ethsnarks::FieldT("6933274320914065805670637410453081675154127044926882796951068647148079547843"), FMT(prefix, ".dummyPublicKeyY"))),
         txTypeTransfer(make_variable(pb, ethsnarks::FieldT(int(TransactionType::Transfer)), FMT(prefix, ".txTypeTransfer"))),
         txTypeNewAccount(make_variable(pb, ethsnarks::FieldT(int(TransactionType::NewAccount)), FMT(prefix, ".txTypeNewAccount"))),
         zeroAccount(NUM_BITS_ACCOUNT, zero)
@@ -114,6 +117,8 @@ public:
         pb.add_r1cs_constraint(ConstraintT(emptyTradeHistory, FieldT::one(), ethsnarks::FieldT(EMPTY_TRADE_HISTORY)), ".emptyTradeHistory");
         pb.add_r1cs_constraint(ConstraintT(maxAmount, FieldT::one(), ethsnarks::FieldT(MAX_AMOUNT)), ".maxAmount");
         pb.add_r1cs_constraint(ConstraintT(maxConcurrentOrderIDs, FieldT::one(), ethsnarks::FieldT(MAX_CONCURRENT_ORDERIDS)), ".maxConcurrentOrderIDs");
+        pb.add_r1cs_constraint(ConstraintT(dummyPublicKeyX, FieldT::one(), ethsnarks::FieldT("132404916167441185773716937639098950030214269269071041759116060313694190797")), ".dummyPublicKeyX");
+        pb.add_r1cs_constraint(ConstraintT(dummyPublicKeyY, FieldT::one(), ethsnarks::FieldT("6933274320914065805670637410453081675154127044926882796951068647148079547843")), ".dummyPublicKeyY");
         pb.add_r1cs_constraint(ConstraintT(txTypeTransfer, FieldT::one(), ethsnarks::FieldT(int(TransactionType::Transfer))), ".txTypeTransfer");
         pb.add_r1cs_constraint(ConstraintT(txTypeNewAccount, FieldT::one(), ethsnarks::FieldT(int(TransactionType::NewAccount))), ".txTypeNewAccount");
     }
