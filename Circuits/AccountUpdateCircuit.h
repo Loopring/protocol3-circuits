@@ -51,7 +51,7 @@ public:
 
     // Increase the nonce
     AddGadget nonce_after;
-
+    // Increase the number of conditional transactions (if conditional)
     UnsafeAddGadget numConditionalTransactionsAfter;
 
     AccountUpdateCircuit(
@@ -102,7 +102,7 @@ public:
 
         // Increase the nonce
         nonce_after(pb, state.accountA.account.nonce, state.constants.one, NUM_BITS_NONCE, FMT(prefix, ".nonce_after")),
-        // Increase numConditionalTransactionsAfter
+        // Increase the number of conditional transactions (if conditional)
         numConditionalTransactionsAfter(pb, state.numConditionalTransactions, isConditional.result(), FMT(prefix, ".numConditionalTransactionsAfter"))
     {
         setArrayOutput(accountA_Address, accountID.bits);
@@ -159,7 +159,7 @@ public:
 
         // Increase the nonce
         nonce_after.generate_r1cs_witness();
-        // Increase numConditionalTransactionsAfter
+        // Increase the number of conditional transactions (if conditional)
         numConditionalTransactionsAfter.generate_r1cs_witness();
     }
 
@@ -195,7 +195,7 @@ public:
 
         // Increase the nonce
         nonce_after.generate_r1cs_constraints();
-        // Increase numConditionalTransactionsAfter
+        // Increase the number of conditional transactions (if conditional)
         numConditionalTransactionsAfter.generate_r1cs_constraints();
     }
 

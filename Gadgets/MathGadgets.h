@@ -348,7 +348,7 @@ public:
 
     void generate_r1cs_constraints()
     {
-        pb.add_r1cs_constraint(ConstraintT(value + add, FieldT::one(), sum), ".value + add = sum");
+        pb.add_r1cs_constraint(ConstraintT(value + add, FieldT::one(), sum), FMT(annotation_prefix, ".value + add = sum"));
     }
 };
 
@@ -1813,6 +1813,11 @@ public:
         no_oldOwner.generate_r1cs_constraints();
         equal_owner_or_no_owner.generate_r1cs_constraints();
         equal_owner_or_no_owner_eq_true.generate_r1cs_constraints();
+    }
+
+    const VariableT& isNewAccount() const
+    {
+        return no_oldOwner.result();
     }
 };
 

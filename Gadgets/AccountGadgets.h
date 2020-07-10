@@ -116,7 +116,7 @@ public:
         proofVerifierBefore.generate_r1cs_witness();
         rootCalculatorAfter.generate_r1cs_witness();
 
-        ASSERT(pb.val(proofVerifierBefore.m_expected_root) == update.rootBefore,  annotation_prefix);
+        //ASSERT(pb.val(proofVerifierBefore.m_expected_root) == update.rootBefore,  annotation_prefix);
         if (pb.val(rootCalculatorAfter.result()) != update.rootAfter)
         {
             std::cout << "Before:" << std::endl;
@@ -229,7 +229,7 @@ public:
         proofVerifierBefore.generate_r1cs_witness();
         rootCalculatorAfter.generate_r1cs_witness();
 
-        ASSERT(pb.val(proofVerifierBefore.m_expected_root) == update.rootBefore,  annotation_prefix);
+        //ASSERT(pb.val(proofVerifierBefore.m_expected_root) == update.rootBefore,  annotation_prefix);
         if (pb.val(rootCalculatorAfter.result()) != update.rootAfter)
         {
             std::cout << "Before:" << std::endl;
@@ -316,8 +316,13 @@ class DynamicBalanceGadget : public DynamicVariableGadget
 {
 public:
 
-    const VariableT& newIndex;
+    // It's actually never possible that `new index < old index`, but it can happen
+    // because state data is passed into all tx types, while the state is only valid for the
+    // actual tx state it was made for. So it doesn't really matter what happends when this is the
+    // case, the output won't be used anyway.
+    MaxGadget correctedNewIndex;
 
+    const VariableT& newIndex;
     ApplyInterestGadget applyInterest;
 
     DynamicBalanceGadget(
@@ -329,7 +334,8 @@ public:
         const std::string& prefix
     ) :
         DynamicVariableGadget(pb, prefix),
-        newIndex(_index),
+        correctedNewIndex(pb, oldIndex, _index, NUM_BITS_AMOUNT, FMT(prefix, ".correctedNewIndex")),
+        newIndex(correctedNewIndex.result()),
         applyInterest(pb, constants, balance, oldIndex, newIndex, FMT(prefix, ".applyInterest"))
     {
         add(applyInterest.result());
@@ -360,11 +366,13 @@ public:
 
     void generate_r1cs_witness()
     {
+        correctedNewIndex.generate_r1cs_witness();
         applyInterest.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
+        correctedNewIndex.generate_r1cs_constraints();
         applyInterest.generate_r1cs_constraints();
     }
 

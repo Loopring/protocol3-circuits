@@ -53,8 +53,8 @@ auto dummySpotTrade = R"({
 })"_json;
 
 auto dummyTransfer = R"({
-    "accountFromID": 0,
-    "accountToID": 2,
+    "fromAccountID": 0,
+    "toAccountID": 2,
     "amount": "0",
     "fee": "0",
     "feeTokenID": 0,
@@ -62,12 +62,13 @@ auto dummyTransfer = R"({
     "validUntil": 4294967295,
     "type": 0,
     "ownerFrom": "0",
-    "ownerTo": "2",
+    "to": "2",
     "dualAuthorX": "0",
     "dualAuthorY": "0",
-    "payerAccountToID": 2,
-    "payerOwnerTo": "2",
-    "payeeAccountToID": 2,
+    "data": "0",
+    "payerToAccountID": 2,
+    "payerTo": "2",
+    "payeeToAccountID": 2,
     "nonce": 0
 })"_json;
 
@@ -467,37 +468,39 @@ class Transfer
 {
 public:
 
-    ethsnarks::FieldT accountFromID;
-    ethsnarks::FieldT accountToID;
+    ethsnarks::FieldT fromAccountID;
+    ethsnarks::FieldT toAccountID;
     ethsnarks::FieldT tokenID;
     ethsnarks::FieldT amount;
     ethsnarks::FieldT feeTokenID;
     ethsnarks::FieldT fee;
     ethsnarks::FieldT validUntil;
-    ethsnarks::FieldT ownerTo;
+    ethsnarks::FieldT to;
     ethsnarks::FieldT dualAuthorX;
     ethsnarks::FieldT dualAuthorY;
-    ethsnarks::FieldT payerAccountToID;
-    ethsnarks::FieldT payerOwnerTo;
-    ethsnarks::FieldT payeeAccountToID;
+    ethsnarks::FieldT data;
+    ethsnarks::FieldT payerToAccountID;
+    ethsnarks::FieldT payerTo;
+    ethsnarks::FieldT payeeToAccountID;
     ethsnarks::FieldT type;
 };
 
 static void from_json(const json& j, Transfer& transfer)
 {
-    transfer.accountFromID = ethsnarks::FieldT(j.at("accountFromID"));
-    transfer.accountToID = ethsnarks::FieldT(j.at("accountToID"));
+    transfer.fromAccountID = ethsnarks::FieldT(j.at("fromAccountID"));
+    transfer.toAccountID = ethsnarks::FieldT(j.at("toAccountID"));
     transfer.tokenID = ethsnarks::FieldT(j.at("tokenID"));
     transfer.amount = ethsnarks::FieldT(j["amount"].get<std::string>().c_str());
     transfer.feeTokenID = ethsnarks::FieldT(j.at("feeTokenID"));
     transfer.fee = ethsnarks::FieldT(j["fee"].get<std::string>().c_str());
     transfer.validUntil = ethsnarks::FieldT(j.at("validUntil"));
-    transfer.ownerTo = ethsnarks::FieldT(j["ownerTo"].get<std::string>().c_str());
+    transfer.to = ethsnarks::FieldT(j["to"].get<std::string>().c_str());
     transfer.dualAuthorX = ethsnarks::FieldT(j["dualAuthorX"].get<std::string>().c_str());
     transfer.dualAuthorY = ethsnarks::FieldT(j["dualAuthorY"].get<std::string>().c_str());
-    transfer.payerAccountToID = ethsnarks::FieldT(j.at("payerAccountToID"));
-    transfer.payerOwnerTo = ethsnarks::FieldT(j["payerOwnerTo"].get<std::string>().c_str());
-    transfer.payeeAccountToID = ethsnarks::FieldT(j.at("payeeAccountToID"));
+    transfer.data = ethsnarks::FieldT(j["data"].get<std::string>().c_str());
+    transfer.payerToAccountID = ethsnarks::FieldT(j.at("payerToAccountID"));
+    transfer.payerTo = ethsnarks::FieldT(j["payerTo"].get<std::string>().c_str());
+    transfer.payeeToAccountID = ethsnarks::FieldT(j.at("payeeToAccountID"));
     transfer.type = ethsnarks::FieldT(j.at("type"));
 }
 
@@ -604,8 +607,8 @@ static void from_json(const json& j, UniversalTransaction& transaction)
     // Deposit
     transaction.deposit.owner = transaction.witness.accountUpdate_A.before.owner;
     // Transfer
-    transaction.transfer.ownerTo = transaction.witness.accountUpdate_B.before.owner;
-    transaction.transfer.payerOwnerTo = transaction.witness.accountUpdate_B.before.owner;
+    transaction.transfer.to = transaction.witness.accountUpdate_B.before.owner;
+    transaction.transfer.payerTo = transaction.witness.accountUpdate_B.before.owner;
 
     // Now get the actual transaction data for the actual transaction that will execute from the block
     if (j.contains("noop"))

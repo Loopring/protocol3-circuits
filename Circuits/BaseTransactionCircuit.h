@@ -112,7 +112,6 @@ struct TransactionState : public GadgetT
     TransactionAccountState accountB;
     TransactionAccountOperatorState oper;
     TransactionAccountBalancesState pool;
-    TransactionAccountBalancesState indexBefore;
     TransactionAccountBalancesState index;
 
     TransactionState(
@@ -144,7 +143,6 @@ struct TransactionState : public GadgetT
         accountB(pb, FMT(prefix, ".accountB")),
         oper(pb, FMT(prefix, ".oper")),
         pool(pb, FMT(prefix, ".pool")),
-        indexBefore(pb, FMT(prefix, ".indexBefore")),
         index(pb, FMT(prefix, ".index"))
     {
 
@@ -154,15 +152,13 @@ struct TransactionState : public GadgetT
                                const Account& account_B, const BalanceLeaf& balanceLeafS_B, const BalanceLeaf& balanceLeafB_B, const TradeHistoryLeaf& tradeHistoryLeaf_B,
                                const Account& account_O, const BalanceLeaf& balanceLeafA_O, const BalanceLeaf& balanceLeafB_O,
                                const BalanceLeaf& balanceLeafS_P, const BalanceLeaf& balanceLeafB_P,
-                               const BalanceLeaf& balanceLeafS_I, const BalanceLeaf& balanceLeafB_I,
-                               const BalanceLeaf& balanceLeafS_I_after, const BalanceLeaf& balanceLeafB_I_after)
+                               const BalanceLeaf& balanceLeafS_I, const BalanceLeaf& balanceLeafB_I)
     {
         accountA.generate_r1cs_witness(account_A, balanceLeafS_A, balanceLeafB_A, tradeHistoryLeaf_A);
         accountB.generate_r1cs_witness(account_B, balanceLeafS_B, balanceLeafB_B, tradeHistoryLeaf_B);
         oper.generate_r1cs_witness(account_O, balanceLeafA_O, balanceLeafB_O);
         pool.generate_r1cs_witness(balanceLeafS_P, balanceLeafB_P);
-        indexBefore.generate_r1cs_witness(balanceLeafS_I, balanceLeafB_I);
-        index.generate_r1cs_witness(balanceLeafS_I_after, balanceLeafB_I_after);
+        index.generate_r1cs_witness(balanceLeafS_I, balanceLeafB_I);
     }
 };
 
@@ -283,7 +279,7 @@ public:
         uOutputs[balanceB_B_Index] = state.accountB.balanceB.index;
 
 
-        aOutputs[accountB_Address] = flatten({VariableArrayT(1, state.constants.one), VariableArrayT(1, state.constants.one), VariableArrayT(NUM_BITS_ACCOUNT - 2, state.constants.zero)});
+        aOutputs[accountB_Address] = flatten({VariableArrayT(1, state.constants.zero), VariableArrayT(1, state.constants.one), VariableArrayT(NUM_BITS_ACCOUNT - 2, state.constants.zero)});
         uOutputs[accountB_Owner] = state.accountB.account.owner;
         uOutputs[accountB_PublicKeyX] = state.accountB.account.publicKey.x;
         uOutputs[accountB_PublicKeyY] = state.accountB.account.publicKey.y;

@@ -21,9 +21,7 @@ class WithdrawCircuit : public BaseTransactionCircuit
 public:
 
     // Inputs
-    DualVariableGadget owner;
     DualVariableGadget accountID;
-    DualVariableGadget nonce;
     DualVariableGadget tokenID;
     DualVariableGadget amount;
     DualVariableGadget feeTokenID;
@@ -33,12 +31,18 @@ public:
     DualVariableGadget minGas;
     DualVariableGadget type;
 
+    // Special case protocol fee withdrawal
+    EqualGadget isProtocolFeeWithdrawal;
+    TernaryGadget ownerValue;
+    TernaryGadget nonceValue;
+    DualVariableGadget owner;
+    DualVariableGadget nonce;
+
     // Signature
     Poseidon_gadget_T<11, 1, 6, 53, 10, 1> hash;
 
     // Type
     IsNonZero isConditional;
-    UnsafeAddGadget numConditionalTransactionsAfter;
     NotGadget needsSignature;
 
     // Balances
@@ -46,7 +50,6 @@ public:
     DynamicBalanceGadget balanceB_P;
 
     // Check how much should be withdrawn
-    EqualGadget isProtocolFeeWithdrawal;
     TernaryGadget fullBalance;
     EqualGadget amountIsZero;
     EqualGadget amountIsFullBalance;
@@ -76,6 +79,9 @@ public:
     NotGadget isNotForcedWithdrawal;
     AddGadget nonce_after;
 
+    // Increase the number of conditional transactions
+    UnsafeAddGadget numConditionalTransactionsAfter;
+
     WithdrawCircuit(
         ProtoboardT& pb,
         const TransactionState& state,
@@ -84,9 +90,7 @@ public:
         BaseTransactionCircuit(pb, state, prefix),
 
         // Inputs
-        owner(pb, state.accountA.account.owner, NUM_BITS_ADDRESS, FMT(prefix, ".owner")),
         accountID(pb, NUM_BITS_ACCOUNT, FMT(prefix, ".accountID")),
-        nonce(pb, state.accountA.account.nonce, NUM_BITS_NONCE, FMT(prefix, ".nonce")),
         tokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".tokenID")),
         amount(pb, NUM_BITS_AMOUNT, FMT(prefix, ".amount")),
         feeTokenID(pb, NUM_BITS_TOKEN, FMT(prefix, ".feeTokenID")),
@@ -95,6 +99,13 @@ public:
         dataHash(pb, NUM_BITS_HASH, FMT(prefix, ".dataHash")),
         minGas(pb, NUM_BITS_GAS, FMT(prefix, ".minGas")),
         type(pb, NUM_BITS_TYPE, FMT(prefix, ".type")),
+
+        // Special case protocol fee withdrawal
+        isProtocolFeeWithdrawal(pb, accountID.packed, state.constants.zero, FMT(prefix, ".isProtocolFeeWithdrawal")),
+        ownerValue(pb, isProtocolFeeWithdrawal.result(), state.constants.zero, state.accountA.account.owner, FMT(prefix, ".ownerValue")),
+        nonceValue(pb, isProtocolFeeWithdrawal.result(), state.constants.zero, state.accountA.account.nonce, FMT(prefix, ".nonceValue")),
+        owner(pb, ownerValue.result(), NUM_BITS_ADDRESS, FMT(prefix, ".owner")),
+        nonce(pb, nonceValue.result(), NUM_BITS_NONCE, FMT(prefix, ".nonce")),
 
         // Signature
         hash(pb, var_array({
@@ -112,7 +123,6 @@ public:
 
         // Type
         isConditional(pb, type.packed, FMT(prefix, ".isConditional")),
-        numConditionalTransactionsAfter(pb, state.numConditionalTransactions, state.constants.one, FMT(prefix, ".numConditionalTransactionsAfter")),
         needsSignature(pb, isConditional.result(), FMT(prefix, ".needsSignature")),
 
         // Balances
@@ -120,7 +130,6 @@ public:
         balanceB_P(pb, state.constants, state.pool.balanceB, state.index.balanceB, FMT(prefix, ".balanceB_P")),
 
         // Check how much should be withdrawn
-        isProtocolFeeWithdrawal(pb, accountID.packed, state.constants.zero, FMT(prefix, ".isProtocolFeeWithdrawal")),
         fullBalance(pb, isProtocolFeeWithdrawal.result(), balanceB_P.balance(), balanceS_A.balance(), FMT(prefix, ".fullBalance")),
         amountIsZero(pb, amount.packed, state.constants.zero, FMT(prefix, ".amountIsZero")),
         amountIsFullBalance(pb, amount.packed, fullBalance.result(), FMT(prefix, ".amountIsFullBalance")),
@@ -148,7 +157,10 @@ public:
         // Increase the nonce by 1 (unless it's a forced withdrawal)
         isForcedWithdrawal(pb, {validFullWithdrawalType.result(), invalidFullWithdrawalType.result()}, FMT(prefix, ".isForcedWithdrawal")),
         isNotForcedWithdrawal(pb, isForcedWithdrawal.result(), FMT(prefix, ".isNotForcedWithdrawal")),
-        nonce_after(pb, state.accountA.account.nonce, isNotForcedWithdrawal.result(), NUM_BITS_NONCE, FMT(prefix, ".nonce_after"))
+        nonce_after(pb, state.accountA.account.nonce, isNotForcedWithdrawal.result(), NUM_BITS_NONCE, FMT(prefix, ".nonce_after")),
+
+        // Increase the number of conditional transactions
+        numConditionalTransactionsAfter(pb, state.numConditionalTransactions, state.constants.one, FMT(prefix, ".numConditionalTransactionsAfter"))
     {
         setArrayOutput(accountA_Address, merkleTreeAccountA.result());
         setOutput(accountA_Nonce, nonce_after.result());
@@ -177,9 +189,7 @@ public:
     void generate_r1cs_witness(const Withdrawal& withdrawal)
     {
         // Inputs
-        owner.generate_r1cs_witness();
         accountID.generate_r1cs_witness(pb, withdrawal.accountID);
-        nonce.generate_r1cs_witness();
         tokenID.generate_r1cs_witness(pb, withdrawal.tokenID);
         amount.generate_r1cs_witness(pb, withdrawal.amount);
         feeTokenID.generate_r1cs_witness(pb, withdrawal.feeTokenID);
@@ -189,13 +199,18 @@ public:
         minGas.generate_r1cs_witness(pb, withdrawal.minGas);
         type.generate_r1cs_witness(pb, withdrawal.type);
 
+        // Special case protocol fee withdrawal
+        isProtocolFeeWithdrawal.generate_r1cs_witness();
+        ownerValue.generate_r1cs_witness();
+        nonceValue.generate_r1cs_witness();
+        owner.generate_r1cs_witness();
+        nonce.generate_r1cs_witness();
+
         // Signature
         hash.generate_r1cs_witness();
 
         // Type
         isConditional.generate_r1cs_witness();
-        numConditionalTransactionsAfter.generate_r1cs_witness();
-        //pb.val(numConditionalTransactionsAfter.sum) = transfer.numConditionalTransactionsAfter;
         needsSignature.generate_r1cs_witness();
 
         // Balances
@@ -203,7 +218,6 @@ public:
         balanceB_P.generate_r1cs_witness();
 
         // Check how much should be withdrawn
-        isProtocolFeeWithdrawal.generate_r1cs_witness();
         fullBalance.generate_r1cs_witness();
         amountIsZero.generate_r1cs_witness();
         amountIsFullBalance.generate_r1cs_witness();
@@ -232,14 +246,15 @@ public:
         isForcedWithdrawal.generate_r1cs_witness();
         isNotForcedWithdrawal.generate_r1cs_witness();
         nonce_after.generate_r1cs_witness();
+
+        // Increase the number of conditional transactions
+        numConditionalTransactionsAfter.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
         // Inputs
-        owner.generate_r1cs_constraints(true);
         accountID.generate_r1cs_constraints(true);
-        nonce.generate_r1cs_constraints();
         tokenID.generate_r1cs_constraints(true);
         amount.generate_r1cs_constraints(true);
         feeTokenID.generate_r1cs_constraints(true);
@@ -249,12 +264,18 @@ public:
         minGas.generate_r1cs_constraints(true);
         type.generate_r1cs_constraints(true);
 
+        // Special case protocol fee withdrawal
+        isProtocolFeeWithdrawal.generate_r1cs_constraints();
+        ownerValue.generate_r1cs_constraints();
+        nonceValue.generate_r1cs_constraints();
+        owner.generate_r1cs_constraints(true);
+        nonce.generate_r1cs_constraints(true);
+
         // Signature
         hash.generate_r1cs_constraints();
 
         // Type
         isConditional.generate_r1cs_constraints();
-        numConditionalTransactionsAfter.generate_r1cs_constraints();
         needsSignature.generate_r1cs_constraints();
 
         // Balances
@@ -262,7 +283,6 @@ public:
         balanceB_P.generate_r1cs_constraints();
 
         // Check how much should be withdrawn
-        isProtocolFeeWithdrawal.generate_r1cs_constraints();
         fullBalance.generate_r1cs_constraints();
         amountIsZero.generate_r1cs_constraints();
         amountIsFullBalance.generate_r1cs_constraints();
@@ -291,6 +311,9 @@ public:
         isForcedWithdrawal.generate_r1cs_constraints();
         isNotForcedWithdrawal.generate_r1cs_constraints();
         nonce_after.generate_r1cs_constraints();
+
+        // Increase the number of conditional transactions
+        numConditionalTransactionsAfter.generate_r1cs_constraints();
     }
 
     const VariableArrayT getPublicData() const

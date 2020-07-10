@@ -35,6 +35,7 @@ public:
     DynamicBalanceGadget depositedAmount;
     AddGadget balance_after;
 
+    // Increase the number of conditional transactions
     UnsafeAddGadget numConditionalTransactionsAfter;
 
     DepositCircuit(
@@ -55,14 +56,15 @@ public:
         ownerValid(pb, state.constants, state.accountA.account.owner, owner.packed, FMT(prefix, ".ownerValid")),
 
         // Calculate the new index
-        newIndex(pb, index.packed, state.indexBefore.balanceB.index, NUM_BITS_AMOUNT, FMT(prefix, ".newIndex")),
+        newIndex(pb, index.packed, state.index.balanceB.index, NUM_BITS_AMOUNT, FMT(prefix, ".newIndex")),
 
         // Calculate the new balance
         balanceS_A(pb, state.constants, state.accountA.balanceS, newIndex.result(), FMT(prefix, ".balanceS_A")),
         depositedAmount(pb, state.constants, amount.packed, index.packed, newIndex.result(), FMT(prefix, ".depositedAmount")),
         balance_after(pb, balanceS_A.balance(), depositedAmount.balance(), NUM_BITS_AMOUNT, FMT(prefix, ".balance_after")),
 
-        numConditionalTransactionsAfter(pb, state.numConditionalTransactions, state.constants.one, ".numConditionalTransactionsAfter")
+        // Increase the number of conditional transactions
+        numConditionalTransactionsAfter(pb, state.numConditionalTransactions, state.constants.one, FMT(prefix, ".numConditionalTransactionsAfter"))
     {
         setArrayOutput(accountA_Address, accountID.bits);
         setOutput(accountA_Owner, owner.packed);
@@ -70,8 +72,7 @@ public:
         setOutput(balanceA_S_Balance, balance_after.result());
         setOutput(balanceA_S_Index, newIndex.result());
 
-        //setArrayOutput(balanceA_B_Address, tokenID.bits);
-        //setOutput(balanceA_B_Index, newIndex.result());
+        setOutput(index_B, newIndex.result());
 
         setOutput(signatureRequired_A, state.constants.zero);
         setOutput(signatureRequired_B, state.constants.zero);
@@ -99,6 +100,7 @@ public:
         depositedAmount.generate_r1cs_witness();
         balance_after.generate_r1cs_witness();
 
+        // Increase the number of conditional transactions
         numConditionalTransactionsAfter.generate_r1cs_witness();
     }
 
@@ -122,6 +124,7 @@ public:
         depositedAmount.generate_r1cs_constraints();
         balance_after.generate_r1cs_constraints();
 
+        // Increase the number of conditional transactions
         numConditionalTransactionsAfter.generate_r1cs_constraints();
     }
 

@@ -192,7 +192,6 @@ public:
     UpdateBalanceGadget updateBalanceB_I;
     UpdateBalanceGadget updateBalanceA_I;
 
-
     TransactionGadget(
         ProtoboardT& pb,
         const jubjub::Params& params,
@@ -300,12 +299,12 @@ public:
 
         // Update Index
         updateBalanceB_I(pb, indexBalancesRoot, tx.getArrayOutput(balanceA_S_Address),
-                         {state.indexBefore.balanceB.balance, state.indexBefore.balanceB.index, state.indexBefore.balanceB.tradingHistory},
-                         {state.indexBefore.balanceB.balance, tx.getOutput(index_B), state.indexBefore.balanceB.tradingHistory},
+                         {state.index.balanceB.balance, state.index.balanceB.index, state.index.balanceB.tradingHistory},
+                         {state.index.balanceB.balance, tx.getOutput(index_B), state.index.balanceB.tradingHistory},
                          FMT(prefix, ".updateBalanceB_I")),
         updateBalanceA_I(pb, updateBalanceB_I.result(), tx.getArrayOutput(balanceB_S_Address),
-                         {state.indexBefore.balanceA.balance, state.indexBefore.balanceA.index, state.indexBefore.balanceA.tradingHistory},
-                         {state.indexBefore.balanceA.balance, tx.getOutput(index_A), state.indexBefore.balanceA.tradingHistory},
+                         {state.index.balanceA.balance, state.index.balanceA.index, state.index.balanceA.tradingHistory},
+                         {state.index.balanceA.balance, tx.getOutput(index_A), state.index.balanceA.tradingHistory},
                          FMT(prefix, ".updateBalanceA_I"))
 
     {
@@ -331,9 +330,7 @@ public:
                                     uTx.witness.balanceUpdateA_P.before,
                                     uTx.witness.balanceUpdateB_P.before,
                                     uTx.witness.balanceUpdateA_I.before,
-                                    uTx.witness.balanceUpdateB_I.before,
-                                    uTx.witness.balanceUpdateA_I.after,
-                                    uTx.witness.balanceUpdateB_I.after);
+                                    uTx.witness.balanceUpdateB_I.before);
 
         noop.generate_r1cs_witness();
         spotTrade.generate_r1cs_witness(uTx.spotTrade);
@@ -484,9 +481,9 @@ public:
     Poseidon_gadget_T<3, 1, 6, 51, 2, 1> hash;
     SignatureVerifier signatureVerifier;
 
-    // Ring settlements
+    // Transactions
     bool onchainDataAvailability;
-    unsigned int numRings;
+    unsigned int numTransactions;
     std::vector<TransactionGadget> transactions;
 
     // Update Protocol pool
@@ -535,7 +532,7 @@ public:
     void generateConstraints(bool onchainDataAvailability, unsigned int blockSize) override
     {
         this->onchainDataAvailability = onchainDataAvailability;
-        this->numRings = blockSize;
+        this->numTransactions = blockSize;
 
         constants.generate_r1cs_constraints();
 
@@ -551,26 +548,26 @@ public:
         // Increment the nonce of the Operator
         nonce_after.generate_r1cs_constraints();
 
-        // Ring settlements
-        transactions.reserve(numRings);
-        for (size_t j = 0; j < numRings; j++)
+        // Transactions
+        transactions.reserve(numTransactions);
+        for (size_t j = 0; j < numTransactions; j++)
         {
             std::cout << "------------------- tx: " << j << std::endl;
-            const VariableT ringAccountsRoot = (j == 0) ? merkleRootBefore.packed : transactions.back().getNewAccountsRoot();
-            const VariableT& ringProtocolBalancesRoot = (j == 0) ? accountBefore_P.balancesRoot : transactions.back().getNewProtocolBalancesRoot();
-            const VariableT& ringIndexBalancesRoot = (j == 0) ? accountBefore_I.balancesRoot : transactions.back().getNewIndexBalancesRoot();
+            const VariableT txAccountsRoot = (j == 0) ? merkleRootBefore.packed : transactions.back().getNewAccountsRoot();
+            const VariableT& txProtocolBalancesRoot = (j == 0) ? accountBefore_P.balancesRoot : transactions.back().getNewProtocolBalancesRoot();
+            const VariableT& txIndexBalancesRoot = (j == 0) ? accountBefore_I.balancesRoot : transactions.back().getNewIndexBalancesRoot();
             transactions.emplace_back(
                 pb,
                 params,
                 constants,
                 exchangeID.packed,
-                ringAccountsRoot,
+                txAccountsRoot,
                 timestamp.packed,
                 protocolTakerFeeBips.packed,
                 protocolMakerFeeBips.packed,
                 operatorAccountID.bits,
-                ringProtocolBalancesRoot,
-                ringIndexBalancesRoot,
+                txProtocolBalancesRoot,
+                txIndexBalancesRoot,
                 (j == 0) ? constants.zero : transactions.back().tx.getOutput(misc_NumConditionalTransactions),
                 std::string("tx_") + std::to_string(j)
             );
@@ -616,7 +613,7 @@ public:
         if (onchainDataAvailability)
         {
             publicData.add(operatorAccountID.bits);
-            for (size_t j = 0; j < numRings; j++)
+            for (size_t j = 0; j < numTransactions; j++)
             {
                 publicData.add(reverse(transactions[j].getPublicData()));
             }
@@ -633,7 +630,7 @@ public:
 
     bool generateWitness(const Block& block)
     {
-        if (block.transactions.size() != numRings)
+        if (block.transactions.size() != numTransactions)
         {
             std::cout << "Invalid number of transactions: " << block.transactions.size() << std::endl;
             return false;
@@ -658,13 +655,19 @@ public:
         // Increment the nonce of the Operator
         nonce_after.generate_r1cs_witness();
 
-        // Ring settlements
+        // Transactions
+        // First set numConditionalTransactionsAfter which is a dependency between transactions.
+        // Once this is set the transactions can be processed in parallel.
+        for(unsigned int i = 0; i < block.transactions.size(); i++)
+        {
+            pb.val(transactions[i].tx.getOutput(misc_NumConditionalTransactions)) = block.transactions[i].witness.numConditionalTransactionsAfter;
+        }
 #ifdef MULTICORE
-        //#pragma omp parallel for
+        #pragma omp parallel for
 #endif
         for(unsigned int i = 0; i < block.transactions.size(); i++)
         {
-            std::cout << "--------------- tx: " << i << std::endl;
+            //std::cout << "--------------- tx: " << i << " ( " << block.transactions[i].type << " ) " << std::endl;
             transactions[i].generate_r1cs_witness(block.transactions[i]);
         }
 
@@ -702,12 +705,12 @@ public:
 
     unsigned int getBlockSize() override
     {
-        return numRings;
+        return numTransactions;
     }
 
     void printInfo() override
     {
-        std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numRings) << "/tx)" << std::endl;
+        std::cout << pb.num_constraints() << " constraints (" << (pb.num_constraints() / numTransactions) << "/tx)" << std::endl;
     }
 };
 
