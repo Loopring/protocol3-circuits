@@ -52,7 +52,7 @@ public:
     OrderGadget(
         ProtoboardT& pb,
         const Constants& constants,
-        const VariableT& blockExchangeID,
+        const VariableT& blockExchange,
         const std::string& prefix
     ) :
         GadgetT(pb, prefix),
@@ -87,7 +87,7 @@ public:
 
         // Signature
         hash(pb, var_array({
-            blockExchangeID,
+            blockExchange,
             orderID.packed,
             accountID.packed,
             tokenS.packed,

@@ -26,7 +26,7 @@ struct AccountState
     VariableT balancesRoot;
 };
 
-void printAccount(const ProtoboardT& pb, const AccountState& state)
+static void printAccount(const ProtoboardT& pb, const AccountState& state)
 {
     std::cout << "- owner: " << pb.val(state.owner) << std::endl;
     std::cout << "- publicKeyX: " << pb.val(state.publicKeyX) << std::endl;
@@ -149,7 +149,7 @@ struct BalanceState
     VariableT tradingHistory;
 };
 
-void printBalance(const ProtoboardT& pb, const BalanceState& state)
+static void printBalance(const ProtoboardT& pb, const BalanceState& state)
 {
     std::cout << "- balance: " << pb.val(state.balance) << std::endl;
     std::cout << "- index: " << pb.val(state.index) << std::endl;

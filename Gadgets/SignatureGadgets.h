@@ -307,13 +307,9 @@ public:
     const Constants& constants;
     const jubjub::VariablePointT sig_R;
     const VariableArrayT sig_s;
-    const VariableT sig_m;
     EdDSA_Poseidon signatureVerifier;
 
-    NotGadget notRequired;
-    OrGadget valid;
-
-    bool requireValid;
+    IfThenRequireGadget valid;
 
     SignatureVerifier(
         ProtoboardT& pb,
@@ -322,19 +318,15 @@ public:
         const jubjub::VariablePointT& publicKey,
         const VariableT& message,
         const VariableT& required,
-        const std::string& prefix,
-        bool _requireValid = true
+        const std::string& prefix
     ) :
         GadgetT(pb, prefix),
 
         constants(_constants),
         sig_R(pb, FMT(prefix, ".R")),
         sig_s(make_var_array(pb, FieldT::size_in_bits(), FMT(prefix, ".s"))),
-        sig_m(message),
-        signatureVerifier(pb, params, jubjub::EdwardsPoint(params.Gx, params.Gy), publicKey, sig_R, sig_s, sig_m, FMT(prefix, ".signatureVerifier")),
-        notRequired(pb, required, FMT(prefix, ".notRequired")),
-        valid(pb, {notRequired.result(), signatureVerifier.result()}, FMT(prefix, ".valid")),
-        requireValid(_requireValid)
+        signatureVerifier(pb, params, jubjub::EdwardsPoint(params.Gx, params.Gy), publicKey, sig_R, sig_s, message, FMT(prefix, ".signatureVerifier")),
+        valid(pb, required, signatureVerifier.result(), FMT(prefix, ".valid"))
     {
 
     }
@@ -345,29 +337,18 @@ public:
         pb.val(sig_R.y) = sig.R.y;
         sig_s.fill_with_bits_of_field_element(pb, sig.s);
         signatureVerifier.generate_r1cs_witness();
-        notRequired.generate_r1cs_witness();
         valid.generate_r1cs_witness();
     }
 
     void generate_r1cs_constraints()
     {
         signatureVerifier.generate_r1cs_constraints();
-        notRequired.generate_r1cs_constraints();
         valid.generate_r1cs_constraints();
-        if (requireValid)
-        {
-            requireEqual(pb, valid.result(), constants.one, FMT(annotation_prefix, ".isSignatureCheckValid"));
-        }
     }
 
     const VariableT& result() const
     {
-        return valid.result();
-    }
-
-    const VariableArrayT& getHash()
-    {
-        return signatureVerifier.m_hash_RAM.result();
+        return signatureVerifier.result();
     }
 };
 

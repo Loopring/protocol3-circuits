@@ -14,7 +14,7 @@ using json = nlohmann::json;
 namespace Loopring
 {
 
-auto dummySpotTrade = R"({
+static auto dummySpotTrade = R"({
     "fFillS_A": 0,
     "fFillS_B": 0,
     "orderA": {
@@ -23,7 +23,6 @@ auto dummySpotTrade = R"({
         "amountB": "79228162514264337593543950335",
         "amountS": "79228162514264337593543950335",
         "buy": true,
-        "exchangeID": 0,
         "feeBips": 0,
         "maxFeeBips": 0,
         "orderID": "0",
@@ -39,7 +38,6 @@ auto dummySpotTrade = R"({
         "amountB": "79228162514264337593543950335",
         "amountS": "79228162514264337593543950335",
         "buy": true,
-        "exchangeID": 2,
         "feeBips": 0,
         "maxFeeBips": 0,
         "orderID": "0",
@@ -52,7 +50,7 @@ auto dummySpotTrade = R"({
     }
 })"_json;
 
-auto dummyTransfer = R"({
+static auto dummyTransfer = R"({
     "fromAccountID": 0,
     "toAccountID": 2,
     "amount": "0",
@@ -72,7 +70,7 @@ auto dummyTransfer = R"({
     "nonce": 0
 })"_json;
 
-auto dummyWithdraw = R"({
+static auto dummyWithdraw = R"({
     "owner": "0",
     "accountID": 0,
     "tokenID": 0,
@@ -85,7 +83,7 @@ auto dummyWithdraw = R"({
     "type": 0
 })"_json;
 
-auto dummyAccountUpdate = R"({
+static auto dummyAccountUpdate = R"({
     "owner": "0",
     "accountID": 0,
     "nonce": 0,
@@ -97,7 +95,7 @@ auto dummyAccountUpdate = R"({
     "type": 0
 })"_json;
 
-auto dummyNewAccount = R"({
+static auto dummyNewAccount = R"({
     "payerAccountID": 0,
     "feeTokenID": 0,
     "fee": "0",
@@ -109,14 +107,14 @@ auto dummyNewAccount = R"({
     "newWalletHash": "0"
 })"_json;
 
-auto dummyOwnerChange = R"({
+static auto dummyOwnerChange = R"({
     "accountID": 0,
     "feeTokenID": 0,
     "fee": "0",
     "newOwner": "0"
 })"_json;
 
-auto dummyDeposit = R"({
+static auto dummyDeposit = R"({
     "owner": "0",
     "accountID": 0,
     "tokenID": 0,
@@ -124,7 +122,7 @@ auto dummyDeposit = R"({
     "index": "0"
 })"_json;
 
-auto dummySignature = R"({
+static auto dummySignature = R"({
     "Rx": "13060336632196495412858530687189935300033555341384637843571668213752389743866",
     "Ry": "4915883150652842217472446614681036440072632592629277920562695676195366802174",
     "s": "2049853744288428596543952232796911341686225132653835991176529722328469628710"
@@ -297,7 +295,6 @@ static void from_json(const json& j, Signature& signature)
 class Order
 {
 public:
-    ethsnarks::FieldT exchangeID;
     ethsnarks::FieldT orderID;
     ethsnarks::FieldT accountID;
     ethsnarks::FieldT tokenS;
@@ -316,7 +313,6 @@ public:
 
 static void from_json(const json& j, Order& order)
 {
-    order.exchangeID = ethsnarks::FieldT(j.at("exchangeID"));
     order.orderID = ethsnarks::FieldT(j.at("orderID").get<std::string>().c_str());
     order.accountID = ethsnarks::FieldT(j.at("accountID"));
     order.tokenS = ethsnarks::FieldT(j.at("tokenS"));
@@ -656,7 +652,7 @@ class Block
 {
 public:
 
-    ethsnarks::FieldT exchangeID;
+    ethsnarks::FieldT exchange;
 
     ethsnarks::FieldT merkleRootBefore;
     ethsnarks::FieldT merkleRootAfter;
@@ -680,7 +676,7 @@ public:
 
 static void from_json(const json& j, Block& block)
 {
-    block.exchangeID = ethsnarks::FieldT(j["exchangeID"].get<unsigned int>());
+    block.exchange = ethsnarks::FieldT(j["exchange"].get<std::string>().c_str());
 
     block.merkleRootBefore = ethsnarks::FieldT(j["merkleRootBefore"].get<std::string>().c_str());
     block.merkleRootAfter = ethsnarks::FieldT(j["merkleRootAfter"].get<std::string>().c_str());

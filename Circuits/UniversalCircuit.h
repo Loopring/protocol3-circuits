@@ -196,7 +196,7 @@ public:
         ProtoboardT& pb,
         const jubjub::Params& params,
         const Constants& _constants,
-        const VariableT& exchangeID,
+        const VariableT& exchange,
         const VariableT& accountsRoot,
         const VariableT& timestamp,
         const VariableT& protocolTakerFeeBips,
@@ -214,7 +214,7 @@ public:
         type(pb, NUM_BITS_TX_TYPE, FMT(prefix, ".type")),
         selector(pb, constants, type.packed, (unsigned int) TransactionType::COUNT, FMT(prefix, ".selector")),
 
-        state(pb, params, constants, exchangeID, timestamp, protocolTakerFeeBips, protocolMakerFeeBips, numConditionalTransactionsBefore, type.packed, FMT(prefix, ".transactionState")),
+        state(pb, params, constants, exchange, timestamp, protocolTakerFeeBips, protocolMakerFeeBips, numConditionalTransactionsBefore, type.packed, FMT(prefix, ".transactionState")),
 
         // Process transaction
         noop(pb, state, FMT(prefix, ".noop")),
@@ -465,7 +465,7 @@ public:
     AccountGadget accountBefore_O;
 
     // Inputs
-    DualVariableGadget exchangeID;
+    DualVariableGadget exchange;
     DualVariableGadget merkleRootBefore;
     DualVariableGadget merkleRootAfter;
     DualVariableGadget timestamp;
@@ -508,7 +508,7 @@ public:
         accountBefore_O(pb, FMT(prefix, ".accountBefore_O")),
 
         // Inputs
-        exchangeID(pb, NUM_BITS_EXCHANGE_ID, FMT(prefix, ".exchangeID")),
+        exchange(pb, NUM_BITS_ADDRESS, FMT(prefix, ".exchange")),
         merkleRootBefore(pb, 256, FMT(prefix, ".merkleRootBefore")),
         merkleRootAfter(pb, 256, FMT(prefix, ".merkleRootAfter")),
         timestamp(pb, NUM_BITS_TIMESTAMP, FMT(prefix, ".timestamp")),
@@ -537,7 +537,7 @@ public:
         constants.generate_r1cs_constraints();
 
         // Inputs
-        exchangeID.generate_r1cs_constraints(true);
+        exchange.generate_r1cs_constraints(true);
         merkleRootBefore.generate_r1cs_constraints(true);
         merkleRootAfter.generate_r1cs_constraints(true);
         timestamp.generate_r1cs_constraints(true);
@@ -560,7 +560,7 @@ public:
                 pb,
                 params,
                 constants,
-                exchangeID.packed,
+                exchange.packed,
                 txAccountsRoot,
                 timestamp.packed,
                 protocolTakerFeeBips.packed,
@@ -603,7 +603,7 @@ public:
         numConditionalTransactions->generate_r1cs_constraints(true);
 
         // Public data
-        publicData.add(exchangeID.bits);
+        publicData.add(exchange.bits);
         publicData.add(merkleRootBefore.bits);
         publicData.add(merkleRootAfter.bits);
         publicData.add(timestamp.bits);
@@ -644,7 +644,7 @@ public:
         accountBefore_O.generate_r1cs_witness(block.accountUpdate_O.before);
 
         // Inputs
-        exchangeID.generate_r1cs_witness(pb, block.exchangeID);
+        exchange.generate_r1cs_witness(pb, block.exchange);
         merkleRootBefore.generate_r1cs_witness(pb, block.merkleRootBefore);
         merkleRootAfter.generate_r1cs_witness(pb, block.merkleRootAfter);
         timestamp.generate_r1cs_witness(pb, block.timestamp);

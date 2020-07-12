@@ -67,8 +67,8 @@ public:
         BaseTransactionCircuit(pb, state, prefix),
 
         // Orders
-        orderA(pb, state.constants, state.exchangeID, FMT(prefix, ".orderA")),
-        orderB(pb, state.constants, state.exchangeID, FMT(prefix, ".orderB")),
+        orderA(pb, state.constants, state.exchange, FMT(prefix, ".orderA")),
+        orderB(pb, state.constants, state.exchange, FMT(prefix, ".orderB")),
 
         // Balances
         balanceS_A(pb, state.constants, state.accountA.balanceS, state.index.balanceB, FMT(prefix, ".balanceS_A")),
@@ -89,7 +89,7 @@ public:
         tradeHistory_B(pb, state.constants, state.accountB.tradeHistory, orderB.orderID, FMT(prefix, ".tradeHistoryB")),
 
         // Match orders
-        orderMatching(pb, state.constants, state.timestamp, orderA, orderB, tradeHistory_A, tradeHistory_B, fillS_A.value(), fillS_B.value(), FMT(prefix, ".orderMatching")),
+        orderMatching(pb, state.constants, state.timestamp, orderA, orderB, tradeHistory_A.getFilled(), tradeHistory_B.getFilled(), fillS_A.value(), fillS_B.value(), FMT(prefix, ".orderMatching")),
 
         // Calculate fees
         feeCalculatorA(pb, state.constants, fillS_B.value(), state.protocolTakerFeeBips, orderA.feeBips.packed, orderA.rebateBips.packed, FMT(prefix, ".feeCalculatorA")),

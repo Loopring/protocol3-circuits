@@ -157,7 +157,7 @@ public:
 
         // Signature
         hashPayer(pb, var_array({
-            state.exchangeID,
+            state.exchange,
             fromAccountID.packed,
             payer_toAccountID.packed,
             tokenID.packed,
@@ -172,7 +172,7 @@ public:
             nonce.packed
         }), FMT(this->annotation_prefix, ".hashPayer")),
         hashDual(pb, var_array({
-            state.exchangeID,
+            state.exchange,
             fromAccountID.packed,
             payee_toAccountID.packed,
             tokenID.packed,

@@ -71,7 +71,7 @@ public:
 
         // Signature
         hash(pb, var_array({
-            state.exchangeID,
+            state.exchange,
             payerAccountID.packed,
             feeTokenID.packed,
             fee.packed,

@@ -20,7 +20,7 @@ struct TradeHistoryState
     VariableT orderID;
 };
 
-void printTradeHistory(const ProtoboardT& pb, const TradeHistoryState& state)
+static void printTradeHistory(const ProtoboardT& pb, const TradeHistoryState& state)
 {
     std::cout << "- filled: " << pb.val(state.filled) << std::endl;
     std::cout << "- orderID: " << pb.val(state.orderID) << std::endl;

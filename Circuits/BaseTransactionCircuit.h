@@ -101,7 +101,7 @@ struct TransactionState : public GadgetT
 
     const Constants& constants;
 
-    const VariableT& exchangeID;
+    const VariableT& exchange;
     const VariableT& timestamp;
     const VariableT& protocolTakerFeeBips;
     const VariableT& protocolMakerFeeBips;
@@ -118,7 +118,7 @@ struct TransactionState : public GadgetT
         ProtoboardT& pb,
         const jubjub::Params& _params,
         const Constants& _constants,
-        const VariableT& _exchangeID,
+        const VariableT& _exchange,
         const VariableT& _timestamp,
         const VariableT& _protocolTakerFeeBips,
         const VariableT& _protocolMakerFeeBips,
@@ -132,7 +132,7 @@ struct TransactionState : public GadgetT
 
         constants(_constants),
 
-        exchangeID(_exchangeID),
+        exchange(_exchange),
         timestamp(_timestamp),
         protocolTakerFeeBips(_protocolTakerFeeBips),
         protocolMakerFeeBips(_protocolMakerFeeBips),
